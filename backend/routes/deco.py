@@ -220,3 +220,95 @@ async def get_merged_deco_clients() -> Dict[str, Any]:
         if "401" in str(e) or "Unauthorized" in str(e):
             raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
         raise HTTPException(status_code=500, detail=f"Failed to get merged clients: {str(e)}")
+
+
+@router.get("/wifi-config")
+async def get_wifi_config() -> Dict[str, Any]:
+    """
+    Get WiFi configuration including SSID, bands, and channel settings
+
+    Returns:
+        JSON response containing:
+        - ssid: Network SSID/name
+        - bands: List of supported bands (2.4 GHz, 5 GHz, 6 GHz)
+        - channel_2_4ghz: Current 2.4 GHz channel
+        - channel_5ghz: Current 5 GHz channel
+        - channel_6ghz: Current 6 GHz channel (if available)
+        - band_steering_enabled: Whether band steering is enabled
+        - timestamp: API response timestamp
+        - cache_info: Cache status and age
+
+    Raises:
+        401: Not authenticated with Deco API
+        500: API error or service not initialized
+    """
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    try:
+        wifi_config = deco_service.get_wifi_config()
+
+        return {
+            "ssid": wifi_config.get("ssid"),
+            "bands": wifi_config.get("bands"),
+            "channel_2_4ghz": wifi_config.get("channel_2_4ghz"),
+            "channel_5ghz": wifi_config.get("channel_5ghz"),
+            "channel_6ghz": wifi_config.get("channel_6ghz"),
+            "band_steering_enabled": wifi_config.get("band_steering_enabled"),
+            "timestamp": wifi_config.get("last_updated"),
+            "cache_info": {
+                "ttl_seconds": deco_service.CACHE_TTL,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch WiFi config: {e}")
+        if "401" in str(e) or "Unauthorized" in str(e):
+            raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch WiFi config: {str(e)}")
+
+
+@router.get("/qos")
+async def get_qos_settings() -> Dict[str, Any]:
+    """
+    Get QoS (Quality of Service) settings and per-device bandwidth allocation
+
+    Returns:
+        JSON response containing:
+        - qos_enabled: Whether QoS is enabled
+        - devices: List of devices with QoS settings:
+            - device_name: Device name
+            - mac_address: MAC address
+            - priority: Priority level (High/Normal/Low)
+            - bandwidth_limit_mbps: Bandwidth limit in Mbps
+            - connection_type: WiFi/Wired
+            - ip_address: IP address
+        - total_devices: Total number of devices
+        - timestamp: API response timestamp
+        - cache_info: Cache status and age
+
+    Raises:
+        401: Not authenticated with Deco API
+        500: API error or service not initialized
+    """
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    try:
+        qos_data = deco_service.get_qos_settings()
+
+        return {
+            "qos_enabled": qos_data.get("qos_enabled"),
+            "devices": qos_data.get("devices"),
+            "total_devices": qos_data.get("total_devices"),
+            "timestamp": qos_data.get("last_updated"),
+            "cache_info": {
+                "ttl_seconds": deco_service.CACHE_TTL,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch QoS settings: {e}")
+        if "401" in str(e) or "Unauthorized" in str(e):
+            raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch QoS settings: {str(e)}")
