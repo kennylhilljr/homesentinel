@@ -11,6 +11,16 @@
   border-radius: 8px;
   color: white;
   margin-bottom: 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.header-content {
+  flex: 1;
+  text-align: left;
 }
 
 .App-header h1 {
@@ -23,6 +33,51 @@
   margin: 10px 0 0 0;
   font-size: 1.1em;
   opacity: 0.9;
+}
+
+.main-nav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.nav-button {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.nav-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-color: white;
+}
+
+.nav-button.active {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #667eea;
+  border-color: white;
+}
+
+@media (max-width: 768px) {
+  .App-header {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .header-content {
+    text-align: center;
+  }
+
+  .main-nav {
+    justify-content: center;
+  }
 }
 
 .App-main {

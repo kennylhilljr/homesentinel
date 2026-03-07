@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import DeviceCard from './components/DeviceCard';
 import DeviceDetailCard from './components/DeviceDetailCard';
+import DecoNodesPage from './pages/DecoNodesPage';
 
 function App() {
   const [apiStatus, setApiStatus] = useState('connecting...');
@@ -14,6 +15,7 @@ function App() {
   const [showDetailCard, setShowDetailCard] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState('dashboard');
   const [formData, setFormData] = useState({
     friendly_name: '',
     device_type: '',
@@ -24,7 +26,7 @@ function App() {
     // Check backend API health
     const checkHealth = async () => {
       try {
-        const response = await fetch('https://localhost:8443/api/health', {
+        const response = await fetch('http://localhost:9000/api/health', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -44,7 +46,7 @@ function App() {
 
     const getDevices = async () => {
       try {
-        const response = await fetch('https://localhost:8443/api/devices', {
+        const response = await fetch('http://localhost:9000/api/devices', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -62,7 +64,7 @@ function App() {
 
     const getPollingConfig = async () => {
       try {
-        const response = await fetch('https://localhost:8443/api/config/polling', {
+        const response = await fetch('http://localhost:9000/api/config/polling', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -79,7 +81,7 @@ function App() {
 
     const getDeviceGroups = async () => {
       try {
-        const response = await fetch('https://localhost:8443/api/device-groups', {
+        const response = await fetch('http://localhost:9000/api/device-groups', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -112,7 +114,7 @@ function App() {
   const triggerManualScan = async () => {
     setLoading(true);
     try {
-      const response = await fetch('https://localhost:8443/api/devices/scan-now', {
+      const response = await fetch('http://localhost:9000/api/devices/scan-now', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -185,7 +187,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `https://localhost:8443/api/devices/${editingDevice.device_id}`,
+        `http://localhost:9000/api/devices/${editingDevice.device_id}`,
         {
           method: 'PUT',
           headers: {
@@ -228,10 +230,32 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>HomeSentinel</h1>
-        <p>Home Network Monitor & Device Management Platform</p>
+        <div className="header-content">
+          <h1>HomeSentinel</h1>
+          <p>Home Network Monitor & Device Management Platform</p>
+        </div>
+        <nav className="main-nav">
+          <button
+            className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('dashboard')}
+          >
+            Dashboard
+          </button>
+          <button
+            className={`nav-button ${currentPage === 'deco' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('deco')}
+          >
+            Deco Nodes
+          </button>
+        </nav>
       </header>
       <main className="App-main">
+        {/* Deco Nodes Page */}
+        {currentPage === 'deco' && <DecoNodesPage />}
+
+        {/* Dashboard Page */}
+        {currentPage === 'dashboard' && (
+          <>
         {/* Status Summary */}
         <div className="status-summary">
           <div className="summary-card">
@@ -400,8 +424,10 @@ function App() {
           <p>This is the home network monitoring dashboard. The system is currently discovering devices on your network.</p>
           <p><strong>Backend:</strong> https://localhost:8443</p>
           <p><strong>Frontend:</strong> http://localhost:3000</p>
-          <p><strong>Features:</strong> OUI vendor lookup, device metadata, and device grouping</p>
+          <p><strong>Features:</strong> OUI vendor lookup, device metadata, device grouping, and Deco mesh monitoring</p>
         </div>
+          </>
+        )}
       </main>
     </div>
   );
