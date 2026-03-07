@@ -22,13 +22,13 @@
     "AI-290"
   ],
   "created_at": "2025-03-06T20:30:00Z",
-  "done": 3,
+  "done": 5,
   "in_progress": 0,
-  "todo": 9,
+  "todo": 7,
   "last_verification_status": "pass",
-  "tickets_since_verification": 3,
-  "tickets_since_pm_review": 3,
-  "last_pm_review_at": null,
+  "tickets_since_verification": 1,
+  "tickets_since_pm_review": 0,
+  "last_pm_review_at": "2026-03-07T01:36:00Z",
   "current_ticket": null,
   "completed_tickets": [
     {
@@ -51,6 +51,20 @@
       "pr": "https://github.com/kennylhilljr/homesentinel/pull/3",
       "commit": "ec08ba5",
       "completed_at": "2026-03-07T01:00:00Z"
+    },
+    {
+      "key": "AI-283",
+      "title": "[NDM] Device Detail Card & Dashboard",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/4",
+      "commit": "88fe591",
+      "completed_at": "2026-03-07T01:05:00Z"
+    },
+    {
+      "key": "AI-285",
+      "title": "[DECO] Authentication & Session Management",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/5",
+      "commit": "2af1ff82",
+      "completed_at": "2026-03-07T01:34:16Z"
     }
   ],
   "git": {
