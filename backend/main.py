@@ -24,6 +24,7 @@ from services.polling_service import PollingServiceManager
 from services.oui_service import OUIService
 from services.deco_service import DecoService
 from services.deco_client import DecoClient
+from services.correlation_service import CorrelationService
 from routes import deco as deco_routes
 import uuid
 from pydantic import BaseModel
@@ -93,12 +94,14 @@ alert_repo = None
 oui_service = None
 deco_service = None
 deco_client = None
+correlation_service = None
+device_repo = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client
+    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -138,6 +141,15 @@ async def startup_event():
         logger.info("Deco service initialized and routes configured")
     except Exception as e:
         logger.warning(f"Failed to initialize Deco service: {e}")
+
+    # Initialize correlation service
+    try:
+        device_repo = NetworkDeviceRepository(db)
+        correlation_service = CorrelationService(deco_service, device_repo)
+        deco_routes.set_correlation_service(correlation_service)
+        logger.info("Correlation service initialized and routes configured")
+    except Exception as e:
+        logger.warning(f"Failed to initialize correlation service: {e}")
 
     # Initialize polling service
     polling_manager = PollingServiceManager()
