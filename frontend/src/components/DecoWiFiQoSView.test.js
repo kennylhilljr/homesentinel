@@ -1,6 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import DecoWiFiQoSView from './DecoWiFiQoSView';
+import * as apiConfig from '../utils/apiConfig';
+
+// Mock apiConfig module
+jest.mock('../utils/apiConfig', () => ({
+  buildUrl: jest.fn((endpoint) => `/api${endpoint}`),
+}));
 
 // Mock fetch
 global.fetch = jest.fn();
@@ -47,11 +53,11 @@ describe('DecoWiFiQoSView Component', () => {
   };
 
   beforeEach(() => {
-    fetch.mockClear();
+    jest.clearAllMocks();
   });
 
   afterEach(() => {
-    fetch.mockClear();
+    jest.resetAllMocks();
   });
 
   test('test_wifi_qos_view_renders', async () => {
@@ -344,11 +350,13 @@ describe('DecoWiFiQoSView Component', () => {
     render(<DecoWiFiQoSView />);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('http://localhost:9000/api/deco/wifi-config', {
+      expect(apiConfig.buildUrl).toHaveBeenCalledWith('/deco/wifi-config');
+      expect(apiConfig.buildUrl).toHaveBeenCalledWith('/deco/qos');
+      expect(fetch).toHaveBeenCalledWith('/api/deco/wifi-config', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-      expect(fetch).toHaveBeenCalledWith('http://localhost:9000/api/deco/qos', {
+      expect(fetch).toHaveBeenCalledWith('/api/deco/qos', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
