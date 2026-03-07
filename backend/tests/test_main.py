@@ -56,6 +56,7 @@ class TestDeviceEndpoints:
         data = response.json()
         assert "devices" in data
         assert "total" in data
+        assert "timestamp" in data
         assert isinstance(data["devices"], list)
         assert isinstance(data["total"], int)
 
@@ -65,6 +66,24 @@ class TestDeviceEndpoints:
         data = response.json()
         assert data["total"] == 0
         assert len(data["devices"]) == 0
+
+    def test_get_online_devices_endpoint(self, client):
+        """Test /api/devices/online endpoint"""
+        response = client.get("/api/devices/online")
+        assert response.status_code == 200
+        data = response.json()
+        assert "devices" in data
+        assert "total" in data
+        assert data["status_filter"] == "online"
+
+    def test_get_offline_devices_endpoint(self, client):
+        """Test /api/devices/offline endpoint"""
+        response = client.get("/api/devices/offline")
+        assert response.status_code == 200
+        data = response.json()
+        assert "devices" in data
+        assert "total" in data
+        assert data["status_filter"] == "offline"
 
 
 class TestCORSConfiguration:
@@ -172,6 +191,62 @@ class TestCrossOriginRequests:
             headers={"Origin": "https://localhost:3000"}
         )
         assert response.status_code == 200
+
+
+class TestPollingConfigEndpoints:
+    """Test suite for polling configuration endpoints"""
+
+    def test_get_polling_config(self, client):
+        """Test GET /api/config/polling endpoint"""
+        response = client.get("/api/config/polling")
+        assert response.status_code == 200
+        data = response.json()
+        assert "interval" in data
+        assert "last_scan" in data
+        assert "polling_status" in data
+        assert data["interval"] == 60  # Default interval
+
+    def test_polling_config_has_required_fields(self, client):
+        """Test that polling config has all required fields"""
+        response = client.get("/api/config/polling")
+        data = response.json()
+        assert "interval" in data
+        assert "polling_status" in data
+        assert isinstance(data["interval"], int)
+
+
+class TestManualScanEndpoint:
+    """Test suite for manual scan endpoint"""
+
+    def test_scan_now_endpoint(self, client):
+        """Test POST /api/devices/scan-now endpoint"""
+        response = client.post("/api/devices/scan-now")
+        assert response.status_code == 200
+        data = response.json()
+        assert "success" in data
+        assert "devices_found" in data
+        assert "timestamp" in data
+        assert "scan_time_seconds" in data
+
+    def test_scan_now_returns_results(self, client):
+        """Test that scan-now returns proper structure"""
+        response = client.post("/api/devices/scan-now")
+        data = response.json()
+        assert data["success"] is True
+        assert isinstance(data["devices_found"], int)
+        assert isinstance(data["devices_added"], int)
+        assert isinstance(data["devices_updated"], int)
+
+
+class TestAPIHealthWithDatabase:
+    """Test suite for API health with database"""
+
+    def test_health_check_shows_database_status(self, client):
+        """Test that health check includes database status"""
+        response = client.get("/api/health")
+        data = response.json()
+        assert "database" in data
+        assert data["database"] in ["connected", "disconnected"]
 
 
 if __name__ == "__main__":
