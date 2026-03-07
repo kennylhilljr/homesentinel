@@ -1,0 +1,63 @@
+.deco-topology-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+.page-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 40px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.header-title h1 {
+  margin: 0 0 10px 0;
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.header-title p {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.95;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .deco-topology-page {
+    padding: 10px;
+    gap: 15px;
+  }
+
+  .page-header {
+    padding: 30px 15px;
+  }
+
+  .header-title h1 {
+    font-size: 24px;
+  }
+
+  .header-title p {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header {
+    padding: 20px 10px;
+  }
+
+  .header-title h1 {
+    font-size: 20px;
+    margin-bottom: 5px;
+  }
+
+  .header-title p {
+    font-size: 12px;
+  }
+}

@@ -384,3 +384,137 @@ async def get_qos_settings() -> Dict[str, Any]:
         if "401" in str(e) or "Unauthorized" in str(e):
             raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
         raise HTTPException(status_code=500, detail=f"Failed to fetch QoS settings: {str(e)}")
+
+
+@router.get("/topology")
+async def get_topology() -> Dict[str, Any]:
+    """
+    Get network topology showing Deco nodes and their connected devices
+
+    Returns:
+        JSON response containing:
+        - nodes: List of Deco nodes with their properties:
+            - node_id: Unique node identifier
+            - node_name: Human-readable node name
+            - mac_address: Node MAC address (for device relationships)
+            - status: Node operational status (online/offline)
+            - signal_strength: Signal strength percentage (0-100)
+            - connected_clients: Number of connected clients
+        - devices: List of connected devices with their properties:
+            - device_id: Unique device identifier
+            - mac_address: Device MAC address
+            - device_name: Device name (friendly or Deco client name)
+            - status: Device status (online/offline)
+            - friendly_name: User-defined device name
+            - vendor_name: Device vendor/manufacturer
+        - relationships: List of device-to-node connections:
+            - device_id: Connected device ID
+            - device_mac: Device MAC address
+            - node_id: Associated Deco node ID
+            - node_mac: Node MAC address (for visual connection line)
+        - total_nodes: Total number of nodes
+        - total_devices: Total number of devices
+        - total_relationships: Total number of device-to-node relationships
+        - timestamp: API response timestamp
+
+    Raises:
+        401: Not authenticated with Deco API
+        500: API error or service not initialized
+    """
+    if deco_service is None or correlation_service is None:
+        raise HTTPException(status_code=500, detail="Services not initialized")
+
+    try:
+        # Get all Deco nodes
+        nodes_data = deco_service.get_nodes_with_details()
+
+        # Get merged client data (devices with their Deco connections)
+        merged_result = correlation_service.get_merged_clients()
+        merged_devices = merged_result.get("merged_devices", [])
+
+        # Get raw Deco clients to extract node associations
+        deco_clients = deco_service.deco_client.get_client_list()
+
+        # Build nodes list for topology (include MAC for relationships)
+        nodes = []
+        node_id_to_mac = {}
+        for node in nodes_data:
+            # Extract MAC from raw data if available, otherwise use node_id
+            node_mac = node.get("raw_data", {}).get("macAddress") or node.get("raw_data", {}).get("mac_address") or node.get("node_id")
+            node_id_to_mac[node.get("node_id")] = node_mac
+
+            nodes.append({
+                "node_id": node.get("node_id"),
+                "node_name": node.get("node_name"),
+                "mac_address": node_mac,
+                "status": node.get("status"),
+                "signal_strength": node.get("signal_strength"),
+                "connected_clients": node.get("connected_clients"),
+            })
+
+        # Build devices list (from merged clients)
+        devices = []
+        device_mac_to_id = {}
+        for merged_device in merged_devices:
+            device_mac = merged_device.get("mac_address", "")
+            device_id = merged_device.get("device_id", "")
+            device_mac_to_id[device_mac] = device_id
+
+            devices.append({
+                "device_id": device_id,
+                "mac_address": device_mac,
+                "device_name": merged_device.get("deco_client_name") or merged_device.get("friendly_name") or "Unknown",
+                "status": merged_device.get("status"),
+                "friendly_name": merged_device.get("friendly_name"),
+                "vendor_name": merged_device.get("vendor_name"),
+            })
+
+        # Build relationships (device -> node connections)
+        relationships = []
+        seen_relationships = set()
+
+        for deco_client in deco_clients:
+            client_mac = deco_client.get("macAddress") or deco_client.get("mac_address") or ""
+            node_id = deco_client.get("nodeID") or deco_client.get("node_id")
+
+            if client_mac and node_id:
+                # Normalize MAC for comparison
+                normalized_client_mac = client_mac.lower().replace("-", ":").replace(" ", "")
+
+                # Find device_id for this client
+                device_id = None
+                for merged_device in merged_devices:
+                    merged_mac = merged_device.get("mac_address", "").lower().replace("-", ":").replace(" ", "")
+                    if normalized_client_mac == merged_mac:
+                        device_id = merged_device.get("device_id")
+                        break
+
+                # Get node MAC
+                node_mac = node_id_to_mac.get(node_id, node_id)
+
+                # Create relationship (avoid duplicates)
+                rel_key = f"{device_id}_{node_id}"
+                if rel_key not in seen_relationships and device_id:
+                    relationships.append({
+                        "device_id": device_id,
+                        "device_mac": normalized_client_mac,
+                        "node_id": node_id,
+                        "node_mac": node_mac,
+                    })
+                    seen_relationships.add(rel_key)
+
+        return {
+            "nodes": nodes,
+            "devices": devices,
+            "relationships": relationships,
+            "total_nodes": len(nodes),
+            "total_devices": len(devices),
+            "total_relationships": len(relationships),
+            "timestamp": merged_result.get("timestamp"),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch topology: {e}")
+        if "401" in str(e) or "Unauthorized" in str(e):
+            raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch topology: {str(e)}")
