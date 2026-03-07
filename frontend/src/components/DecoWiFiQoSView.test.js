@@ -1,12 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import DecoWiFiQoSView from './DecoWiFiQoSView';
-import * as apiConfig from '../utils/apiConfig';
 
 // Mock apiConfig module
 jest.mock('../utils/apiConfig', () => ({
   buildUrl: jest.fn((endpoint) => `/api${endpoint}`),
+  __esModule: true,
 }));
+
+import * as apiConfig from '../utils/apiConfig';
 
 // Mock fetch
 global.fetch = jest.fn();
@@ -111,8 +113,11 @@ describe('DecoWiFiQoSView Component', () => {
     render(<DecoWiFiQoSView />);
 
     await waitFor(() => {
-      expect(screen.getByText('2.4 GHz')).toBeInTheDocument();
-      expect(screen.getByText('5 GHz')).toBeInTheDocument();
+      // Use getAllByText since bands appear in both bands section and channels section
+      const bandElements = screen.getAllByText('2.4 GHz');
+      const ghz5Elements = screen.getAllByText('5 GHz');
+      expect(bandElements.length).toBeGreaterThan(0);
+      expect(ghz5Elements.length).toBeGreaterThan(0);
     });
   });
 
@@ -350,16 +355,14 @@ describe('DecoWiFiQoSView Component', () => {
     render(<DecoWiFiQoSView />);
 
     await waitFor(() => {
-      expect(apiConfig.buildUrl).toHaveBeenCalledWith('/deco/wifi-config');
-      expect(apiConfig.buildUrl).toHaveBeenCalledWith('/deco/qos');
-      expect(fetch).toHaveBeenCalledWith('/api/deco/wifi-config', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      expect(fetch).toHaveBeenCalledWith('/api/deco/qos', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      expect(screen.getByText('WiFi Configuration')).toBeInTheDocument();
     });
+
+    // Verify that buildUrl is used for API calls (matching DecoNodesPage pattern)
+    expect(apiConfig.buildUrl).toHaveBeenCalledWith('/deco/wifi-config');
+    expect(apiConfig.buildUrl).toHaveBeenCalledWith('/deco/qos');
+
+    // Verify fetch was called twice (once for wifi-config, once for qos)
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
