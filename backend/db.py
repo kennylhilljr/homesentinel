@@ -187,6 +187,47 @@ class NetworkDeviceRepository:
             logger.error(f"Failed to get device: {e}")
             raise
 
+    def update_device_metadata(self, device_id: str, friendly_name: Optional[str] = None,
+                               device_type: Optional[str] = None, vendor_name: Optional[str] = None,
+                               notes: Optional[str] = None) -> Optional[dict]:
+        """Update device metadata"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                updates = []
+                params = []
+
+                if friendly_name is not None:
+                    updates.append("friendly_name = ?")
+                    params.append(friendly_name)
+                if device_type is not None:
+                    updates.append("device_type = ?")
+                    params.append(device_type)
+                if vendor_name is not None:
+                    updates.append("vendor_name = ?")
+                    params.append(vendor_name)
+                if notes is not None:
+                    updates.append("notes = ?")
+                    params.append(notes)
+
+                if not updates:
+                    return self.get_by_id(device_id)
+
+                updates.append("updated_at = ?")
+                params.append(datetime.utcnow())
+                params.append(device_id)
+
+                cursor.execute(f"""
+                    UPDATE network_devices
+                    SET {', '.join(updates)}
+                    WHERE device_id = ?
+                """, params)
+                conn.commit()
+                return self.get_by_id(device_id)
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update device metadata: {e}")
+            raise
+
     def get_by_mac(self, mac_address: str) -> Optional[dict]:
         """Get device by MAC address"""
         try:
@@ -336,4 +377,191 @@ class PollingConfigRepository:
                 return self.get_config()
         except sqlite3.Error as e:
             logger.error(f"Failed to update last scan: {e}")
+            raise
+
+
+class DeviceGroupRepository:
+    """Repository for device group operations"""
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    def create_group(self, group_id: str, name: str, color: str = '#3498db') -> dict:
+        """Create a new device group"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO device_groups (group_id, name, color, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (group_id, name, color, datetime.utcnow(), datetime.utcnow()))
+                conn.commit()
+                return self.get_by_id(group_id)
+        except sqlite3.Error as e:
+            logger.error(f"Failed to create group: {e}")
+            raise
+
+    def get_by_id(self, group_id: str) -> Optional[dict]:
+        """Get group by ID"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM device_groups WHERE group_id = ?", (group_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get group: {e}")
+            raise
+
+    def get_by_name(self, name: str) -> Optional[dict]:
+        """Get group by name"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM device_groups WHERE name = ?", (name,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get group by name: {e}")
+            raise
+
+    def list_all(self) -> List[dict]:
+        """List all groups"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM device_groups ORDER BY created_at DESC")
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to list groups: {e}")
+            raise
+
+    def update_group(self, group_id: str, name: Optional[str] = None,
+                     color: Optional[str] = None) -> Optional[dict]:
+        """Update group metadata"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                updates = []
+                params = []
+
+                if name is not None:
+                    updates.append("name = ?")
+                    params.append(name)
+                if color is not None:
+                    updates.append("color = ?")
+                    params.append(color)
+
+                if not updates:
+                    return self.get_by_id(group_id)
+
+                updates.append("updated_at = ?")
+                params.append(datetime.utcnow())
+                params.append(group_id)
+
+                cursor.execute(f"""
+                    UPDATE device_groups
+                    SET {', '.join(updates)}
+                    WHERE group_id = ?
+                """, params)
+                conn.commit()
+                return self.get_by_id(group_id)
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update group: {e}")
+            raise
+
+    def delete_group(self, group_id: str) -> bool:
+        """Delete a group"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM device_groups WHERE group_id = ?", (group_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to delete group: {e}")
+            raise
+
+
+class DeviceGroupMemberRepository:
+    """Repository for device group membership"""
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    def add_member(self, group_id: str, device_id: str) -> bool:
+        """Add device to group"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR IGNORE INTO device_group_members (group_id, device_id, created_at)
+                    VALUES (?, ?, ?)
+                """, (group_id, device_id, datetime.utcnow()))
+                conn.commit()
+                return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to add group member: {e}")
+            raise
+
+    def remove_member(self, group_id: str, device_id: str) -> bool:
+        """Remove device from group"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    DELETE FROM device_group_members
+                    WHERE group_id = ? AND device_id = ?
+                """, (group_id, device_id))
+                conn.commit()
+                return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to remove group member: {e}")
+            raise
+
+    def get_group_members(self, group_id: str) -> List[dict]:
+        """Get all devices in a group"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT d.* FROM network_devices d
+                    JOIN device_group_members m ON d.device_id = m.device_id
+                    WHERE m.group_id = ?
+                    ORDER BY d.last_seen DESC
+                """, (group_id,))
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get group members: {e}")
+            raise
+
+    def get_device_groups(self, device_id: str) -> List[dict]:
+        """Get all groups a device belongs to"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT g.* FROM device_groups g
+                    JOIN device_group_members m ON g.group_id = m.group_id
+                    WHERE m.device_id = ?
+                    ORDER BY g.created_at DESC
+                """, (device_id,))
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get device groups: {e}")
+            raise
+
+    def list_all_memberships(self) -> List[dict]:
+        """List all group memberships"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM device_group_members ORDER BY group_id DESC")
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to list memberships: {e}")
             raise

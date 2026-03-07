@@ -22,12 +22,12 @@
     "AI-290"
   ],
   "created_at": "2025-03-06T20:30:00Z",
-  "done": 1,
+  "done": 2,
   "in_progress": 0,
-  "todo": 11,
+  "todo": 10,
   "last_verification_status": "pass",
-  "tickets_since_verification": 1,
-  "tickets_since_pm_review": 1,
+  "tickets_since_verification": 2,
+  "tickets_since_pm_review": 2,
   "last_pm_review_at": null,
   "current_ticket": null,
   "completed_tickets": [
@@ -37,6 +37,13 @@
       "pr": "https://github.com/kennylhilljr/homesentinel/pull/1",
       "commit": "39dfee1",
       "completed_at": "2026-03-07T00:20:00Z"
+    },
+    {
+      "key": "AI-280",
+      "title": "[NDM] LAN Device Discovery via ARP/DHCP",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/2",
+      "commit": "b114b88",
+      "completed_at": "2026-03-07T00:44:00Z"
     }
   ],
   "git": {
