@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { buildUrl } from '../utils/apiConfig';
 import './DecoWiFiQoSView.css';
 
 /**
@@ -20,7 +21,7 @@ function DecoWiFiQoSView({ refreshInterval = 10000 }) {
         setError(null);
 
         // Fetch WiFi config
-        const wifiResponse = await fetch('http://localhost:9000/api/deco/wifi-config', {
+        const wifiResponse = await fetch(buildUrl('/deco/wifi-config'), {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -35,7 +36,7 @@ function DecoWiFiQoSView({ refreshInterval = 10000 }) {
         setWifiConfig(wifiData);
 
         // Fetch QoS settings
-        const qosResponse = await fetch('http://localhost:9000/api/deco/qos', {
+        const qosResponse = await fetch(buildUrl('/deco/qos'), {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
