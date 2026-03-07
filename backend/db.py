@@ -6,6 +6,7 @@ Handles SQLite connection, migrations, and database operations
 import sqlite3
 import os
 import logging
+import json
 from typing import Optional, List
 from contextlib import contextmanager
 from datetime import datetime
@@ -142,18 +143,39 @@ class NetworkDeviceRepository:
 
                 # Check if device exists
                 cursor.execute(
-                    "SELECT device_id FROM network_devices WHERE device_id = ?",
+                    "SELECT device_id, current_ip, ip_history FROM network_devices WHERE device_id = ?",
                     (device_id,)
                 )
-                exists = cursor.fetchone() is not None
+                existing = cursor.fetchone()
+                exists = existing is not None
 
                 if exists:
                     # Update existing device
+                    old_ip = existing[1]
+                    ip_history_json = existing[2]
+
+                    # Parse and update IP history if IP changed
+                    ip_history = []
+                    if ip_history_json:
+                        try:
+                            ip_history = json.loads(ip_history_json)
+                        except (json.JSONDecodeError, TypeError):
+                            ip_history = []
+
+                    # Add old IP to history if it changed
+                    if current_ip and old_ip and old_ip != current_ip:
+                        ip_history.append({
+                            'ip': old_ip,
+                            'seen_at': datetime.utcnow().isoformat()
+                        })
+
+                    new_history_json = json.dumps(ip_history) if ip_history else None
+
                     cursor.execute("""
                         UPDATE network_devices
-                        SET current_ip = ?, last_seen = ?, status = ?, updated_at = ?
+                        SET current_ip = ?, ip_history = ?, ip_history_updated_at = ?, last_seen = ?, status = ?, updated_at = ?
                         WHERE device_id = ?
-                    """, (current_ip, datetime.utcnow(), 'online', datetime.utcnow(), device_id))
+                    """, (current_ip, new_history_json, datetime.utcnow(), datetime.utcnow(), 'online', datetime.utcnow(), device_id))
                 else:
                     # Create new device
                     cursor.execute("""

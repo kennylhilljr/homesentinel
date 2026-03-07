@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import DeviceCard from './components/DeviceCard';
 import DeviceDetailCard from './components/DeviceDetailCard';
+import DeviceSearch from './components/DeviceSearch';
 import DecoNodesPage from './pages/DecoNodesPage';
 
 function App() {
@@ -303,6 +304,11 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Device Search Component */}
+        <div className="search-section">
+          <DeviceSearch />
+        </div>
 
         <div className="devices-card">
           <div className="devices-header">
