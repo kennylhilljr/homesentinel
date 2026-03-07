@@ -112,22 +112,22 @@ describe('DecoNodeCard Component', () => {
       expect(screen.getByText('Excellent')).toBeInTheDocument();
     });
 
-    test('shows good signal quality for 50-70 strength', () => {
+    test('shows good signal quality for 40-70 strength', () => {
       const node = { ...mockNode, signal_strength: 60 };
       render(<DecoNodeCard node={node} onClick={jest.fn()} />);
 
       expect(screen.getByText('Good')).toBeInTheDocument();
     });
 
-    test('shows fair signal quality for 30-50 strength', () => {
+    test('shows good signal quality at boundary (40%)', () => {
       const node = { ...mockNode, signal_strength: 40 };
       render(<DecoNodeCard node={node} onClick={jest.fn()} />);
 
-      expect(screen.getByText('Fair')).toBeInTheDocument();
+      expect(screen.getByText('Good')).toBeInTheDocument();
     });
 
-    test('shows poor signal quality for < 30 strength', () => {
-      const node = { ...mockNode, signal_strength: 20 };
+    test('shows poor signal quality for < 40 strength', () => {
+      const node = { ...mockNode, signal_strength: 30 };
       render(<DecoNodeCard node={node} onClick={jest.fn()} />);
 
       expect(screen.getByText('Poor')).toBeInTheDocument();

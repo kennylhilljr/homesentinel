@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import DecoNodeCard from '../components/DecoNodeCard';
+import { buildUrl } from '../utils/apiConfig';
 import '../pages/DecoNodesPage.css';
 
 /**
@@ -23,7 +24,7 @@ function DecoNodesPage() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:9000/api/deco/nodes', {
+      const response = await fetch(buildUrl('/deco/nodes'), {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -61,7 +62,7 @@ function DecoNodesPage() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:9000/api/deco/nodes/refresh', {
+      const response = await fetch(buildUrl('/deco/nodes/refresh'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

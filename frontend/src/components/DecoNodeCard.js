@@ -28,16 +28,19 @@ function DecoNodeCard({ node, onClick }) {
 
   /**
    * Get signal quality indicator based on percentage
+   * Thresholds:
+   * - Green (>70%): Excellent
+   * - Orange (40-70%): Good
+   * - Orange (<40%): Poor
+   *
    * @param {number} strength - Signal strength 0-100
    * @returns {object} Color and label for signal indicator
    */
   const getSignalQuality = (strength) => {
     if (strength >= 70) {
       return { color: '#10b981', label: 'Excellent', className: 'signal-excellent' };
-    } else if (strength >= 50) {
+    } else if (strength >= 40) {
       return { color: '#f59e0b', label: 'Good', className: 'signal-good' };
-    } else if (strength >= 30) {
-      return { color: '#f97316', label: 'Fair', className: 'signal-fair' };
     } else {
       return { color: '#ef4444', label: 'Poor', className: 'signal-poor' };
     }
