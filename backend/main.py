@@ -21,6 +21,9 @@ from db import Database, NetworkDeviceRepository, PollingConfigRepository, Devic
 from services import NetworkDeviceService
 from services.polling_service import PollingServiceManager
 from services.oui_service import OUIService
+from services.deco_service import DecoService
+from services.deco_client import DecoClient
+from routes import deco as deco_routes
 import uuid
 from pydantic import BaseModel
 
@@ -38,6 +41,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Deco routes
+app.include_router(deco_routes.router)
 
 # Pydantic models
 class DeviceUpdate(BaseModel):
@@ -67,12 +73,14 @@ polling_manager = None
 group_repo = None
 member_repo = None
 oui_service = None
+deco_service = None
+deco_client = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, polling_manager, group_repo, member_repo, oui_service
+    global db, device_service, polling_manager, group_repo, member_repo, oui_service, deco_service, deco_client
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -94,6 +102,15 @@ async def startup_event():
     member_repo = DeviceGroupMemberRepository(db)
     logger.info("Device group repositories initialized")
 
+    # Initialize Deco client and service
+    try:
+        deco_client = DecoClient()
+        deco_service = DecoService(deco_client=deco_client)
+        deco_routes.set_deco_service(deco_service)
+        logger.info("Deco service initialized and routes configured")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Deco service: {e}")
+
     # Initialize polling service
     polling_manager = PollingServiceManager()
     polling_interval = int(os.getenv("POLLING_INTERVAL_SECONDS", "60"))
@@ -112,7 +129,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global db, polling_manager
+    global db, polling_manager, deco_client
 
     logger.info("Shutting down HomeSentinel Backend...")
 
@@ -120,6 +137,11 @@ async def shutdown_event():
     if polling_manager:
         await polling_manager.stop()
         logger.info("Polling service stopped")
+
+    # Close Deco client
+    if deco_client:
+        deco_client.close()
+        logger.info("Deco client closed")
 
     # Close database
     if db:
