@@ -4,6 +4,7 @@ import DeviceCard from './components/DeviceCard';
 import DeviceDetailCard from './components/DeviceDetailCard';
 import DeviceSearch from './components/DeviceSearch';
 import DecoNodesPage from './pages/DecoNodesPage';
+import DecoTopologyPage from './pages/DecoTopologyPage';
 
 function App() {
   const [apiStatus, setApiStatus] = useState('connecting...');
@@ -248,11 +249,20 @@ function App() {
           >
             Deco Nodes
           </button>
+          <button
+            className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('topology')}
+          >
+            Network Topology
+          </button>
         </nav>
       </header>
       <main className="App-main">
         {/* Deco Nodes Page */}
         {currentPage === 'deco' && <DecoNodesPage />}
+
+        {/* Network Topology Page */}
+        {currentPage === 'topology' && <DecoTopologyPage />}
 
         {/* Dashboard Page */}
         {currentPage === 'dashboard' && (

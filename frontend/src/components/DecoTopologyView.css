@@ -1,0 +1,539 @@
+.deco-topology-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+/* Header Section */
+.topology-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex-wrap: wrap;
+}
+
+.header-info h2 {
+  margin: 0 0 5px 0;
+  font-size: 24px;
+  color: #333;
+}
+
+.header-info p {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.header-controls {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-primary {
+  background: #2196F3;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1976D2;
+}
+
+.btn-primary:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #757575;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #616161;
+}
+
+.refresh-icon {
+  font-size: 16px;
+  display: inline-block;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.auto-refresh-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.auto-refresh-toggle input {
+  cursor: pointer;
+}
+
+.last-refresh {
+  font-size: 13px;
+  color: #999;
+  white-space: nowrap;
+}
+
+/* Legend Section */
+.topology-legend {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 15px 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #333;
+}
+
+.legend-color.online-node {
+  background: #4CAF50;
+}
+
+.legend-color.offline-node {
+  background: #999;
+}
+
+.legend-color.online-device {
+  background: #2196F3;
+}
+
+.legend-color.offline-device {
+  background: #ccc;
+}
+
+.legend-line {
+  width: 20px;
+  height: 2px;
+  background: #ccc;
+}
+
+/* Stats Section */
+.topology-stats {
+  display: flex;
+  gap: 15px;
+  padding: 15px 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.stat-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.stat-value {
+  color: #2196F3;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+/* SVG Container */
+.svg-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: auto;
+  padding: 10px;
+}
+
+.topology-svg {
+  width: 100%;
+  height: auto;
+  min-height: 500px;
+  display: block;
+}
+
+.node-circle {
+  transition: filter 0.3s ease;
+}
+
+.node-circle.online {
+  fill: #4CAF50;
+}
+
+.node-circle.offline {
+  fill: #999;
+}
+
+.node-circle:hover {
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.3));
+  cursor: pointer;
+}
+
+.device-circle {
+  transition: filter 0.3s ease;
+}
+
+.device-circle.online {
+  fill: #2196F3;
+}
+
+.device-circle.offline {
+  fill: #ccc;
+}
+
+.device-circle:hover {
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.3));
+  cursor: pointer;
+}
+
+.node-label {
+  pointer-events: none;
+  user-select: none;
+}
+
+.node-status {
+  pointer-events: none;
+  user-select: none;
+}
+
+.device-label {
+  pointer-events: none;
+  user-select: none;
+}
+
+.topology-line {
+  pointer-events: none;
+}
+
+/* Error Container */
+.error-container {
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  border-radius: 4px;
+}
+
+.error-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.error-text {
+  flex: 1;
+}
+
+.error-text h3 {
+  margin: 0 0 5px 0;
+  color: #c62828;
+  font-size: 16px;
+}
+
+.error-text p {
+  margin: 0;
+  color: #d32f2f;
+  font-size: 14px;
+}
+
+/* Loading Container */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f0f0f0;
+  border-top-color: #2196F3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+.loading-container p {
+  color: #666;
+  font-size: 16px;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.empty-state h2 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 20px;
+}
+
+.empty-state p {
+  margin: 0 0 20px 0;
+  color: #666;
+  font-size: 14px;
+  max-width: 400px;
+}
+
+/* Topology Details Section */
+.topology-details {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.details-section {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+}
+
+.details-section h3 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  color: #333;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 10px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.detail-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.detail-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.detail-card.node-card {
+  border-left: 4px solid #4CAF50;
+}
+
+.detail-card.device-card {
+  border-left: 4px solid #2196F3;
+}
+
+.detail-card.offline {
+  border-left-color: #999;
+  opacity: 0.8;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #f9f9f9;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.card-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #333;
+  word-break: break-word;
+  flex: 1;
+}
+
+.status-badge {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
+.status-badge.online {
+  color: #4CAF50;
+  background: #e8f5e9;
+}
+
+.status-badge.offline {
+  color: #999;
+  background: #f0f0f0;
+}
+
+.card-body {
+  padding: 12px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  color: #999;
+  font-weight: 500;
+  min-width: 70px;
+}
+
+code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: #333;
+  word-break: break-all;
+}
+
+/* Signal Bar Small */
+.signal-bar-small {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 16px;
+}
+
+.signal-fill-small {
+  flex: 1;
+  height: 100%;
+  background: linear-gradient(90deg, #f44336, #ff9800, #4CAF50);
+  border-radius: 2px;
+}
+
+.signal-bar-small span {
+  font-size: 11px;
+  min-width: 28px;
+  text-align: right;
+  color: #666;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .deco-topology-view {
+    padding: 10px;
+    gap: 15px;
+  }
+
+  .topology-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-controls {
+    width: 100%;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topology-svg {
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topology-legend {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .topology-stats {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
