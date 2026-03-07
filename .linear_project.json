@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "project_id": "b617d02d-876c-44da-8d46-4984a3b56872",
+  "project_name": "HomeSentinel",
+  "project_url": "https://linear.app/ai-cli-macz/project/homesentinel-06230996606e",
+  "team": "Ai-cli-macz",
+  "total_issues": 12,
+  "total_issues_planned": 36,
+  "meta_issue_key": null,
+  "issues_created": [
+    "AI-279",
+    "AI-280",
+    "AI-281",
+    "AI-282",
+    "AI-283",
+    "AI-284",
+    "AI-285",
+    "AI-286",
+    "AI-287",
+    "AI-288",
+    "AI-289",
+    "AI-290"
+  ],
+  "created_at": "2025-03-06T20:30:00Z",
+  "done": 0,
+  "git": {
+    "initial_commit": "6d3ba05c9dc9256b79346636047caecbcdb139d7",
+    "github_repo": "kennylhilljr/homesentinel"
+  }
+}
