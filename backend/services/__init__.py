@@ -11,6 +11,8 @@ from .device_scanner import (
     DHCPLease
 )
 from .polling_service import BackgroundPoller, PollingServiceManager
+from .search_service import DeviceSearchService
+from .event_service import EventService
 
 __all__ = [
     'ARPScanner',
@@ -19,5 +21,7 @@ __all__ = [
     'DeviceInfo',
     'DHCPLease',
     'BackgroundPoller',
-    'PollingServiceManager'
+    'PollingServiceManager',
+    'DeviceSearchService',
+    'EventService'
 ]

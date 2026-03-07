@@ -22,13 +22,13 @@
     "AI-290"
   ],
   "created_at": "2025-03-06T20:30:00Z",
-  "done": 3,
+  "done": 8,
   "in_progress": 0,
-  "todo": 9,
+  "todo": 4,
   "last_verification_status": "pass",
-  "tickets_since_verification": 3,
+  "tickets_since_verification": 4,
   "tickets_since_pm_review": 3,
-  "last_pm_review_at": null,
+  "last_pm_review_at": "2026-03-07T01:36:00Z",
   "current_ticket": null,
   "completed_tickets": [
     {
@@ -51,6 +51,41 @@
       "pr": "https://github.com/kennylhilljr/homesentinel/pull/3",
       "commit": "ec08ba5",
       "completed_at": "2026-03-07T01:00:00Z"
+    },
+    {
+      "key": "AI-283",
+      "title": "[NDM] Device Detail Card & Dashboard",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/4",
+      "commit": "88fe591",
+      "completed_at": "2026-03-07T01:05:00Z"
+    },
+    {
+      "key": "AI-285",
+      "title": "[DECO] Authentication & Session Management",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/5",
+      "commit": "2af1ff82",
+      "completed_at": "2026-03-07T01:34:16Z"
+    },
+    {
+      "key": "AI-286",
+      "title": "[DECO] Node Status Display",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/6",
+      "commit": "dab870a",
+      "completed_at": "2026-03-07T01:59:19Z"
+    },
+    {
+      "key": "AI-282",
+      "title": "[NDM] Device Search & MAC/IP Correlation",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/6",
+      "commit": "f157416",
+      "completed_at": "2026-03-07T02:15:48Z"
+    },
+    {
+      "key": "AI-284",
+      "title": "[NDM] New Device Alerts & Event Log",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/6",
+      "commit": "e57cd43",
+      "completed_at": "2026-03-07T02:23:11Z"
     }
   ],
   "git": {

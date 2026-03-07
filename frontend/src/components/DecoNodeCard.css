@@ -1,0 +1,371 @@
+/* Deco Node Card Component Styles */
+
+.deco-node-card {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.deco-node-card:hover {
+  border-color: #4b5563;
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+.deco-node-card:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.deco-node-card.online {
+  border-left: 4px solid #10b981;
+}
+
+.deco-node-card.offline {
+  border-left: 4px solid #ef4444;
+  opacity: 0.7;
+}
+
+/* Header Section */
+.node-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.node-info-primary {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #f3f4f6;
+  word-break: break-word;
+}
+
+.node-id-small {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-badge.status-online {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid #10b981;
+}
+
+.status-badge.status-offline {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid #ef4444;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.online {
+  background-color: #10b981;
+}
+
+.status-dot.offline {
+  background-color: #ef4444;
+  animation: none;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Content Section */
+.node-card-content {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  margin-bottom: 12px;
+}
+
+.node-info-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.node-signal-column {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 120px;
+}
+
+/* Info Rows */
+.node-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.node-label {
+  color: #9ca3af;
+  font-weight: 500;
+  min-width: 70px;
+}
+
+.node-value {
+  color: #f3f4f6;
+  font-weight: 500;
+  text-align: right;
+}
+
+.node-value.firmware {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #93c5fd;
+}
+
+.node-value.uptime {
+  color: #f3f4f6;
+}
+
+.node-value.clients {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.client-count {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.node-value.model {
+  background-color: rgba(168, 85, 247, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #d8b4fe;
+  font-size: 13px;
+}
+
+/* Signal Strength Indicator */
+.signal-indicator-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100px;
+  height: 100px;
+}
+
+.signal-ring {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.signal-progress {
+  transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+}
+
+.signal-text {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.signal-percentage {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f3f4f6;
+  line-height: 1;
+}
+
+.signal-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.signal-excellent .signal-percentage {
+  color: #10b981;
+}
+
+.signal-excellent .signal-label {
+  color: #10b981;
+}
+
+.signal-good .signal-percentage {
+  color: #f59e0b;
+}
+
+.signal-good .signal-label {
+  color: #f59e0b;
+}
+
+.signal-fair .signal-percentage {
+  color: #f97316;
+}
+
+.signal-fair .signal-label {
+  color: #f97316;
+}
+
+.signal-poor .signal-percentage {
+  color: #ef4444;
+}
+
+.signal-poor .signal-label {
+  color: #ef4444;
+}
+
+/* Footer Section */
+.node-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #374151;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.footer-text {
+  font-style: italic;
+}
+
+.footer-timestamp {
+  color: #4b5563;
+  font-size: 11px;
+}
+
+/* Loading State */
+.node-card.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #9ca3af;
+  animation: pulse 1.5s infinite;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .deco-node-card {
+    padding: 16px;
+  }
+
+  .node-card-content {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .node-signal-column {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .node-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .node-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .node-label {
+    min-width: auto;
+  }
+
+  .node-value {
+    text-align: left;
+  }
+
+  .node-card-footer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .deco-node-card {
+    padding: 12px;
+  }
+
+  .node-name {
+    font-size: 16px;
+  }
+
+  .signal-indicator-container {
+    width: 80px;
+    height: 80px;
+  }
+
+  .signal-percentage {
+    font-size: 14px;
+  }
+
+  .signal-label {
+    font-size: 10px;
+  }
+}
