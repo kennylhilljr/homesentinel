@@ -10,6 +10,7 @@ import uvicorn
 import os
 import logging
 from datetime import datetime
+from typing import Optional
 import asyncio
 
 # Setup logging
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Import database and services
 from db import Database, NetworkDeviceRepository, PollingConfigRepository, DeviceGroupRepository, DeviceGroupMemberRepository
-from services import NetworkDeviceService
+from services import NetworkDeviceService, DeviceSearchService
 from services.polling_service import PollingServiceManager
 from services.oui_service import OUIService
 from services.deco_service import DecoService
@@ -69,6 +70,7 @@ class DeviceGroupMemberAdd(BaseModel):
 # Global database and service instances
 db = None
 device_service = None
+search_service = None
 polling_manager = None
 group_repo = None
 member_repo = None
@@ -80,7 +82,7 @@ deco_client = None
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, polling_manager, group_repo, member_repo, oui_service, deco_service, deco_client
+    global db, device_service, search_service, polling_manager, group_repo, member_repo, oui_service, deco_service, deco_client
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -96,6 +98,10 @@ async def startup_event():
     # Initialize device service
     device_service = NetworkDeviceService(db)
     logger.info("Device service initialized")
+
+    # Initialize search service
+    search_service = DeviceSearchService(db)
+    logger.info("Search service initialized")
 
     # Initialize group repositories
     group_repo = DeviceGroupRepository(db)
@@ -214,6 +220,43 @@ async def get_offline_devices():
         "total": len(devices),
         "status_filter": "offline"
     }
+
+
+@app.get("/api/devices/search")
+async def search_devices(q: str = "", status: Optional[str] = None):
+    """
+    Search for devices across multiple fields.
+
+    Query string 'q' searches:
+    - MAC address (prefix match)
+    - IP address (substring match)
+    - Hostname (contains match)
+    - Friendly name (contains match)
+    - Vendor name (contains match)
+
+    Optional 'status' filter: 'online' or 'offline'
+
+    Returns devices matching the query, sorted by last_seen.
+    """
+    global search_service
+    if search_service is None:
+        raise HTTPException(status_code=500, detail="Search service not initialized")
+
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Query parameter 'q' is required and cannot be empty")
+
+    try:
+        devices = search_service.search(q, status)
+        return {
+            "query": q,
+            "status_filter": status,
+            "devices": devices,
+            "total": len(devices),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/config/polling")
