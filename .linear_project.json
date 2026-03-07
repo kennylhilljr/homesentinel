@@ -23,6 +23,13 @@
   ],
   "created_at": "2025-03-06T20:30:00Z",
   "done": 0,
+  "in_progress": 0,
+  "todo": 12,
+  "last_verification_status": "pass",
+  "tickets_since_verification": 0,
+  "tickets_since_pm_review": 0,
+  "last_pm_review_at": null,
+  "current_ticket": "AI-279",
   "git": {
     "initial_commit": "6d3ba05c9dc9256b79346636047caecbcdb139d7",
     "github_repo": "kennylhilljr/homesentinel"
