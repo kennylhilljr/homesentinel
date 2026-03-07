@@ -152,6 +152,27 @@ describe('DecoWiFiConfigEditor Component', () => {
     });
   });
 
+  test('test_ssid_with_trailing_spaces_within_32_chars_should_pass', async () => {
+    render(<DecoWiFiConfigEditor />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('TestNetwork')).toBeInTheDocument();
+    });
+
+    const ssidInput = screen.getByLabelText(/Network Name/i);
+    const submitButton = screen.getByRole('button', { name: /Update Configuration/i });
+
+    // Set SSID with trailing spaces: "TestNet     " (7 chars + 5 spaces = 12 total, 7 trimmed)
+    fireEvent.change(ssidInput, { target: { value: 'TestNet     ' } });
+
+    fireEvent.click(submitButton);
+
+    // Should show confirmation dialog (validation passes)
+    await waitFor(() => {
+      expect(screen.getByText(/Confirm WiFi Configuration Changes/i)).toBeInTheDocument();
+    });
+  });
+
   test('test_password_min_length_validation', async () => {
     render(<DecoWiFiConfigEditor />);
 
