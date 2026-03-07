@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: homesentinel-backend
+    ports:
+      - "8443:8443"
+    environment:
+      - BACKEND_PORT=8443
+      - BACKEND_HOST=0.0.0.0
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend:/app
+      - ./backend/certs:/app/certs
+    command: python main.py
+    networks:
+      - homesentinel-network
+    healthcheck:
+      test: ["CMD", "curl", "-k", "https://localhost:8443/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: homesentinel-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=https://backend:8443
+      - REACT_APP_WS_URL=wss://backend:8443
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm start
+    networks:
+      - homesentinel-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  homesentinel-network:
+    driver: bridge
+
+volumes:
+  backend_logs:
+  frontend_logs:
