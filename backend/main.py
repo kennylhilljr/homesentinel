@@ -17,9 +17,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import database and services
-from db import Database, NetworkDeviceRepository, PollingConfigRepository
+from db import Database, NetworkDeviceRepository, PollingConfigRepository, DeviceGroupRepository, DeviceGroupMemberRepository
 from services import NetworkDeviceService
 from services.polling_service import PollingServiceManager
+from services.oui_service import OUIService
+import uuid
+from pydantic import BaseModel
 
 app = FastAPI(
     title="HomeSentinel API",
@@ -36,16 +39,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Pydantic models
+class DeviceUpdate(BaseModel):
+    friendly_name: str = None
+    device_type: str = None
+    notes: str = None
+
+
+class DeviceGroupCreate(BaseModel):
+    name: str
+    color: str = '#3498db'
+
+
+class DeviceGroupUpdate(BaseModel):
+    name: str = None
+    color: str = None
+
+
+class DeviceGroupMemberAdd(BaseModel):
+    device_id: str
+
+
 # Global database and service instances
 db = None
 device_service = None
 polling_manager = None
+group_repo = None
+member_repo = None
+oui_service = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, polling_manager
+    global db, device_service, polling_manager, group_repo, member_repo, oui_service
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -54,9 +81,18 @@ async def startup_event():
     db.run_migrations()
     logger.info("Database initialized and migrations applied")
 
+    # Initialize OUI service
+    oui_service = OUIService()
+    logger.info(f"OUI service initialized with {oui_service.get_database_size()} entries")
+
     # Initialize device service
     device_service = NetworkDeviceService(db)
     logger.info("Device service initialized")
+
+    # Initialize group repositories
+    group_repo = DeviceGroupRepository(db)
+    member_repo = DeviceGroupMemberRepository(db)
+    logger.info("Device group repositories initialized")
 
     # Initialize polling service
     polling_manager = PollingServiceManager()
@@ -217,6 +253,184 @@ async def trigger_manual_scan():
         }
     except Exception as e:
         logger.error(f"Manual scan failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Device metadata endpoints
+@app.get("/api/devices/{device_id}")
+async def get_device_details(device_id: str):
+    """Get full device details including vendor information"""
+    global device_service
+    if device_service is None:
+        raise HTTPException(status_code=500, detail="Device service not initialized")
+
+    device = device_service.get_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    return device
+
+
+@app.put("/api/devices/{device_id}")
+async def update_device(device_id: str, updates: DeviceUpdate):
+    """Update device metadata"""
+    global device_service
+    if device_service is None:
+        raise HTTPException(status_code=500, detail="Device service not initialized")
+
+    try:
+        device = device_service.get_device(device_id)
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+
+        if updates.friendly_name:
+            device_service.update_device_friendly_name(device_id, updates.friendly_name)
+        if updates.device_type:
+            device_service.update_device_type(device_id, updates.device_type)
+        if updates.notes:
+            device_service.set_device_notes(device_id, updates.notes)
+
+        updated_device = device_service.get_device(device_id)
+        return updated_device
+
+    except Exception as e:
+        logger.error(f"Failed to update device: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Device Group endpoints
+@app.post("/api/device-groups")
+async def create_device_group(group_data: DeviceGroupCreate):
+    """Create a new device group"""
+    global group_repo
+    if group_repo is None:
+        raise HTTPException(status_code=500, detail="Group service not initialized")
+
+    try:
+        group_id = str(uuid.uuid4())
+        group = group_repo.create_group(group_id, group_data.name, group_data.color)
+        return group
+    except Exception as e:
+        logger.error(f"Failed to create group: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/device-groups")
+async def list_device_groups():
+    """List all device groups"""
+    global group_repo
+    if group_repo is None:
+        raise HTTPException(status_code=500, detail="Group service not initialized")
+
+    try:
+        groups = group_repo.list_all()
+        return {
+            "groups": groups,
+            "total": len(groups)
+        }
+    except Exception as e:
+        logger.error(f"Failed to list groups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/device-groups/{group_id}")
+async def get_device_group(group_id: str):
+    """Get group details with members"""
+    global group_repo, member_repo
+    if group_repo is None or member_repo is None:
+        raise HTTPException(status_code=500, detail="Group service not initialized")
+
+    try:
+        group = group_repo.get_by_id(group_id)
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+
+        members = member_repo.get_group_members(group_id)
+        return {
+            **group,
+            "members": members,
+            "member_count": len(members)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/device-groups/{group_id}")
+async def update_device_group(group_id: str, updates: DeviceGroupUpdate):
+    """Update group metadata"""
+    global group_repo
+    if group_repo is None:
+        raise HTTPException(status_code=500, detail="Group service not initialized")
+
+    try:
+        group = group_repo.get_by_id(group_id)
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+
+        updated_group = group_repo.update_group(group_id, updates.name, updates.color)
+        return updated_group
+    except Exception as e:
+        logger.error(f"Failed to update group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/device-groups/{group_id}")
+async def delete_device_group(group_id: str):
+    """Delete a device group"""
+    global group_repo
+    if group_repo is None:
+        raise HTTPException(status_code=500, detail="Group service not initialized")
+
+    try:
+        success = group_repo.delete_group(group_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Group not found")
+
+        return {"success": True, "message": "Group deleted"}
+    except Exception as e:
+        logger.error(f"Failed to delete group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/device-groups/{group_id}/members")
+async def add_device_to_group(group_id: str, member_data: DeviceGroupMemberAdd):
+    """Add device to group"""
+    global group_repo, member_repo, device_service
+    if group_repo is None or member_repo is None:
+        raise HTTPException(status_code=500, detail="Group service not initialized")
+
+    try:
+        group = group_repo.get_by_id(group_id)
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+
+        device = device_service.get_device(member_data.device_id)
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+
+        member_repo.add_member(group_id, member_data.device_id)
+        return {"success": True, "message": "Device added to group"}
+    except Exception as e:
+        logger.error(f"Failed to add member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/device-groups/{group_id}/members/{device_id}")
+async def remove_device_from_group(group_id: str, device_id: str):
+    """Remove device from group"""
+    global group_repo, member_repo
+    if group_repo is None or member_repo is None:
+        raise HTTPException(status_code=500, detail="Group service not initialized")
+
+    try:
+        success = member_repo.remove_member(group_id, device_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Membership not found")
+
+        return {"success": True, "message": "Device removed from group"}
+    except Exception as e:
+        logger.error(f"Failed to remove member: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
