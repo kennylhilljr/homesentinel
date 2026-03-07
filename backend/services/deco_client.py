@@ -52,6 +52,7 @@ class DecoClient:
         cloud_endpoint: Optional[str] = None,
         local_endpoint: Optional[str] = None,
         use_cloud: bool = True,
+        verify_ssl: bool = True,
     ):
         """
         Initialize Deco API client
@@ -60,11 +61,33 @@ class DecoClient:
             cloud_endpoint: Cloud API endpoint URL (default: https://api.tplinkcloud.com)
             local_endpoint: Local LAN API endpoint URL (default: http://192.168.0.1:8080)
             use_cloud: If True, use cloud API; if False, use local LAN API
+            verify_ssl: If True, verify SSL certificates for HTTPS requests (default: True).
+                       Cloud API always forces verify_ssl=True for security.
+                       Local API can optionally disable verification via this parameter.
+                       WARNING: Disabling SSL verification on local API should only be done on trusted networks.
+
+        Security Notes:
+            - Cloud API (api.tplinkcloud.com) ALWAYS verifies SSL certificates (verify_ssl forced to True)
+            - Local API (192.168.0.1) allows SSL verification to be configured via verify_ssl parameter
+            - Default is verify_ssl=True (standard HTTPS certificate verification enabled)
+            - Disabling SSL verification creates vulnerability to man-in-the-middle attacks
         """
         self.cloud_endpoint = cloud_endpoint or self.DEFAULT_CLOUD_ENDPOINT
         self.local_endpoint = local_endpoint or self.DEFAULT_LOCAL_ENDPOINT
         self.use_cloud = use_cloud
         self.active_endpoint = self.cloud_endpoint if use_cloud else self.local_endpoint
+
+        # Force SSL verification for cloud API (security requirement)
+        # Allow configuration for local API (with default True for security)
+        if use_cloud:
+            self.verify_ssl = True
+        else:
+            self.verify_ssl = verify_ssl
+            if not verify_ssl:
+                logger.warning(
+                    "SSL certificate verification disabled for local API endpoint - "
+                    "only use on trusted networks"
+                )
 
         # Session management
         self._session_token: Optional[str] = None
@@ -79,7 +102,8 @@ class DecoClient:
         self._http_session = self._create_session()
 
         logger.info(
-            f"DecoClient initialized - Using {'cloud' if use_cloud else 'local LAN'} API at {self.active_endpoint}"
+            f"DecoClient initialized - Using {'cloud' if use_cloud else 'local LAN'} API at {self.active_endpoint} "
+            f"(SSL verification: {'enabled' if self.verify_ssl else 'disabled'})"
         )
 
     def _create_session(self) -> requests.Session:
@@ -139,7 +163,7 @@ class DecoClient:
                 f"{self.active_endpoint}/api/auth/login",
                 json=payload,
                 timeout=10,
-                verify=False,  # Disable SSL verification for local API
+                verify=self.verify_ssl,
             )
 
             # Check for HTTP errors
@@ -277,19 +301,19 @@ class DecoClient:
             # Make request
             if method.upper() == "GET":
                 response = self._http_session.get(
-                    url, headers=headers, params=params, timeout=10, verify=False
+                    url, headers=headers, params=params, timeout=10, verify=self.verify_ssl
                 )
             elif method.upper() == "POST":
                 response = self._http_session.post(
-                    url, json=data, headers=headers, params=params, timeout=10, verify=False
+                    url, json=data, headers=headers, params=params, timeout=10, verify=self.verify_ssl
                 )
             elif method.upper() == "PUT":
                 response = self._http_session.put(
-                    url, json=data, headers=headers, params=params, timeout=10, verify=False
+                    url, json=data, headers=headers, params=params, timeout=10, verify=self.verify_ssl
                 )
             elif method.upper() == "DELETE":
                 response = self._http_session.delete(
-                    url, headers=headers, params=params, timeout=10, verify=False
+                    url, headers=headers, params=params, timeout=10, verify=self.verify_ssl
                 )
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
