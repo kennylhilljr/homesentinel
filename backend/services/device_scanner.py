@@ -336,8 +336,10 @@ class NetworkDeviceService:
     def __init__(self, db):
         self.db = db
         from db import NetworkDeviceRepository, PollingConfigRepository
+        from services.oui_service import OUIService
         self.device_repo = NetworkDeviceRepository(db)
         self.config_repo = PollingConfigRepository(db)
+        self.oui_service = OUIService()
         self.arp_scanner = ARPScanner()
         self.dhcp_parser = DHCPParser()
 
@@ -438,3 +440,31 @@ class NetworkDeviceService:
     def set_polling_interval(self, interval_seconds: int) -> dict:
         """Set polling interval"""
         return self.config_repo.set_interval(interval_seconds)
+
+    def update_device_vendor(self, device_id: str, vendor_name: str) -> Optional[dict]:
+        """Update device vendor name"""
+        return self.device_repo.update_device_metadata(device_id, vendor_name=vendor_name)
+
+    def update_device_friendly_name(self, device_id: str, friendly_name: str) -> Optional[dict]:
+        """Update device friendly name"""
+        return self.device_repo.update_device_metadata(device_id, friendly_name=friendly_name)
+
+    def update_device_type(self, device_id: str, device_type: str) -> Optional[dict]:
+        """Update device type"""
+        return self.device_repo.update_device_metadata(device_id, device_type=device_type)
+
+    def set_device_notes(self, device_id: str, notes: str) -> Optional[dict]:
+        """Set device notes"""
+        return self.device_repo.update_device_metadata(device_id, notes=notes)
+
+    def lookup_vendor_by_mac(self, mac_address: str) -> str:
+        """Lookup vendor name by MAC address"""
+        return self.oui_service.lookup_vendor(mac_address)
+
+    def create_device_with_vendor(self, mac_address: str, ip_address: Optional[str] = None) -> dict:
+        """Create device and auto-populate vendor from MAC address"""
+        device = self.create_or_update_device(mac_address, ip_address)
+        vendor_name = self.oui_service.lookup_vendor(mac_address)
+        if vendor_name != "Unknown Vendor":
+            device = self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor_name)
+        return device
