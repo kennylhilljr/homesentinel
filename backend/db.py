@@ -6,9 +6,10 @@ Handles SQLite connection, migrations, and database operations
 import sqlite3
 import os
 import logging
+import json
 from typing import Optional, List
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -142,18 +143,39 @@ class NetworkDeviceRepository:
 
                 # Check if device exists
                 cursor.execute(
-                    "SELECT device_id FROM network_devices WHERE device_id = ?",
+                    "SELECT device_id, current_ip, ip_history FROM network_devices WHERE device_id = ?",
                     (device_id,)
                 )
-                exists = cursor.fetchone() is not None
+                existing = cursor.fetchone()
+                exists = existing is not None
 
                 if exists:
                     # Update existing device
+                    old_ip = existing[1]
+                    ip_history_json = existing[2]
+
+                    # Parse and update IP history if IP changed
+                    ip_history = []
+                    if ip_history_json:
+                        try:
+                            ip_history = json.loads(ip_history_json)
+                        except (json.JSONDecodeError, TypeError):
+                            ip_history = []
+
+                    # Add old IP to history if it changed
+                    if current_ip and old_ip and old_ip != current_ip:
+                        ip_history.append({
+                            'ip': old_ip,
+                            'seen_at': datetime.utcnow().isoformat()
+                        })
+
+                    new_history_json = json.dumps(ip_history) if ip_history else None
+
                     cursor.execute("""
                         UPDATE network_devices
-                        SET current_ip = ?, last_seen = ?, status = ?, updated_at = ?
+                        SET current_ip = ?, ip_history = ?, ip_history_updated_at = ?, last_seen = ?, status = ?, updated_at = ?
                         WHERE device_id = ?
-                    """, (current_ip, datetime.utcnow(), 'online', datetime.utcnow(), device_id))
+                    """, (current_ip, new_history_json, datetime.utcnow(), datetime.utcnow(), 'online', datetime.utcnow(), device_id))
                 else:
                     # Create new device
                     cursor.execute("""
@@ -564,4 +586,171 @@ class DeviceGroupMemberRepository:
                 return [dict(row) for row in rows]
         except sqlite3.Error as e:
             logger.error(f"Failed to list memberships: {e}")
+            raise
+
+
+class DeviceEventRepository:
+    """Repository for device events"""
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    def create(self, event_id: str, device_id: str, event_type: str,
+               description: Optional[str] = None, metadata: Optional[str] = None) -> bool:
+        """Create a new device event"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO device_events
+                    (event_id, device_id, event_type, description, metadata, timestamp, created_at)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, (event_id, device_id, event_type, description, metadata))
+                conn.commit()
+                return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to create event: {e}")
+            raise
+
+    def get_by_id(self, event_id: str) -> Optional[dict]:
+        """Get event by ID"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM device_events WHERE event_id = ?", (event_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get event: {e}")
+            raise
+
+    def list_by_device(self, device_id: str, limit: int = 100, offset: int = 0) -> List[dict]:
+        """List events for a device"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM device_events
+                    WHERE device_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ? OFFSET ?
+                """, (device_id, limit, offset))
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to list events by device: {e}")
+            raise
+
+    def list_all(self, limit: int = 100, offset: int = 0) -> List[dict]:
+        """List all events"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM device_events
+                    ORDER BY timestamp DESC
+                    LIMIT ? OFFSET ?
+                """, (limit, offset))
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to list events: {e}")
+            raise
+
+    def delete_older_than(self, days: int = 90) -> int:
+        """Delete events older than specified days"""
+        try:
+            cutoff_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM device_events WHERE timestamp < ?", (cutoff_date,))
+                conn.commit()
+                return cursor.rowcount
+        except sqlite3.Error as e:
+            logger.error(f"Failed to delete old events: {e}")
+            raise
+
+
+class DeviceAlertRepository:
+    """Repository for device alerts"""
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    def create(self, alert_id: str, device_id: str, event_id: str, alert_type: str) -> bool:
+        """Create a new alert"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO device_alerts
+                    (alert_id, device_id, event_id, alert_type, dismissed, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, (alert_id, device_id, event_id, alert_type))
+                conn.commit()
+                return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to create alert: {e}")
+            raise
+
+    def get_by_id(self, alert_id: str) -> Optional[dict]:
+        """Get alert by ID"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM device_alerts WHERE alert_id = ?", (alert_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get alert: {e}")
+            raise
+
+    def list_active(self, limit: int = 50, offset: int = 0) -> List[dict]:
+        """List active (not dismissed) alerts"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM device_alerts
+                    WHERE dismissed = 0
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (limit, offset))
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to list active alerts: {e}")
+            raise
+
+    def dismiss(self, alert_id: str) -> bool:
+        """Dismiss an alert"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE device_alerts
+                    SET dismissed = 1, dismissed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE alert_id = ?
+                """, (alert_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to dismiss alert: {e}")
+            raise
+
+    def list_by_device(self, device_id: str, limit: int = 50, offset: int = 0) -> List[dict]:
+        """List alerts for a device"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM device_alerts
+                    WHERE device_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (device_id, limit, offset))
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to list alerts by device: {e}")
             raise

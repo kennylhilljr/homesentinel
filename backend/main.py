@@ -10,6 +10,7 @@ import uvicorn
 import os
 import logging
 from datetime import datetime
+from typing import Optional
 import asyncio
 
 # Setup logging
@@ -17,10 +18,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import database and services
-from db import Database, NetworkDeviceRepository, PollingConfigRepository, DeviceGroupRepository, DeviceGroupMemberRepository
-from services import NetworkDeviceService
+from db import Database, NetworkDeviceRepository, PollingConfigRepository, DeviceGroupRepository, DeviceGroupMemberRepository, DeviceEventRepository, DeviceAlertRepository
+from services import NetworkDeviceService, DeviceSearchService, EventService
 from services.polling_service import PollingServiceManager
 from services.oui_service import OUIService
+from services.deco_service import DecoService
+from services.deco_client import DecoClient
+from services.correlation_service import CorrelationService
+from routes import deco as deco_routes
 import uuid
 from pydantic import BaseModel
 
@@ -38,6 +43,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Deco routes
+app.include_router(deco_routes.router)
 
 # Pydantic models
 class DeviceUpdate(BaseModel):
@@ -60,19 +68,40 @@ class DeviceGroupMemberAdd(BaseModel):
     device_id: str
 
 
+class EventFilter(BaseModel):
+    device_id: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    event_type: Optional[str] = None
+    limit: int = 100
+    offset: int = 0
+
+
+class AlertDismiss(BaseModel):
+    reason: Optional[str] = None
+
+
 # Global database and service instances
 db = None
 device_service = None
+search_service = None
+event_service = None
 polling_manager = None
 group_repo = None
 member_repo = None
+event_repo = None
+alert_repo = None
 oui_service = None
+deco_service = None
+deco_client = None
+correlation_service = None
+device_repo = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, polling_manager, group_repo, member_repo, oui_service
+    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -89,10 +118,38 @@ async def startup_event():
     device_service = NetworkDeviceService(db)
     logger.info("Device service initialized")
 
+    # Initialize search service
+    search_service = DeviceSearchService(db)
+    logger.info("Search service initialized")
+
     # Initialize group repositories
     group_repo = DeviceGroupRepository(db)
     member_repo = DeviceGroupMemberRepository(db)
     logger.info("Device group repositories initialized")
+
+    # Initialize event service and repositories
+    event_service = EventService(db)
+    event_repo = DeviceEventRepository(db)
+    alert_repo = DeviceAlertRepository(db)
+    logger.info("Event service and repositories initialized")
+
+    # Initialize Deco client and service
+    try:
+        deco_client = DecoClient()
+        deco_service = DecoService(deco_client=deco_client)
+        deco_routes.set_deco_service(deco_service)
+        logger.info("Deco service initialized and routes configured")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Deco service: {e}")
+
+    # Initialize correlation service
+    try:
+        device_repo = NetworkDeviceRepository(db)
+        correlation_service = CorrelationService(deco_service, device_repo)
+        deco_routes.set_correlation_service(correlation_service)
+        logger.info("Correlation service initialized and routes configured")
+    except Exception as e:
+        logger.warning(f"Failed to initialize correlation service: {e}")
 
     # Initialize polling service
     polling_manager = PollingServiceManager()
@@ -112,7 +169,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global db, polling_manager
+    global db, polling_manager, deco_client
 
     logger.info("Shutting down HomeSentinel Backend...")
 
@@ -120,6 +177,11 @@ async def shutdown_event():
     if polling_manager:
         await polling_manager.stop()
         logger.info("Polling service stopped")
+
+    # Close Deco client
+    if deco_client:
+        deco_client.close()
+        logger.info("Deco client closed")
 
     # Close database
     if db:
@@ -192,6 +254,43 @@ async def get_offline_devices():
         "total": len(devices),
         "status_filter": "offline"
     }
+
+
+@app.get("/api/devices/search")
+async def search_devices(q: str = "", status: Optional[str] = None):
+    """
+    Search for devices across multiple fields.
+
+    Query string 'q' searches:
+    - MAC address (prefix match)
+    - IP address (substring match)
+    - Hostname (contains match)
+    - Friendly name (contains match)
+    - Vendor name (contains match)
+
+    Optional 'status' filter: 'online' or 'offline'
+
+    Returns devices matching the query, sorted by last_seen.
+    """
+    global search_service
+    if search_service is None:
+        raise HTTPException(status_code=500, detail="Search service not initialized")
+
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Query parameter 'q' is required and cannot be empty")
+
+    try:
+        devices = search_service.search(q, status)
+        return {
+            "query": q,
+            "status_filter": status,
+            "devices": devices,
+            "total": len(devices),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/config/polling")
@@ -432,6 +531,105 @@ async def remove_device_from_group(group_id: str, device_id: str):
     except Exception as e:
         logger.error(f"Failed to remove member: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Event and Alert Endpoints
+@app.get("/api/events")
+async def get_events(
+    device_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    event_type: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """Get events with optional filtering"""
+    global event_service
+    if event_service is None:
+        raise HTTPException(status_code=500, detail="Event service not initialized")
+
+    try:
+        events = event_service.get_events(
+            device_id=device_id,
+            start_date=start_date,
+            end_date=end_date,
+            event_type=event_type,
+            limit=limit,
+            offset=offset
+        )
+        count = event_service.get_event_count(
+            device_id=device_id,
+            start_date=start_date,
+            end_date=end_date,
+            event_type=event_type
+        )
+        return {
+            "events": events,
+            "total": count,
+            "limit": limit,
+            "offset": offset,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/events/alerts")
+async def get_alerts(limit: int = 50, offset: int = 0):
+    """Get recent active (not dismissed) alerts"""
+    global event_service
+    if event_service is None:
+        raise HTTPException(status_code=500, detail="Event service not initialized")
+
+    try:
+        alerts = event_service.get_alerts(dismissed=False, limit=limit, offset=offset)
+        return {
+            "alerts": alerts,
+            "total": len(alerts),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/events/alerts/{alert_id}/dismiss")
+async def dismiss_alert(alert_id: str, body: AlertDismiss = None):
+    """Dismiss an alert"""
+    global event_service
+    if event_service is None:
+        raise HTTPException(status_code=500, detail="Event service not initialized")
+
+    try:
+        event_service.dismiss_alert(alert_id)
+        return {
+            "success": True,
+            "alert_id": alert_id,
+            "message": "Alert dismissed successfully"
+        }
+    except Exception as e:
+        logger.error(f"Failed to dismiss alert: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/events/stats")
+async def get_event_stats():
+    """Get event statistics"""
+    global event_service
+    if event_service is None:
+        raise HTTPException(status_code=500, detail="Event service not initialized")
+
+    try:
+        stats = event_service.get_event_stats()
+        return {
+            "stats": stats,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get event stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     # SSL certificate setup
