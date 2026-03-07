@@ -83,7 +83,7 @@ function DecoWiFiConfigEditor({ onConfigUpdated = null }) {
 
     // Validate SSID if provided
     if (ssid.trim().length > 0) {
-      if (ssid.length < 1 || ssid.length > 32) {
+      if (ssid.trim().length < 1 || ssid.trim().length > 32) {
         setError('SSID must be between 1 and 32 characters');
         return false;
       }
