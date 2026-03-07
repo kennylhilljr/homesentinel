@@ -70,6 +70,37 @@ class TestDecoClientInitialization:
             assert client.username == ""
             assert client.password == ""
 
+    def test_init_cloud_api_always_verifies_ssl(self):
+        """Test that cloud API always forces SSL verification"""
+        with patch.dict(os.environ, {"DECO_USERNAME": "test@user.com", "DECO_PASSWORD": "pass"}):
+            # Cloud API should always have verify_ssl=True, regardless of parameter
+            client = DecoClient(use_cloud=True, verify_ssl=False)
+            assert client.verify_ssl is True
+
+    def test_init_cloud_api_verify_ssl_default(self):
+        """Test that cloud API defaults to SSL verification"""
+        with patch.dict(os.environ, {"DECO_USERNAME": "test@user.com", "DECO_PASSWORD": "pass"}):
+            client = DecoClient(use_cloud=True)
+            assert client.verify_ssl is True
+
+    def test_init_local_api_default_verify_ssl_enabled(self):
+        """Test that local API defaults to SSL verification enabled"""
+        with patch.dict(os.environ, {"DECO_USERNAME": "test@user.com", "DECO_PASSWORD": "pass"}):
+            client = DecoClient(use_cloud=False)
+            assert client.verify_ssl is True
+
+    def test_init_local_api_verify_ssl_can_be_disabled(self):
+        """Test that local API allows SSL verification to be disabled"""
+        with patch.dict(os.environ, {"DECO_USERNAME": "test@user.com", "DECO_PASSWORD": "pass"}):
+            client = DecoClient(use_cloud=False, verify_ssl=False)
+            assert client.verify_ssl is False
+
+    def test_init_local_api_verify_ssl_can_be_enabled(self):
+        """Test that local API allows SSL verification to be explicitly enabled"""
+        with patch.dict(os.environ, {"DECO_USERNAME": "test@user.com", "DECO_PASSWORD": "pass"}):
+            client = DecoClient(use_cloud=False, verify_ssl=True)
+            assert client.verify_ssl is True
+
 
 class TestDecoClientAuthentication:
     """Tests for authentication functionality"""
@@ -146,7 +177,7 @@ class TestDecoClientAuthentication:
             {"DECO_USERNAME": "testuser@example.com", "DECO_PASSWORD": "testpass"},
         ):
             client = DecoClient()
-            with pytest.raises(InvalidCredentialsError, match="No token found"):
+            with pytest.raises(InvalidCredentialsError, match="no token in response"):
                 client.authenticate()
 
     @patch("services.deco_client.requests.Session.post")
@@ -214,6 +245,63 @@ class TestDecoClientAuthentication:
 
             assert token == "access_token_value"
             assert client.is_authenticated() is True
+
+    @patch("services.deco_client.requests.Session.post")
+    def test_authentication_cloud_api_uses_verify_ssl_true(self, mock_post):
+        """Test that cloud API authentication always uses verify_ssl=True"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"token": "test_token"}
+        mock_post.return_value = mock_response
+
+        with patch.dict(
+            os.environ,
+            {"DECO_USERNAME": "testuser@example.com", "DECO_PASSWORD": "testpass"},
+        ):
+            client = DecoClient(use_cloud=True)
+            client.authenticate()
+
+            # Verify that post was called with verify=True
+            call_args = mock_post.call_args
+            assert call_args[1]["verify"] is True
+
+    @patch("services.deco_client.requests.Session.post")
+    def test_authentication_local_api_uses_verify_ssl_true_by_default(self, mock_post):
+        """Test that local API authentication uses verify_ssl=True by default"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"token": "test_token"}
+        mock_post.return_value = mock_response
+
+        with patch.dict(
+            os.environ,
+            {"DECO_USERNAME": "testuser@example.com", "DECO_PASSWORD": "testpass"},
+        ):
+            client = DecoClient(use_cloud=False)
+            client.authenticate()
+
+            # Verify that post was called with verify=True
+            call_args = mock_post.call_args
+            assert call_args[1]["verify"] is True
+
+    @patch("services.deco_client.requests.Session.post")
+    def test_authentication_local_api_uses_verify_ssl_false_when_disabled(self, mock_post):
+        """Test that local API authentication uses verify_ssl=False when explicitly disabled"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"token": "test_token"}
+        mock_post.return_value = mock_response
+
+        with patch.dict(
+            os.environ,
+            {"DECO_USERNAME": "testuser@example.com", "DECO_PASSWORD": "testpass"},
+        ):
+            client = DecoClient(use_cloud=False, verify_ssl=False)
+            client.authenticate()
+
+            # Verify that post was called with verify=False
+            call_args = mock_post.call_args
+            assert call_args[1]["verify"] is False
 
 
 class TestDecoClientSessionManagement:
@@ -539,6 +627,119 @@ class TestDecoClientAPIRequests:
             response = client.update_wifi_settings()
 
             assert "No settings to update" in response.get("message", "")
+
+    @patch("services.deco_client.requests.Session.get")
+    @patch("services.deco_client.requests.Session.post")
+    def test_get_request_uses_verify_ssl_true(self, mock_post, mock_get):
+        """Test that GET requests use verify_ssl parameter (cloud API with verify=True)"""
+        # Mock authentication
+        mock_auth_response = Mock()
+        mock_auth_response.status_code = 200
+        mock_auth_response.json.return_value = {"token": "test_token"}
+        mock_post.return_value = mock_auth_response
+
+        # Mock GET response
+        mock_get_response = Mock()
+        mock_get_response.status_code = 200
+        mock_get_response.json.return_value = {"nodes": []}
+        mock_get.return_value = mock_get_response
+
+        with patch.dict(
+            os.environ,
+            {"DECO_USERNAME": "testuser@example.com", "DECO_PASSWORD": "testpass"},
+        ):
+            client = DecoClient(use_cloud=True)  # Cloud API with verify=True
+            client.get_node_list()
+
+            # Verify GET was called with verify=True
+            call_args = mock_get.call_args
+            assert call_args[1]["verify"] is True
+
+    @patch("services.deco_client.requests.Session.put")
+    @patch("services.deco_client.requests.Session.post")
+    def test_post_request_uses_verify_ssl_false_when_disabled(self, mock_post, mock_put):
+        """Test that POST requests use verify_ssl parameter (local API with verify=False)"""
+        # Mock authentication response
+        mock_auth_response = Mock()
+        mock_auth_response.status_code = 200
+        mock_auth_response.json.return_value = {"token": "test_token"}
+        mock_post.return_value = mock_auth_response
+
+        # Mock update response (PUT request)
+        mock_update_response = Mock()
+        mock_update_response.status_code = 200
+        mock_update_response.json.return_value = {"success": True}
+        mock_put.return_value = mock_update_response
+
+        with patch.dict(
+            os.environ,
+            {"DECO_USERNAME": "testuser@example.com", "DECO_PASSWORD": "testpass"},
+        ):
+            client = DecoClient(use_cloud=False, verify_ssl=False)  # Local API with verify=False
+            client.update_wifi_settings(ssid="TestSSID")
+
+            # Check that auth POST was called with verify=False
+            auth_call = mock_post.call_args
+            assert auth_call[1]["verify"] is False
+
+            # Check that PUT was called with verify=False
+            put_call = mock_put.call_args
+            assert put_call[1]["verify"] is False
+
+    @patch("services.deco_client.requests.Session.put")
+    @patch("services.deco_client.requests.Session.post")
+    def test_put_request_uses_verify_ssl_setting(self, mock_post, mock_put):
+        """Test that PUT requests use verify_ssl parameter"""
+        # Mock authentication
+        mock_auth_response = Mock()
+        mock_auth_response.status_code = 200
+        mock_auth_response.json.return_value = {"token": "test_token"}
+        mock_post.return_value = mock_auth_response
+
+        # Mock PUT response
+        mock_put_response = Mock()
+        mock_put_response.status_code = 200
+        mock_put_response.json.return_value = {"success": True}
+        mock_put.return_value = mock_put_response
+
+        with patch.dict(
+            os.environ,
+            {"DECO_USERNAME": "testuser@example.com", "DECO_PASSWORD": "testpass"},
+        ):
+            client = DecoClient(use_cloud=False, verify_ssl=False)
+            client.update_wifi_settings(ssid="NewSSID")
+
+            # Verify PUT was called with verify=False
+            call_args = mock_put.call_args
+            assert call_args[1]["verify"] is False
+
+    @patch("services.deco_client.requests.Session.delete")
+    @patch("services.deco_client.requests.Session.post")
+    def test_delete_request_uses_verify_ssl_setting(self, mock_post, mock_delete):
+        """Test that DELETE requests use verify_ssl parameter"""
+        # Mock authentication
+        mock_auth_response = Mock()
+        mock_auth_response.status_code = 200
+        mock_auth_response.json.return_value = {"token": "test_token"}
+        mock_post.return_value = mock_auth_response
+
+        # Mock DELETE response
+        mock_delete_response = Mock()
+        mock_delete_response.status_code = 200
+        mock_delete_response.json.return_value = {"success": True}
+        mock_delete.return_value = mock_delete_response
+
+        with patch.dict(
+            os.environ,
+            {"DECO_USERNAME": "testuser@example.com", "DECO_PASSWORD": "testpass"},
+        ):
+            client = DecoClient(use_cloud=False, verify_ssl=True)
+            # Make a DELETE request through _make_request
+            client._make_request("DELETE", "/api/test")
+
+            # Verify DELETE was called with verify=True
+            call_args = mock_delete.call_args
+            assert call_args[1]["verify"] is True
 
 
 class TestDecoClientContextManager:
