@@ -1,0 +1,196 @@
+.device-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.device-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: #667eea;
+}
+
+.device-card:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+/* Status-based styling */
+.device-card-online {
+  border-left: 4px solid #10b981;
+}
+
+.device-card-offline {
+  border-left: 4px solid #6b7280;
+}
+
+.device-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.device-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-indicator.status-online {
+  background-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.status-indicator.status-offline {
+  background-color: #6b7280;
+  box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
+}
+
+.device-name-card {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.95em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-badge-card {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 600;
+  white-space: nowrap;
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.device-card-online .status-badge-card {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.device-card-offline .status-badge-card {
+  background-color: #f3f4f6;
+  color: #6b7280;
+}
+
+.device-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.device-card-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85em;
+}
+
+.device-card-label {
+  color: #6b7280;
+  font-weight: 600;
+  min-width: 50px;
+}
+
+.device-card-value {
+  color: #1f2937;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-card-value.monospace {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.85em;
+}
+
+.mac-truncate {
+  max-width: 120px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.device-card-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.vendor-badge {
+  background-color: #dbeafe;
+  color: #0c4a6e;
+}
+
+.type-badge {
+  background-color: #fef3c7;
+  color: #92400e;
+  text-transform: capitalize;
+}
+
+.device-card-groups {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.group-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+
+.device-card-footer {
+  border-top: 1px solid #f3f4f6;
+  padding-top: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.device-card-small {
+  font-size: 0.75em;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .device-card {
+    padding: 12px;
+  }
+
+  .device-card-row {
+    flex-wrap: wrap;
+  }
+
+  .device-card-label {
+    min-width: auto;
+  }
+
+  .mac-truncate {
+    max-width: 80px;
+  }
+}

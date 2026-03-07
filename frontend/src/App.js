@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import DeviceCard from './components/DeviceCard';
+import DeviceDetailCard from './components/DeviceDetailCard';
 
 function App() {
   const [apiStatus, setApiStatus] = useState('connecting...');
@@ -8,6 +10,8 @@ function App() {
   const [lastScanTime, setLastScanTime] = useState(null);
   const [loading, setLoading] = useState(false);
   const [deviceGroups, setDeviceGroups] = useState([]);
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [showDetailCard, setShowDetailCard] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [formData, setFormData] = useState({
@@ -129,6 +133,33 @@ function App() {
     }
   };
 
+  const handleDeviceClick = (device) => {
+    setSelectedDevice(device);
+    setShowDetailCard(true);
+  };
+
+  const handleDetailCardClose = () => {
+    setShowDetailCard(false);
+    setSelectedDevice(null);
+  };
+
+  const handleDeviceUpdate = (updatedDevice) => {
+    setDevices(devices.map(d => d.device_id === updatedDevice.device_id ? updatedDevice : d));
+    setSelectedDevice(updatedDevice);
+  };
+
+  // Handle Escape key to close detail card
+  useEffect(() => {
+    const handleEscapeKey = (e) => {
+      if (e.key === 'Escape' && showDetailCard) {
+        handleDetailCardClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscapeKey);
+    return () => window.removeEventListener('keydown', handleEscapeKey);
+  }, [showDetailCard]);
+
   const openEditModal = (device) => {
     setEditingDevice(device);
     setFormData({
@@ -190,6 +221,10 @@ function App() {
 
   const vendorNamesPresent = devices.filter(d => d.vendor_name).length;
 
+  // Calculate status summary
+  const onlineCount = devices.filter(d => d.status === 'online').length;
+  const offlineCount = devices.filter(d => d.status === 'offline').length;
+
   return (
     <div className="App">
       <header className="App-header">
@@ -197,6 +232,27 @@ function App() {
         <p>Home Network Monitor & Device Management Platform</p>
       </header>
       <main className="App-main">
+        {/* Status Summary */}
+        <div className="status-summary">
+          <div className="summary-card">
+            <div className="summary-label">Total Devices</div>
+            <div className="summary-value">{devices.length}</div>
+          </div>
+          <div className="summary-card online">
+            <div className="summary-label">Online</div>
+            <div className="summary-value">{onlineCount}</div>
+          </div>
+          <div className="summary-card offline">
+            <div className="summary-label">Offline</div>
+            <div className="summary-value">{offlineCount}</div>
+          </div>
+          <div className="summary-card">
+            <div className="summary-label">Last Refreshed</div>
+            <div className="summary-value timestamp-small">
+              {lastScanTime ? new Date(lastScanTime).toLocaleTimeString() : 'Never'}
+            </div>
+          </div>
+        </div>
         <div className="status-card">
           <h2>System Status</h2>
           <p>API Connection: <strong className={apiStatus === 'connected' ? 'status-ok' : 'status-error'}>{apiStatus}</strong></p>
@@ -227,61 +283,48 @@ function App() {
         <div className="devices-card">
           <div className="devices-header">
             <h2>Network Devices ({devices.length})</h2>
-            <button
-              onClick={triggerManualScan}
-              disabled={loading}
-              className="scan-button"
-            >
-              {loading ? 'Scanning...' : 'Scan Now'}
-            </button>
+            <div className="devices-actions">
+              <button
+                onClick={triggerManualScan}
+                disabled={loading}
+                className="scan-button"
+              >
+                {loading ? 'Scanning...' : 'Scan Now'}
+              </button>
+              {lastScanTime && (
+                <span className="device-info">
+                  Updated: {new Date(lastScanTime).toLocaleTimeString()}
+                </span>
+              )}
+            </div>
           </div>
           {devices.length > 0 ? (
-            <>
-              <p className="device-info">Last updated: {formatDate(lastScanTime)}</p>
-              <table className="devices-table">
-                <thead>
-                  <tr>
-                    <th>Device Name</th>
-                    <th>MAC Address</th>
-                    <th>Vendor</th>
-                    <th>IP Address</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {devices.map((device) => (
-                    <tr key={device.device_id} className={`device-row ${device.status}`}>
-                      <td className="device-name">
-                        {getDeviceDisplayName(device)}
-                      </td>
-                      <td className="mac-address">{device.mac_address}</td>
-                      <td className="vendor-name">{device.vendor_name || 'Unknown'}</td>
-                      <td className="ip-address">{device.current_ip || 'N/A'}</td>
-                      <td className="device-type">{device.device_type || 'unknown'}</td>
-                      <td className={`status ${device.status}`}>
-                        <span className={`status-badge ${device.status}`}>{device.status}</span>
-                      </td>
-                      <td className="actions">
-                        <button
-                          className="edit-button"
-                          onClick={() => openEditModal(device)}
-                          title="Edit device"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
+            <div className="devices-grid">
+              {devices.map((device) => (
+                <DeviceCard
+                  key={device.device_id}
+                  device={device}
+                  groups={deviceGroups}
+                  onClick={() => handleDeviceClick(device)}
+                />
+              ))}
+            </div>
           ) : (
-            <p>No devices discovered yet. Click "Scan Now" to start discovery.</p>
+            <p className="no-devices">No devices discovered yet. Click "Scan Now" to start discovery.</p>
           )}
         </div>
 
+        {/* Detail Card - New Component */}
+        {showDetailCard && selectedDevice && (
+          <DeviceDetailCard
+            device={selectedDevice}
+            groups={deviceGroups}
+            onClose={handleDetailCardClose}
+            onUpdate={handleDeviceUpdate}
+          />
+        )}
+
+        {/* Legacy Edit Modal - Keeping for backwards compatibility */}
         {showEditModal && editingDevice && (
           <div className="modal-overlay">
             <div className="modal-content">

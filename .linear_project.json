@@ -22,12 +22,12 @@
     "AI-290"
   ],
   "created_at": "2025-03-06T20:30:00Z",
-  "done": 2,
+  "done": 3,
   "in_progress": 0,
-  "todo": 10,
+  "todo": 9,
   "last_verification_status": "pass",
-  "tickets_since_verification": 2,
-  "tickets_since_pm_review": 2,
+  "tickets_since_verification": 3,
+  "tickets_since_pm_review": 3,
   "last_pm_review_at": null,
   "current_ticket": null,
   "completed_tickets": [
@@ -44,6 +44,13 @@
       "pr": "https://github.com/kennylhilljr/homesentinel/pull/2",
       "commit": "b114b88",
       "completed_at": "2026-03-07T00:44:00Z"
+    },
+    {
+      "key": "AI-281",
+      "title": "[NDM] OUI Vendor Lookup & Device Registry",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/3",
+      "commit": "ec08ba5",
+      "completed_at": "2026-03-07T01:00:00Z"
     }
   ],
   "git": {

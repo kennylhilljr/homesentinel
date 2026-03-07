@@ -26,12 +26,89 @@
 }
 
 .App-main {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1fr;
   gap: 20px;
   margin-bottom: 20px;
+}
+
+/* Status Summary */
+.status-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.summary-card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #667eea;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.summary-card.online {
+  border-left-color: #10b981;
+}
+
+.summary-card.offline {
+  border-left-color: #6b7280;
+}
+
+.summary-label {
+  color: #6b7280;
+  font-size: 0.9em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.summary-value {
+  font-size: 2.5em;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.summary-card.online .summary-value {
+  color: #10b981;
+}
+
+.summary-card.offline .summary-value {
+  color: #6b7280;
+}
+
+.timestamp-small {
+  font-size: 0.85em !important;
+}
+
+/* Device Grid */
+.devices-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.no-devices {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #6b7280;
+  padding: 40px 20px;
+  font-size: 1.05em;
+}
+
+.devices-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
 .status-card,
