@@ -22,14 +22,23 @@
     "AI-290"
   ],
   "created_at": "2025-03-06T20:30:00Z",
-  "done": 0,
+  "done": 1,
   "in_progress": 0,
-  "todo": 12,
+  "todo": 11,
   "last_verification_status": "pass",
-  "tickets_since_verification": 0,
-  "tickets_since_pm_review": 0,
+  "tickets_since_verification": 1,
+  "tickets_since_pm_review": 1,
   "last_pm_review_at": null,
-  "current_ticket": "AI-279",
+  "current_ticket": null,
+  "completed_tickets": [
+    {
+      "key": "AI-279",
+      "title": "[SETUP] Project Scaffolding - Git, Backend Framework, Frontend",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/1",
+      "commit": "39dfee1",
+      "completed_at": "2026-03-07T00:20:00Z"
+    }
+  ],
   "git": {
     "initial_commit": "6d3ba05c9dc9256b79346636047caecbcdb139d7",
     "github_repo": "kennylhilljr/homesentinel"
