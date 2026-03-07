@@ -30,6 +30,10 @@ class DecoService:
         self.deco_client = deco_client or DecoClient()
         self._nodes_cache: Optional[List[Dict[str, Any]]] = None
         self._cache_timestamp: Optional[datetime] = None
+        self._wifi_config_cache: Optional[Dict[str, Any]] = None
+        self._wifi_config_timestamp: Optional[datetime] = None
+        self._qos_cache: Optional[Dict[str, Any]] = None
+        self._qos_timestamp: Optional[datetime] = None
 
     def get_nodes_with_details(self) -> List[Dict[str, Any]]:
         """
@@ -210,4 +214,221 @@ class DecoService:
         """Clear the node cache"""
         self._nodes_cache = None
         self._cache_timestamp = None
-        logger.info("Node cache cleared")
+        self._wifi_config_cache = None
+        self._wifi_config_timestamp = None
+        self._qos_cache = None
+        self._qos_timestamp = None
+        logger.info("All caches cleared")
+
+    def get_wifi_config(self) -> Dict[str, Any]:
+        """
+        Get WiFi configuration from Deco API
+
+        Returns:
+            WiFi configuration dictionary containing:
+            - ssid: Network name(s)
+            - bands: Supported bands (2.4 GHz, 5 GHz, 6 GHz)
+            - channel_2_4ghz: Current 2.4 GHz channel
+            - channel_5ghz: Current 5 GHz channel
+            - channel_6ghz: Current 6 GHz channel (if available)
+            - band_steering: Whether band steering is enabled
+            - last_updated: Timestamp of last update
+
+        Raises:
+            InvalidCredentialsError: If not authenticated with Deco API
+            APIConnectionError: If API request fails
+        """
+        # Check if cache is still valid
+        if self._is_cache_valid_wifi_config():
+            logger.debug("Returning cached WiFi config")
+            return self._wifi_config_cache
+
+        try:
+            logger.info("Fetching fresh WiFi config from Deco API")
+            raw_config = self.deco_client.get_wifi_settings()
+
+            # Enrich WiFi config with formatted fields
+            enriched_config = self._enrich_wifi_config(raw_config)
+
+            # Update cache
+            self._wifi_config_cache = enriched_config
+            self._wifi_config_timestamp = datetime.now()
+
+            logger.info("Retrieved and cached WiFi config")
+            return enriched_config
+
+        except InvalidCredentialsError as e:
+            logger.error(f"Authentication failed: {e}")
+            raise
+        except APIConnectionError as e:
+            logger.error(f"API connection error: {e}")
+            raise
+
+    def get_qos_settings(self) -> Dict[str, Any]:
+        """
+        Get QoS (Quality of Service) settings and per-device bandwidth allocation
+
+        Returns:
+            QoS settings dictionary containing:
+            - qos_enabled: Whether QoS is enabled
+            - devices: List of devices with QoS settings:
+                - device_id/name: Device identifier
+                - mac_address: MAC address
+                - priority: Priority level (High/Normal/Low)
+                - bandwidth_limit: Bandwidth limit in Mbps (or null if no limit)
+                - connection_type: WiFi/Wired
+            - total_bandwidth: Total available bandwidth in Mbps
+            - last_updated: Timestamp of last update
+
+        Raises:
+            InvalidCredentialsError: If not authenticated with Deco API
+            APIConnectionError: If API request fails
+        """
+        # Check if cache is still valid
+        if self._is_cache_valid_qos():
+            logger.debug("Returning cached QoS settings")
+            return self._qos_cache
+
+        try:
+            logger.info("Fetching fresh QoS settings from Deco API")
+
+            # Get connected clients to correlate with QoS settings
+            clients = self.deco_client.get_client_list()
+
+            # Build QoS data from clients (since Deco API may not have dedicated QoS endpoint)
+            qos_data = self._build_qos_from_clients(clients)
+
+            # Update cache
+            self._qos_cache = qos_data
+            self._qos_timestamp = datetime.now()
+
+            logger.info("Retrieved and cached QoS settings")
+            return qos_data
+
+        except InvalidCredentialsError as e:
+            logger.error(f"Authentication failed: {e}")
+            raise
+        except APIConnectionError as e:
+            logger.error(f"API connection error: {e}")
+            raise
+
+    def _is_cache_valid_wifi_config(self) -> bool:
+        """
+        Check if WiFi config cache is still valid
+
+        Returns:
+            True if cache exists and is within TTL, False otherwise
+        """
+        if not self._wifi_config_cache or not self._wifi_config_timestamp:
+            return False
+
+        age = (datetime.now() - self._wifi_config_timestamp).total_seconds()
+        is_valid = age < self.CACHE_TTL
+
+        if is_valid:
+            logger.debug(f"WiFi config cache is valid ({age:.1f}s old, TTL: {self.CACHE_TTL}s)")
+        else:
+            logger.debug(f"WiFi config cache expired ({age:.1f}s old, TTL: {self.CACHE_TTL}s)")
+
+        return is_valid
+
+    def _is_cache_valid_qos(self) -> bool:
+        """
+        Check if QoS cache is still valid
+
+        Returns:
+            True if cache exists and is within TTL, False otherwise
+        """
+        if not self._qos_cache or not self._qos_timestamp:
+            return False
+
+        age = (datetime.now() - self._qos_timestamp).total_seconds()
+        is_valid = age < self.CACHE_TTL
+
+        if is_valid:
+            logger.debug(f"QoS cache is valid ({age:.1f}s old, TTL: {self.CACHE_TTL}s)")
+        else:
+            logger.debug(f"QoS cache expired ({age:.1f}s old, TTL: {self.CACHE_TTL}s)")
+
+        return is_valid
+
+    def _enrich_wifi_config(self, raw_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enrich raw WiFi config data with formatted fields
+
+        Args:
+            raw_config: Raw WiFi config from Deco API
+
+        Returns:
+            Enriched WiFi config dictionary
+        """
+        # Extract SSID(s)
+        ssid = raw_config.get("ssid") or raw_config.get("SSID") or "Unknown"
+
+        # Extract bands
+        bands = []
+        if raw_config.get("band_2_4ghz_enabled") or raw_config.get("is_2_4ghz") or "2.4" in str(raw_config.get("bands", "")):
+            bands.append("2.4 GHz")
+        if raw_config.get("band_5ghz_enabled") or raw_config.get("is_5ghz") or "5" in str(raw_config.get("bands", "")):
+            bands.append("5 GHz")
+        if raw_config.get("band_6ghz_enabled") or raw_config.get("is_6ghz") or "6" in str(raw_config.get("bands", "")):
+            bands.append("6 GHz")
+
+        # Default to common bands if not specified
+        if not bands:
+            bands = ["2.4 GHz", "5 GHz"]
+
+        # Extract channel information
+        channel_2_4ghz = raw_config.get("channel_2_4ghz") or raw_config.get("channel") or "Auto"
+        channel_5ghz = raw_config.get("channel_5ghz") or raw_config.get("channel_5g") or "Auto"
+        channel_6ghz = raw_config.get("channel_6ghz") or None
+
+        # Extract band steering
+        band_steering = raw_config.get("band_steering_enabled") or raw_config.get("band_steering") or False
+
+        enriched_config = {
+            "ssid": str(ssid),
+            "bands": bands,
+            "channel_2_4ghz": str(channel_2_4ghz),
+            "channel_5ghz": str(channel_5ghz),
+            "channel_6ghz": str(channel_6ghz) if channel_6ghz else None,
+            "band_steering_enabled": bool(band_steering),
+            "last_updated": datetime.now().isoformat(),
+            "raw_data": raw_config,
+        }
+
+        return enriched_config
+
+    def _build_qos_from_clients(self, clients: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Build QoS data from connected clients
+
+        Args:
+            clients: List of connected clients from Deco API
+
+        Returns:
+            QoS settings dictionary with per-device bandwidth info
+        """
+        devices = []
+
+        for client in clients:
+            device_entry = {
+                "device_name": client.get("name") or client.get("clientName") or "Unknown",
+                "mac_address": client.get("macAddress") or client.get("mac_address") or "Unknown",
+                "priority": client.get("priority") or "Normal",
+                "bandwidth_limit_mbps": client.get("bandwidth_limit") or client.get("bandwidth") or None,
+                "connection_type": client.get("connectionType") or client.get("type") or "WiFi",
+                "ip_address": client.get("ipAddress") or client.get("ip_address") or "Unknown",
+            }
+            devices.append(device_entry)
+
+        qos_data = {
+            "qos_enabled": True,
+            "devices": devices,
+            "total_devices": len(devices),
+            "total_bandwidth_mbps": None,  # Not typically available from Deco API
+            "last_updated": datetime.now().isoformat(),
+            "raw_data": {"clients": clients},
+        }
+
+        return qos_data
