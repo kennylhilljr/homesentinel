@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './DeviceDetailCard.css';
+import { buildUrl } from '../utils/apiConfig';
 
 /**
  * DeviceDetailCard Component
@@ -62,7 +63,7 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
       updateData[field] = formData[field];
 
       const response = await fetch(
-        `https://localhost:8443/api/devices/${device.device_id}`,
+        buildUrl(`/devices/${device.device_id}`),
         {
           method: 'PUT',
           headers: {

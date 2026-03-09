@@ -5,6 +5,7 @@ Manages Deco node data retrieval, enrichment, and caching
 
 import logging
 import time
+import base64
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from services.deco_client import DecoClient, InvalidCredentialsError, APIConnectionError
@@ -63,11 +64,18 @@ class DecoService:
         try:
             logger.info("Fetching fresh node list from Deco API")
             raw_nodes = self.deco_client.get_node_list()
+            raw_clients = []
+            try:
+                raw_clients = self.deco_client.get_client_list()
+            except Exception as e:
+                logger.warning(f"Failed to fetch Deco clients while enriching node data: {e}")
+
+            clients_by_node = self._build_node_client_index(raw_nodes, raw_clients)
 
             # Enrich nodes with additional data
             enriched_nodes = []
             for node in raw_nodes:
-                enriched_node = self._enrich_node_data(node)
+                enriched_node = self._enrich_node_data(node, clients_by_node)
                 enriched_nodes.append(enriched_node)
 
             # Update cache
@@ -124,7 +132,140 @@ class DecoService:
 
         return is_valid
 
-    def _enrich_node_data(self, raw_node: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_node_status(self, raw_status: Any, raw_node: Dict[str, Any], connected_clients: int) -> str:
+        """Normalize status variants to online/offline with sensible fallbacks."""
+        # TP-Link cloud API returns status as int: 1=online, 0=offline
+        if isinstance(raw_status, int):
+            return "online" if raw_status >= 1 else "offline"
+
+        status_text = str(raw_status or "").strip().lower()
+        if status_text in {"online", "connected", "active", "up", "1", "true"}:
+            return "online"
+        if status_text in {"offline", "disconnected", "inactive", "down", "0", "false"}:
+            return "offline"
+
+        # Boolean hints from raw payload
+        for key in ("online", "isOnline", "is_online", "connected", "isConnected", "active"):
+            if key in raw_node and isinstance(raw_node.get(key), bool):
+                return "online" if raw_node.get(key) else "offline"
+
+        # If we can see clients attached, the node is online.
+        if connected_clients > 0:
+            return "online"
+
+        # Default to online for unknown status to avoid false offline alarms.
+        return "online"
+
+    def _decode_node_alias(self, alias_value: Any) -> Optional[str]:
+        """Decode TP-Link alias values that may be base64-encoded."""
+        if not alias_value:
+            return None
+        alias_text = str(alias_value).strip()
+        if not alias_text:
+            return None
+        # Already plain text
+        if any(ch in alias_text for ch in (" ", "-", "_")) and "=" not in alias_text:
+            return alias_text
+        try:
+            decoded = base64.b64decode(alias_text, validate=True).decode("utf-8", errors="ignore").strip()
+            if decoded:
+                return decoded
+        except Exception:
+            return alias_text
+        return alias_text
+
+    def _extract_client_details(self, raw_client: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize a raw Deco client object for UI consumption."""
+        return {
+            "name": (
+                raw_client.get("clientName")
+                or raw_client.get("client_name")
+                or raw_client.get("name")
+                or raw_client.get("nickname")
+                or "Unknown"
+            ),
+            "mac_address": raw_client.get("macAddress") or raw_client.get("mac_address") or "",
+            "ip_address": raw_client.get("ipAddress") or raw_client.get("ip_address") or raw_client.get("ip") or "",
+            "connection_type": raw_client.get("connectionType") or raw_client.get("connection_type") or "",
+            "signal_rssi": raw_client.get("rssi") or raw_client.get("signalRSSI") or raw_client.get("signal_rssi"),
+            "raw_data": raw_client,
+        }
+
+    def _build_node_client_index(
+        self, raw_nodes: List[Dict[str, Any]], raw_clients: List[Dict[str, Any]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Build node_id -> clients mapping from noisy Deco payloads.
+        Supports mapping by node ID and node MAC address.
+        """
+        node_index: Dict[str, List[Dict[str, Any]]] = {}
+        node_aliases: Dict[str, str] = {}
+
+        for raw_node in raw_nodes:
+            node_id = str(
+                raw_node.get("nodeID")
+                or raw_node.get("node_id")
+                or raw_node.get("deviceId")
+                or raw_node.get("device_id")
+                or raw_node.get("id")
+                or raw_node.get("macAddress")
+                or raw_node.get("mac_address")
+                or "unknown"
+            )
+            node_index[node_id] = []
+
+            for alias in (
+                raw_node.get("nodeID"),
+                raw_node.get("node_id"),
+                raw_node.get("deviceId"),
+                raw_node.get("device_id"),
+                raw_node.get("id"),
+                raw_node.get("macAddress"),
+                raw_node.get("mac_address"),
+            ):
+                if alias:
+                    node_aliases[str(alias).lower()] = node_id
+
+        for raw_client in raw_clients:
+            candidate_keys = [
+                raw_client.get("nodeID"),
+                raw_client.get("node_id"),
+                raw_client.get("nodeId"),
+                raw_client.get("connectedTo"),
+                raw_client.get("connected_to"),
+                raw_client.get("parentDeviceId"),
+                raw_client.get("parent_device_id"),
+                raw_client.get("apMac"),
+                raw_client.get("ap_mac"),
+            ]
+
+            resolved_node_id = None
+            for key in candidate_keys:
+                if key is None:
+                    continue
+                key_text = str(key).strip()
+                if not key_text:
+                    continue
+                key_lower = key_text.lower()
+                if key_text in node_index:
+                    resolved_node_id = key_text
+                    break
+                if key_lower in node_aliases:
+                    resolved_node_id = node_aliases[key_lower]
+                    break
+
+            if not resolved_node_id and len(node_index) == 1:
+                # Single-node fallback when client payload doesn't include node mapping
+                resolved_node_id = next(iter(node_index.keys()))
+
+            if resolved_node_id:
+                node_index.setdefault(resolved_node_id, []).append(self._extract_client_details(raw_client))
+
+        return node_index
+
+    def _enrich_node_data(
+        self, raw_node: Dict[str, Any], clients_by_node: Optional[Dict[str, List[Dict[str, Any]]]] = None
+    ) -> Dict[str, Any]:
         """
         Enrich raw node data with formatted and calculated fields
 
@@ -135,14 +276,48 @@ class DecoService:
             Enriched node data dictionary
         """
         # Extract base node information
-        node_id = raw_node.get("nodeID") or raw_node.get("node_id") or "unknown"
-        node_name = raw_node.get("nodeName") or raw_node.get("node_name") or f"Node {node_id}"
+        node_id = (
+            raw_node.get("nodeID")
+            or raw_node.get("node_id")
+            or raw_node.get("deviceId")
+            or raw_node.get("device_id")
+            or raw_node.get("id")
+            or raw_node.get("macAddress")
+            or raw_node.get("mac_address")
+            or "unknown"
+        )
+        node_name = (
+            raw_node.get("nodeName")
+            or raw_node.get("node_name")
+            or raw_node.get("name")
+            or raw_node.get("nickname")
+            or self._decode_node_alias(raw_node.get("alias"))
+            or f"Node {node_id}"
+        )
 
         # Extract firmware version
-        firmware = raw_node.get("fwVersion") or raw_node.get("firmware_version") or "unknown"
+        firmware = (
+            raw_node.get("fwVersion")
+            or raw_node.get("fwVer")
+            or raw_node.get("firmware_version")
+            or raw_node.get("firmwareVersion")
+            or raw_node.get("swVersion")
+            or raw_node.get("sw_version")
+            or "unknown"
+        )
 
         # Extract uptime (may be in seconds or milliseconds)
-        uptime_raw = raw_node.get("uptime") or raw_node.get("uptimeSeconds") or 0
+        uptime_raw = raw_node.get("uptime")
+        if uptime_raw is None:
+            uptime_raw = raw_node.get("uptimeSeconds")
+        if uptime_raw is None:
+            uptime_raw = raw_node.get("uptime_seconds")
+        if uptime_raw is None:
+            uptime_raw = raw_node.get("upTime")
+        if uptime_raw is None:
+            uptime_raw = raw_node.get("up_time")
+        if uptime_raw is None:
+            uptime_raw = 0
         # If uptime is in milliseconds (> 100 years in seconds), convert to seconds
         if uptime_raw > 3153600000:  # ~100 years in seconds
             uptime_seconds = int(uptime_raw / 1000)
@@ -150,18 +325,55 @@ class DecoService:
             uptime_seconds = int(uptime_raw)
 
         # Extract connected clients
-        connected_clients = raw_node.get("connectedClients") or raw_node.get("connected_clients") or 0
+        node_clients: List[Dict[str, Any]] = []
+        if clients_by_node:
+            node_clients = clients_by_node.get(str(node_id), [])
+        connected_clients_raw = (
+            raw_node.get("connectedClients")
+            or raw_node.get("connected_clients")
+            or raw_node.get("clientNum")
+            or raw_node.get("client_num")
+            or raw_node.get("connectedClientNum")
+        )
+        try:
+            connected_clients = (
+                int(connected_clients_raw) if connected_clients_raw is not None else len(node_clients)
+            )
+        except (TypeError, ValueError):
+            connected_clients = len(node_clients)
 
         # Calculate signal strength (0-100%)
         # Deco API may provide signal as RSSI (negative dBm) or as a percentage
-        signal_rssi = raw_node.get("signalRSSI") or raw_node.get("signal_rssi") or -70
+        signal_rssi = (
+            raw_node.get("signalRSSI")
+            or raw_node.get("signal_rssi")
+            or raw_node.get("rssi")
+            or raw_node.get("signal")
+            or raw_node.get("signalStrength")
+            or raw_node.get("signal_strength")
+        )
         signal_strength = self._calculate_signal_strength(signal_rssi)
 
         # Extract model information
-        model = raw_node.get("modelName") or raw_node.get("model_name") or "unknown"
+        model = (
+            raw_node.get("modelName")
+            or raw_node.get("model_name")
+            or raw_node.get("model")
+            or raw_node.get("deviceModel")
+            or raw_node.get("deviceName")
+            or raw_node.get("productModel")
+            or raw_node.get("product_model")
+            or raw_node.get("hwType")
+            or "unknown"
+        )
 
-        # Extract status
-        status = raw_node.get("status") or raw_node.get("nodeStatus") or "unknown"
+        # Extract status — use 'is not None' to avoid skipping falsy 0
+        raw_status = raw_node.get("status")
+        if raw_status is None:
+            raw_status = raw_node.get("nodeStatus")
+        if raw_status is None:
+            raw_status = raw_node.get("node_status")
+        status = self._normalize_node_status(raw_status, raw_node, connected_clients)
 
         # Create enriched node object
         enriched_node = {
@@ -173,6 +385,7 @@ class DecoService:
             "signal_strength": int(signal_strength),
             "model": str(model),
             "status": str(status),
+            "clients": node_clients,
             "last_updated": datetime.now().isoformat(),
             "raw_data": raw_node,  # Include raw data for debugging
         }
@@ -190,6 +403,9 @@ class DecoService:
             Signal strength as percentage (0-100)
         """
         try:
+            if signal_value in (None, "", "unknown"):
+                return 0
+
             signal_int = int(signal_value)
 
             # If value is negative (RSSI in dBm), convert to percentage

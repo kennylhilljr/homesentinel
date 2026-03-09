@@ -26,6 +26,11 @@ class WiFiConfigUpdate(BaseModel):
     band_steering: Optional[bool] = None
 
 
+class AlexaNameSyncRequest(BaseModel):
+    """Request model for syncing names from Alexa links."""
+    overwrite_existing: bool = False
+
+
 def set_deco_service(service):
     """
     Set the Deco service instance
@@ -166,6 +171,134 @@ async def refresh_deco_nodes() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to refresh nodes: {str(e)}")
 
 
+@router.post("/auto-name-nodes")
+async def auto_name_deco_nodes() -> Dict[str, Any]:
+    """Auto-name network devices that match Deco node MACs."""
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    try:
+        nodes = deco_service.get_nodes_with_details()
+        named = 0
+        for node in nodes:
+            raw = node.get("raw_data", {})
+            node_mac_raw = raw.get("deviceMac", "")
+            node_name = node.get("node_name", "")
+            if not node_mac_raw or not node_name:
+                continue
+
+            # Normalize MAC: "E4FAC45699FC" -> "e4:fa:c4:56:99:fc"
+            mac_clean = node_mac_raw.lower().replace("-", "").replace(":", "")
+            if len(mac_clean) == 12:
+                normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+            else:
+                continue
+
+            # Try to find and name this network device
+            if correlation_service and correlation_service.db:
+                try:
+                    with correlation_service.db.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "UPDATE network_devices SET friendly_name = ? WHERE mac_address = ? AND (friendly_name IS NULL OR friendly_name = '')",
+                            (f"Deco {node_name}", normalized),
+                        )
+                        conn.commit()
+                        if cursor.rowcount > 0:
+                            named += 1
+                except Exception as e:
+                    logger.warning(f"Failed to auto-name Deco node {node_name}: {e}")
+
+        return {"success": True, "named": named, "total_nodes": len(nodes)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to auto-name nodes: {e}")
+
+
+@router.get("/clients")
+async def get_deco_clients() -> Dict[str, Any]:
+    """Get raw Deco client list with names and MAC addresses.
+
+    Tries cloud passthrough first, falls back to local API if cloud returns empty.
+    """
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    try:
+        clients = deco_service.deco_client.get_client_list()
+
+        # Fallback to local API if cloud returned empty
+        if not clients:
+            try:
+                logger.info("Cloud client list empty, trying local Deco API fallback")
+                clients = deco_service.deco_client.get_client_list_local()
+            except Exception as local_err:
+                logger.warning(f"Local API fallback also failed: {local_err}")
+
+        return {
+            "clients": clients,
+            "total": len(clients),
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch Deco clients: {e}")
+        if "401" in str(e) or "Unauthorized" in str(e):
+            raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch clients: {str(e)}")
+
+
+@router.post("/import-client-names")
+async def import_deco_client_names() -> Dict[str, Any]:
+    """Import client names from local Deco API into network device records.
+
+    Fetches the client list from the local Deco API (which has device names like
+    "Alarm Backyard", "LeosRokuTV", etc.), matches by MAC address, and updates
+    network_devices.friendly_name for unnamed devices.
+    """
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    try:
+        clients = deco_service.deco_client.get_client_list_local()
+
+        if not clients:
+            return {"success": True, "imported": 0, "total_clients": 0, "clients": []}
+
+        imported = 0
+        if correlation_service and correlation_service.db:
+            with correlation_service.db.get_connection() as conn:
+                cursor = conn.cursor()
+                for client in clients:
+                    client_name = client.get("name", "")
+                    client_mac = client.get("mac", "") or client.get("macAddress", "")
+                    if not client_name or not client_mac:
+                        continue
+
+                    # Normalize MAC: "AA-BB-CC-DD-EE-FF" -> "aa:bb:cc:dd:ee:ff"
+                    mac_clean = client_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
+                    if len(mac_clean) == 12:
+                        normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                    else:
+                        continue
+
+                    cursor.execute(
+                        "UPDATE network_devices SET friendly_name = ? WHERE mac_address = ? AND (friendly_name IS NULL OR friendly_name = '')",
+                        (client_name, normalized),
+                    )
+                    if cursor.rowcount > 0:
+                        imported += 1
+
+                conn.commit()
+
+        return {
+            "success": True,
+            "imported": imported,
+            "total_clients": len(clients),
+            "clients": clients,
+        }
+    except Exception as e:
+        logger.error(f"Failed to import Deco client names: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to import client names: {str(e)}")
+
+
 @router.get("/clients-merged")
 async def get_merged_deco_clients() -> Dict[str, Any]:
     """
@@ -229,6 +362,27 @@ async def get_merged_deco_clients() -> Dict[str, Any]:
         if "401" in str(e) or "Unauthorized" in str(e):
             raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
         raise HTTPException(status_code=500, detail=f"Failed to get merged clients: {str(e)}")
+
+
+@router.post("/sync-names-from-alexa")
+async def sync_deco_names_from_alexa(req: AlexaNameSyncRequest) -> Dict[str, Any]:
+    """
+    Sync linked Alexa device names into network device friendly names.
+
+    This updates HomeSentinel's network device records so Deco views can display
+    names aligned with Alexa naming.
+    """
+    if correlation_service is None:
+        raise HTTPException(status_code=500, detail="Correlation service not initialized")
+
+    try:
+        result = correlation_service.sync_network_friendly_names_from_alexa(
+            overwrite_existing=req.overwrite_existing
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Failed to sync names from Alexa: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync names: {str(e)}")
 
 
 @router.get("/wifi-config")

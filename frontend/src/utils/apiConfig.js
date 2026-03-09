@@ -23,8 +23,8 @@ export function getApiUrl() {
     return window.__API_URL__;
   }
 
-  // 3. Default to relative path (works in dev and prod)
-  // This assumes backend is available at /api on same domain
+  // 3. Default: use relative path so CRA proxy handles the request
+  // The proxy in package.json forwards to https://localhost:8443
   return '/api';
 }
 
@@ -40,8 +40,7 @@ export function buildUrl(endpoint) {
   return `${baseUrl}${normalizedEndpoint}`;
 }
 
-// For development: if running against localhost:9000
-// Set environment variable: REACT_APP_API_URL=http://localhost:9000/api
+// Override: set REACT_APP_API_URL=https://localhost:8443/api in .env
 
 export default {
   getApiUrl,

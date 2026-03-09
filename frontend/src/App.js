@@ -5,8 +5,14 @@ import DeviceDetailCard from './components/DeviceDetailCard';
 import DeviceSearch from './components/DeviceSearch';
 import DecoNodesPage from './pages/DecoNodesPage';
 import DecoTopologyPage from './pages/DecoTopologyPage';
+import SettingsPage from './pages/SettingsPage';
+import AlexaDevicesPage from './pages/AlexaDevicesPage';
+import DeviceNamingPage from './pages/DeviceNamingPage';
+import { buildUrl } from './utils/apiConfig';
+import ViewModeToggle from './components/ViewModeToggle';
 
 function App() {
+  const [theme, setTheme] = useState(() => localStorage.getItem('hs_theme') || 'deep-slate');
   const [apiStatus, setApiStatus] = useState('connecting...');
   const [devices, setDevices] = useState([]);
   const [pollingConfig, setPollingConfig] = useState(null);
@@ -18,6 +24,7 @@ function App() {
   const [editingDevice, setEditingDevice] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [deviceViewMode, setDeviceViewMode] = useState('grid');
   const [formData, setFormData] = useState({
     friendly_name: '',
     device_type: '',
@@ -28,14 +35,9 @@ function App() {
     // Check backend API health
     const checkHealth = async () => {
       try {
-        const response = await fetch('http://localhost:9000/api/health', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+        const response = await fetch(buildUrl('/health'));
         if (response.ok) {
-          const data = await response.json();
+          await response.json();
           setApiStatus('connected');
         } else {
           setApiStatus('error');
@@ -48,12 +50,7 @@ function App() {
 
     const getDevices = async () => {
       try {
-        const response = await fetch('http://localhost:9000/api/devices', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+        const response = await fetch(buildUrl('/devices'));
         if (response.ok) {
           const data = await response.json();
           setDevices(data.devices || []);
@@ -66,12 +63,7 @@ function App() {
 
     const getPollingConfig = async () => {
       try {
-        const response = await fetch('http://localhost:9000/api/config/polling', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+        const response = await fetch(buildUrl('/config/polling'));
         if (response.ok) {
           const data = await response.json();
           setPollingConfig(data);
@@ -83,12 +75,7 @@ function App() {
 
     const getDeviceGroups = async () => {
       try {
-        const response = await fetch('http://localhost:9000/api/device-groups', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+        const response = await fetch(buildUrl('/device-groups'));
         if (response.ok) {
           const data = await response.json();
           setDeviceGroups(data.groups || []);
@@ -113,14 +100,28 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    // One-time migration: switch old default users to Deep Slate.
+    const migrated = localStorage.getItem('hs_theme_default_migrated');
+    if (migrated) return;
+
+    const storedTheme = localStorage.getItem('hs_theme');
+    if (!storedTheme || storedTheme === 'blue-steel') {
+      setTheme('deep-slate');
+      localStorage.setItem('hs_theme', 'deep-slate');
+    }
+    localStorage.setItem('hs_theme_default_migrated', '1');
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('hs_theme', theme);
+  }, [theme]);
+
   const triggerManualScan = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:9000/api/devices/scan-now', {
+      const response = await fetch(buildUrl('/devices/scan-now'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
       if (response.ok) {
         const data = await response.json();
@@ -189,12 +190,10 @@ function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:9000/api/devices/${editingDevice.device_id}`,
+        buildUrl(`/devices/${editingDevice.device_id}`),
         {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
         }
       );
@@ -230,7 +229,7 @@ function App() {
   const offlineCount = devices.filter(d => d.status === 'offline').length;
 
   return (
-    <div className="App">
+    <div className={`App theme-${theme}`}>
       <header className="App-header">
         <div className="header-content">
           <h1>HomeSentinel</h1>
@@ -255,6 +254,24 @@ function App() {
           >
             Network Topology
           </button>
+          <button
+            className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('alexa')}
+          >
+            Alexa
+          </button>
+          <button
+            className={`nav-button ${currentPage === 'naming' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('naming')}
+          >
+            Device Naming
+          </button>
+          <button
+            className={`nav-button ${currentPage === 'settings' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('settings')}
+          >
+            Settings
+          </button>
         </nav>
       </header>
       <main className="App-main">
@@ -263,6 +280,20 @@ function App() {
 
         {/* Network Topology Page */}
         {currentPage === 'topology' && <DecoTopologyPage />}
+
+        {/* Alexa Devices Page */}
+        {currentPage === 'alexa' && <AlexaDevicesPage />}
+
+        {/* Device Naming Page */}
+        {currentPage === 'naming' && <DeviceNamingPage />}
+
+        {/* Settings Page */}
+        {currentPage === 'settings' && (
+          <SettingsPage
+            theme={theme}
+            onThemeChange={setTheme}
+          />
+        )}
 
         {/* Dashboard Page */}
         {currentPage === 'dashboard' && (
@@ -324,6 +355,11 @@ function App() {
           <div className="devices-header">
             <h2>Network Devices ({devices.length})</h2>
             <div className="devices-actions">
+              <ViewModeToggle
+                label="Devices"
+                value={deviceViewMode}
+                onChange={setDeviceViewMode}
+              />
               <button
                 onClick={triggerManualScan}
                 disabled={loading}
@@ -339,16 +375,60 @@ function App() {
             </div>
           </div>
           {devices.length > 0 ? (
-            <div className="devices-grid">
-              {devices.map((device) => (
-                <DeviceCard
-                  key={device.device_id}
-                  device={device}
-                  groups={deviceGroups}
-                  onClick={() => handleDeviceClick(device)}
-                />
-              ))}
-            </div>
+            deviceViewMode === 'grid' ? (
+              <div className="devices-grid">
+                {devices.map((device) => (
+                  <DeviceCard
+                    key={device.device_id}
+                    device={device}
+                    groups={deviceGroups}
+                    onClick={() => handleDeviceClick(device)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <table className="devices-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>IP</th>
+                    <th>MAC</th>
+                    <th>Vendor</th>
+                    <th>Type</th>
+                    <th>Last Seen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {devices.map((device) => (
+                    <tr
+                      key={device.device_id}
+                      className={`device-row ${device.status === 'online' ? 'online' : 'offline'}`}
+                      onClick={() => handleDeviceClick(device)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          handleDeviceClick(device);
+                        }
+                      }}
+                    >
+                      <td className="device-name">{getDeviceDisplayName(device)}</td>
+                      <td className="status">
+                        <span className={`status-badge ${device.status === 'online' ? 'online' : 'offline'}`}>
+                          {device.status === 'online' ? 'Online' : 'Offline'}
+                        </span>
+                      </td>
+                      <td className="ip-address">{device.current_ip || 'N/A'}</td>
+                      <td className="mac-address">{device.mac_address}</td>
+                      <td className="vendor-name">{device.vendor_name || 'Unknown'}</td>
+                      <td className="device-type">{device.device_type || '-'}</td>
+                      <td className="timestamp">{formatDate(device.last_seen)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
           ) : (
             <p className="no-devices">No devices discovered yet. Click "Scan Now" to start discovery.</p>
           )}

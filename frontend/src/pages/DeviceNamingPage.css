@@ -1,0 +1,227 @@
+.naming-page {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.naming-stats {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.naming-stat {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  text-align: center;
+  flex: 1;
+  min-width: 100px;
+}
+
+.naming-stat .stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #00d4ff;
+}
+
+.naming-stat .stat-label {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 0.25rem;
+}
+
+.naming-error {
+  background: #2a1a1a;
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  color: #ff6666;
+}
+
+.naming-loading {
+  text-align: center;
+  padding: 3rem;
+  color: #888;
+}
+
+.naming-empty {
+  text-align: center;
+  padding: 3rem;
+  color: #888;
+  background: #1a1a2e;
+  border-radius: 8px;
+}
+
+.naming-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.naming-row {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.naming-row.linked {
+  border-color: #00d4ff33;
+  background: #1a1a2e;
+}
+
+.net-device-info {
+  flex: 0 0 350px;
+  min-width: 280px;
+}
+
+.net-device-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.green { background: #00ff88; }
+.status-dot.gray { background: #555; }
+
+.net-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #eee;
+}
+
+.named-badge {
+  font-size: 0.65rem;
+  background: #00d4ff33;
+  color: #00d4ff;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.net-device-details {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.78rem;
+  color: #888;
+  flex-wrap: wrap;
+}
+
+.net-device-details .mac {
+  font-family: monospace;
+  color: #aaa;
+}
+
+.net-device-details .vendor {
+  color: #7a7aff;
+}
+
+.link-controls {
+  flex: 1;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.suggestions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.suggestions select {
+  flex: 1;
+  background: #0d0d1a;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.link-btn, .name-btn {
+  background: #00d4ff;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.link-btn:hover, .name-btn:hover {
+  background: #00b8e0;
+}
+
+.link-btn:disabled, .name-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.manual-name {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.manual-name input {
+  flex: 1;
+  background: #0d0d1a;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.manual-name input::placeholder {
+  color: #666;
+}
+
+/* Reuse filter styles from AlexaDevicesPage */
+.device-filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  background: #1a1a2e;
+  color: #888;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.filter-btn.active {
+  background: #00d4ff22;
+  color: #00d4ff;
+  border-color: #00d4ff;
+}
+
+.filter-btn:hover {
+  border-color: #555;
+}

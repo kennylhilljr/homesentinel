@@ -535,3 +535,74 @@ class TestGetLanDevices:
 
         assert result == devices
         mock_device_repo.list_all.assert_called_once()
+
+
+class TestAlexaNameSync:
+    """Tests for syncing network friendly names from linked Alexa names."""
+
+    def test_sync_names_updates_when_network_name_missing(self):
+        mock_deco_service = Mock()
+        mock_device_repo = Mock()
+        mock_device_repo.update_device_metadata.return_value = {"device_id": "dev-1"}
+        service = CorrelationService(mock_deco_service, mock_device_repo)
+
+        service.get_alexa_links = Mock(return_value=[
+            {
+                "alexa_endpoint_id": "ep-1",
+                "network_device_id": "dev-1",
+                "alexa_name": "Living Room Lamp",
+                "network_name": "",
+            }
+        ])
+
+        result = service.sync_network_friendly_names_from_alexa()
+
+        assert result["updated"] == 1
+        assert result["failed"] == 0
+        assert result["skipped_existing"] == 0
+        mock_device_repo.update_device_metadata.assert_called_once_with(
+            "dev-1", friendly_name="Living Room Lamp"
+        )
+
+    def test_sync_names_skips_existing_by_default(self):
+        mock_deco_service = Mock()
+        mock_device_repo = Mock()
+        service = CorrelationService(mock_deco_service, mock_device_repo)
+
+        service.get_alexa_links = Mock(return_value=[
+            {
+                "alexa_endpoint_id": "ep-1",
+                "network_device_id": "dev-1",
+                "alexa_name": "Kitchen Plug",
+                "network_name": "Already Named",
+            }
+        ])
+
+        result = service.sync_network_friendly_names_from_alexa()
+
+        assert result["updated"] == 0
+        assert result["skipped_existing"] == 1
+        mock_device_repo.update_device_metadata.assert_not_called()
+
+    def test_sync_names_overwrites_when_enabled(self):
+        mock_deco_service = Mock()
+        mock_device_repo = Mock()
+        mock_device_repo.update_device_metadata.return_value = {"device_id": "dev-1"}
+        service = CorrelationService(mock_deco_service, mock_device_repo)
+
+        service.get_alexa_links = Mock(return_value=[
+            {
+                "alexa_endpoint_id": "ep-1",
+                "network_device_id": "dev-1",
+                "alexa_name": "Bedroom TV",
+                "network_name": "Old Name",
+            }
+        ])
+
+        result = service.sync_network_friendly_names_from_alexa(overwrite_existing=True)
+
+        assert result["updated"] == 1
+        assert result["skipped_existing"] == 0
+        mock_device_repo.update_device_metadata.assert_called_once_with(
+            "dev-1", friendly_name="Bedroom TV"
+        )

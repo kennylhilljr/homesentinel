@@ -15,19 +15,25 @@ logger = logging.getLogger(__name__)
 class CorrelationService:
     """
     Service for correlating Deco connected clients with locally-discovered NetworkDevices
-    Matches devices by MAC address to provide unified view of network
+    Matches devices by MAC address to provide unified view of network.
+    Also supports Alexa device correlation.
     """
 
-    def __init__(self, deco_service: DecoService, device_repo: NetworkDeviceRepository):
+    def __init__(self, deco_service: DecoService, device_repo: NetworkDeviceRepository,
+                 alexa_service=None, db=None):
         """
         Initialize correlation service
 
         Args:
             deco_service: DecoService instance for fetching Deco clients
             device_repo: NetworkDeviceRepository for accessing local device data
+            alexa_service: Optional AlexaService for Alexa device correlation
+            db: Optional Database instance for reading link table
         """
         self.deco_service = deco_service
         self.device_repo = device_repo
+        self.alexa_service = alexa_service
+        self.db = db
 
     def normalize_mac_address(self, mac_address: str) -> str:
         """
@@ -261,3 +267,146 @@ class CorrelationService:
         except Exception as e:
             logger.error(f"Failed to get merged clients: {e}")
             raise
+
+    def get_alexa_links(self) -> List[Dict[str, Any]]:
+        """Get all Alexa-to-network device links from database"""
+        if not self.db:
+            return []
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT al.alexa_endpoint_id, al.network_device_id, al.link_type,
+                           ad.friendly_name as alexa_name, ad.device_type as alexa_type,
+                           nd.mac_address, nd.current_ip, nd.friendly_name as network_name
+                    FROM alexa_device_links al
+                    LEFT JOIN alexa_devices ad ON al.alexa_endpoint_id = ad.endpoint_id
+                    LEFT JOIN network_devices nd ON al.network_device_id = nd.device_id
+                """)
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Failed to get Alexa links: {e}")
+            return []
+
+    def auto_correlate_alexa(self) -> Dict[str, Any]:
+        """
+        Auto-correlate Alexa devices with network devices by matching IP addresses.
+        This is best-effort since Alexa doesn't always expose MAC/IP.
+        """
+        if not self.alexa_service or not self.db:
+            return {"linked": 0, "message": "Alexa service or DB not available"}
+
+        try:
+            alexa_devices = self.alexa_service.get_devices()
+            lan_devices = self.get_lan_devices()
+            linked_count = 0
+
+            # Build IP-to-device map for LAN devices
+            ip_to_device = {}
+            for d in lan_devices:
+                ip = d.get("current_ip", "")
+                if ip:
+                    ip_to_device[ip] = d
+
+            # Try to match Alexa devices by any available network info
+            for alexa_dev in alexa_devices:
+                endpoint_id = alexa_dev.get("endpoint_id", "")
+                raw = alexa_dev.get("raw_data", {})
+
+                # Some Alexa devices expose network info in additionalAttributes
+                network_info = raw.get("additionalAttributes", {})
+                device_ip = network_info.get("ipAddress") or network_info.get("ip_address")
+
+                if device_ip and device_ip in ip_to_device:
+                    lan_dev = ip_to_device[device_ip]
+                    device_id = lan_dev.get("device_id", "")
+
+                    with self.db.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO alexa_device_links (alexa_endpoint_id, network_device_id, link_type) VALUES (?, ?, 'auto')",
+                            (endpoint_id, device_id),
+                        )
+                        conn.commit()
+                        if cursor.rowcount > 0:
+                            linked_count += 1
+
+            return {"linked": linked_count, "message": f"Auto-linked {linked_count} devices"}
+        except Exception as e:
+            logger.error(f"Auto-correlation failed: {e}")
+            return {"linked": 0, "message": f"Error: {e}"}
+
+    def sync_network_friendly_names_from_alexa(self, overwrite_existing: bool = False) -> Dict[str, Any]:
+        """
+        Copy linked Alexa device names into network device friendly names.
+
+        Args:
+            overwrite_existing: When False, keeps existing non-empty network friendly names.
+
+        Returns:
+            Summary with updated/skipped/failed counts.
+        """
+        links = self.get_alexa_links()
+        if not links:
+            return {
+                "success": True,
+                "updated": 0,
+                "skipped_existing": 0,
+                "skipped_missing": 0,
+                "failed": 0,
+                "message": "No Alexa links found",
+            }
+
+        updated = 0
+        skipped_existing = 0
+        skipped_missing = 0
+        failed = 0
+        updates: List[Dict[str, str]] = []
+
+        for link in links:
+            network_device_id = (link.get("network_device_id") or "").strip()
+            alexa_name = (link.get("alexa_name") or "").strip()
+            network_name = (link.get("network_name") or "").strip()
+
+            if not network_device_id or not alexa_name:
+                skipped_missing += 1
+                continue
+
+            if not overwrite_existing and network_name:
+                skipped_existing += 1
+                continue
+
+            if network_name == alexa_name:
+                skipped_existing += 1
+                continue
+
+            try:
+                result = self.device_repo.update_device_metadata(
+                    network_device_id, friendly_name=alexa_name
+                )
+                if result:
+                    updated += 1
+                    updates.append({
+                        "network_device_id": network_device_id,
+                        "new_name": alexa_name,
+                    })
+                else:
+                    failed += 1
+            except Exception as e:
+                failed += 1
+                logger.error(
+                    "Failed to sync friendly name for network device %s: %s",
+                    network_device_id,
+                    e,
+                )
+
+        return {
+            "success": True,
+            "updated": updated,
+            "skipped_existing": skipped_existing,
+            "skipped_missing": skipped_missing,
+            "failed": failed,
+            "total_links": len(links),
+            "updates": updates,
+        }

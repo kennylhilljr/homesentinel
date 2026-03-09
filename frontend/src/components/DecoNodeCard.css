@@ -1,39 +1,36 @@
-/* Deco Node Card Component Styles */
-
 .deco-node-card {
-  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-  border: 1px solid #374151;
-  border-radius: 12px;
+  background: linear-gradient(170deg, #ffffff, #f8fbff);
+  border: 1px solid var(--border, #d4dde8);
+  border-radius: 14px;
   padding: 20px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   height: 100%;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(23, 32, 51, 0.08);
 }
 
 .deco-node-card:hover {
-  border-color: #4b5563;
-  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+  border-color: #c6d6fb;
+  box-shadow: 0 14px 34px rgba(23, 32, 51, 0.12);
   transform: translateY(-2px);
 }
 
 .deco-node-card:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--brand, #0b5cab);
   outline-offset: 2px;
 }
 
 .deco-node-card.online {
-  border-left: 4px solid #10b981;
+  border-top: 4px solid var(--success, #1e8b52);
 }
 
 .deco-node-card.offline {
-  border-left: 4px solid #ef4444;
-  opacity: 0.7;
+  border-top: 4px solid var(--danger, #bf2f4b);
+  opacity: 0.85;
 }
 
-/* Header Section */
 .node-card-header {
   display: flex;
   justify-content: space-between;
@@ -49,17 +46,17 @@
 
 .node-name {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #f3f4f6;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--text, #0f1a2a);
   word-break: break-word;
 }
 
 .node-id-small {
-  margin: 4px 0 0 0;
-  font-size: 12px;
-  color: #9ca3af;
-  font-family: 'Monaco', 'Menlo', monospace;
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  color: var(--text-muted, #556277);
+  font-family: 'SFMono-Regular', Menlo, Monaco, monospace;
 }
 
 .header-actions {
@@ -68,31 +65,30 @@
   align-items: center;
 }
 
-/* Status Badge */
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .status-badge.status-online {
-  background-color: rgba(16, 185, 129, 0.1);
-  color: #10b981;
-  border: 1px solid #10b981;
+  background-color: #e7f8ef;
+  color: #0f9f65;
+  border: 1px solid #b7e7cb;
 }
 
 .status-badge.status-offline {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid #ef4444;
+  background-color: #fee8ed;
+  color: #bd244e;
+  border: 1px solid #f6bfd0;
 }
 
-.status-dot {
+.status-badge .status-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
@@ -100,25 +96,25 @@
   animation: pulse 2s infinite;
 }
 
-.status-dot.online {
-  background-color: #10b981;
+.status-badge .status-dot.online {
+  background-color: var(--success, #1e8b52);
 }
 
-.status-dot.offline {
-  background-color: #ef4444;
+.status-badge .status-dot.offline {
+  background-color: var(--danger, #bf2f4b);
   animation: none;
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
-    opacity: 0.5;
+    opacity: 0.45;
   }
 }
 
-/* Content Section */
 .node-card-content {
   display: flex;
   gap: 16px;
@@ -140,38 +136,33 @@
   min-width: 120px;
 }
 
-/* Info Rows */
 .node-info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 0.87rem;
 }
 
 .node-label {
-  color: #9ca3af;
-  font-weight: 500;
+  color: var(--text-muted, #556277);
+  font-weight: 700;
   min-width: 70px;
 }
 
 .node-value {
-  color: #f3f4f6;
-  font-weight: 500;
+  color: var(--text, #0f1a2a);
+  font-weight: 600;
   text-align: right;
 }
 
 .node-value.firmware {
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 13px;
-  background-color: rgba(59, 130, 246, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #93c5fd;
-}
-
-.node-value.uptime {
-  color: #f3f4f6;
+  font-family: 'SFMono-Regular', Menlo, Monaco, monospace;
+  font-size: 0.77rem;
+  background-color: #ebf2ff;
+  padding: 3px 7px;
+  border-radius: 6px;
+  color: var(--brand-strong, #084785);
 }
 
 .node-value.clients {
@@ -181,23 +172,22 @@
 }
 
 .client-count {
-  background-color: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
+  background-color: #e6eeff;
+  color: var(--brand-strong, #084785);
   padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 600;
-  font-size: 13px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.8rem;
 }
 
 .node-value.model {
-  background-color: rgba(168, 85, 247, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #d8b4fe;
-  font-size: 13px;
+  background-color: #eef6ff;
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: #315491;
+  font-size: 0.8rem;
 }
 
-/* Signal Strength Indicator */
 .signal-indicator-container {
   position: relative;
   display: flex;
@@ -208,7 +198,7 @@
 }
 
 .signal-ring {
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  filter: drop-shadow(0 2px 4px rgba(20, 44, 90, 0.1));
 }
 
 .signal-progress {
@@ -225,61 +215,48 @@
 }
 
 .signal-percentage {
-  font-size: 16px;
+  font-size: 0.95rem;
   font-weight: 700;
-  color: #f3f4f6;
+  color: var(--text, #0f1a2a);
   line-height: 1;
 }
 
 .signal-label {
-  font-size: 11px;
-  color: #9ca3af;
+  font-size: 0.64rem;
+  color: var(--text-muted, #556277);
   margin-top: 2px;
   text-transform: uppercase;
-  font-weight: 500;
+  font-weight: 700;
 }
 
-.signal-excellent .signal-percentage {
-  color: #10b981;
-}
-
+.signal-excellent .signal-percentage,
 .signal-excellent .signal-label {
-  color: #10b981;
+  color: var(--success, #1e8b52);
 }
 
-.signal-good .signal-percentage {
-  color: #f59e0b;
-}
-
+.signal-good .signal-percentage,
 .signal-good .signal-label {
-  color: #f59e0b;
+  color: var(--brand, #0b5cab);
 }
 
-.signal-fair .signal-percentage {
-  color: #f97316;
-}
-
+.signal-fair .signal-percentage,
 .signal-fair .signal-label {
-  color: #f97316;
+  color: #f1ab00;
 }
 
-.signal-poor .signal-percentage {
-  color: #ef4444;
-}
-
+.signal-poor .signal-percentage,
 .signal-poor .signal-label {
-  color: #ef4444;
+  color: var(--danger, #bf2f4b);
 }
 
-/* Footer Section */
 .node-card-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #374151;
-  font-size: 12px;
-  color: #6b7280;
+  border-top: 1px solid #e2e9f7;
+  font-size: 0.72rem;
+  color: #6f7f98;
 }
 
 .footer-text {
@@ -287,21 +264,19 @@
 }
 
 .footer-timestamp {
-  color: #4b5563;
-  font-size: 11px;
+  color: #8a98ad;
+  font-size: 0.7rem;
 }
 
-/* Loading State */
 .node-card.loading {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 300px;
-  color: #9ca3af;
+  color: var(--text-muted, #556277);
   animation: pulse 1.5s infinite;
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
   .deco-node-card {
     padding: 16px;
@@ -353,7 +328,7 @@
   }
 
   .node-name {
-    font-size: 16px;
+    font-size: 1rem;
   }
 
   .signal-indicator-container {
@@ -362,10 +337,10 @@
   }
 
   .signal-percentage {
-    font-size: 14px;
+    font-size: 0.86rem;
   }
 
   .signal-label {
-    font-size: 10px;
+    font-size: 0.58rem;
   }
 }
