@@ -13,6 +13,8 @@ from .device_scanner import (
 from .polling_service import BackgroundPoller, PollingServiceManager
 from .search_service import DeviceSearchService
 from .event_service import EventService
+from .chester_client import ChesterClient, ChesterAuthError, ChesterAPIError
+from .chester_service import ChesterService
 
 __all__ = [
     'ARPScanner',
@@ -23,5 +25,9 @@ __all__ = [
     'BackgroundPoller',
     'PollingServiceManager',
     'DeviceSearchService',
-    'EventService'
+    'EventService',
+    'ChesterClient',
+    'ChesterAuthError',
+    'ChesterAPIError',
+    'ChesterService',
 ]

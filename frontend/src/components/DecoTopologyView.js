@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { buildUrl } from '../utils/apiConfig';
+import ViewModeToggle from './ViewModeToggle';
 import './DecoTopologyView.css';
 
 /**
@@ -13,6 +14,7 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [detailsViewMode, setDetailsViewMode] = useState('grid');
   const svgRef = useRef(null);
 
   /**
@@ -78,7 +80,6 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
     if (nodes.length === 0) return;
 
     // Calculate canvas dimensions
-    const padding = 60;
     const nodeRadius = 45;
     const deviceRadius = 25;
     const width = 1200;
@@ -390,72 +391,135 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
 
           {/* Detailed List Section */}
           <div className="topology-details">
+            <div className="topology-details-toolbar">
+              <ViewModeToggle
+                label="Detail Layout"
+                value={detailsViewMode}
+                onChange={setDetailsViewMode}
+              />
+            </div>
             <div className="details-section">
               <h3>Nodes ({topology.total_nodes})</h3>
-              <div className="details-grid">
-                {topology.nodes.map((node) => (
-                  <div key={node.node_id} className={`detail-card node-card ${node.status}`}>
-                    <div className="card-header">
-                      <h4>{node.node_name}</h4>
-                      <span className={`status-badge ${node.status}`}>
-                        {node.status === 'online' ? '● Online' : '● Offline'}
-                      </span>
-                    </div>
-                    <div className="card-body">
-                      <div className="info-row">
-                        <span className="info-label">ID:</span>
-                        <code>{node.node_id}</code>
+              {detailsViewMode === 'grid' ? (
+                <div className="details-grid">
+                  {topology.nodes.map((node) => (
+                    <div key={node.node_id} className={`detail-card node-card ${node.status}`}>
+                      <div className="card-header">
+                        <h4>{node.node_name}</h4>
+                        <span className={`status-badge ${node.status}`}>
+                          {node.status === 'online' ? '● Online' : '● Offline'}
+                        </span>
                       </div>
-                      <div className="info-row">
-                        <span className="info-label">MAC:</span>
-                        <code>{node.mac_address}</code>
-                      </div>
-                      <div className="info-row">
-                        <span className="info-label">Clients:</span>
-                        <span>{node.connected_clients}</span>
-                      </div>
-                      <div className="info-row">
-                        <span className="info-label">Signal:</span>
-                        <div className="signal-bar-small">
-                          <div
-                            className="signal-fill-small"
-                            style={{ width: `${node.signal_strength}%` }}
-                          ></div>
-                          <span>{node.signal_strength}%</span>
+                      <div className="card-body">
+                        <div className="info-row">
+                          <span className="info-label">ID:</span>
+                          <code>{node.node_id}</code>
+                        </div>
+                        <div className="info-row">
+                          <span className="info-label">MAC:</span>
+                          <code>{node.mac_address}</code>
+                        </div>
+                        <div className="info-row">
+                          <span className="info-label">Clients:</span>
+                          <span>{node.connected_clients}</span>
+                        </div>
+                        <div className="info-row">
+                          <span className="info-label">Signal:</span>
+                          <div className="signal-bar-small">
+                            <div
+                              className="signal-fill-small"
+                              style={{ width: `${node.signal_strength}%` }}
+                            ></div>
+                            <span>{node.signal_strength}%</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <table className="topology-list-table">
+                  <thead>
+                    <tr>
+                      <th>Node</th>
+                      <th>Status</th>
+                      <th>Clients</th>
+                      <th>Signal</th>
+                      <th>MAC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topology.nodes.map((node) => (
+                      <tr key={node.node_id}>
+                        <td>{node.node_name}</td>
+                        <td>
+                          <span className={`status-badge ${node.status}`}>
+                            {node.status === 'online' ? 'Online' : 'Offline'}
+                          </span>
+                        </td>
+                        <td>{node.connected_clients}</td>
+                        <td>{node.signal_strength}%</td>
+                        <td><code>{node.mac_address}</code></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
             <div className="details-section">
               <h3>Devices ({topology.total_devices})</h3>
-              <div className="details-grid">
-                {topology.devices.map((device) => (
-                  <div key={device.device_id} className={`detail-card device-card ${device.status}`}>
-                    <div className="card-header">
-                      <h4>{device.friendly_name || device.device_name}</h4>
-                      <span className={`status-badge ${device.status}`}>
-                        {device.status === 'online' ? '● Online' : '● Offline'}
-                      </span>
-                    </div>
-                    <div className="card-body">
-                      <div className="info-row">
-                        <span className="info-label">MAC:</span>
-                        <code>{device.mac_address}</code>
+              {detailsViewMode === 'grid' ? (
+                <div className="details-grid">
+                  {topology.devices.map((device) => (
+                    <div key={device.device_id} className={`detail-card device-card ${device.status}`}>
+                      <div className="card-header">
+                        <h4>{device.friendly_name || device.device_name}</h4>
+                        <span className={`status-badge ${device.status}`}>
+                          {device.status === 'online' ? '● Online' : '● Offline'}
+                        </span>
                       </div>
-                      {device.vendor_name && (
+                      <div className="card-body">
                         <div className="info-row">
-                          <span className="info-label">Vendor:</span>
-                          <span>{device.vendor_name}</span>
+                          <span className="info-label">MAC:</span>
+                          <code>{device.mac_address}</code>
                         </div>
-                      )}
+                        {device.vendor_name && (
+                          <div className="info-row">
+                            <span className="info-label">Vendor:</span>
+                            <span>{device.vendor_name}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <table className="topology-list-table">
+                  <thead>
+                    <tr>
+                      <th>Device</th>
+                      <th>Status</th>
+                      <th>Vendor</th>
+                      <th>MAC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topology.devices.map((device) => (
+                      <tr key={device.device_id}>
+                        <td>{device.friendly_name || device.device_name}</td>
+                        <td>
+                          <span className={`status-badge ${device.status}`}>
+                            {device.status === 'online' ? 'Online' : 'Offline'}
+                          </span>
+                        </td>
+                        <td>{device.vendor_name || 'Unknown'}</td>
+                        <td><code>{device.mac_address}</code></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </>

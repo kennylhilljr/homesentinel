@@ -140,42 +140,74 @@ class ARPScanner:
 
         return devices
 
+    def _read_arp_table(self) -> Dict[str, str]:
+        """Read the system ARP table to map IP -> MAC address"""
+        arp_map = {}
+        try:
+            result = subprocess.run(['arp', '-a'], capture_output=True, timeout=10, text=True)
+            if result.returncode != 0:
+                logger.warning(f"arp -a failed: {result.stderr}")
+                return arp_map
+
+            for line in result.stdout.split('\n'):
+                # macOS format: ? (192.168.12.1) at 58:48:49:61:39:72 on en0 ...
+                # Linux format:  ? (192.168.12.1) at 58:48:49:61:39:72 [ether] on eth0
+                match = re.search(r'\(([\d.]+)\)\s+at\s+([\da-fA-F:]+)', line)
+                if match:
+                    ip = match.group(1)
+                    mac = match.group(2).lower()
+                    # Skip incomplete, broadcast, and multicast
+                    if mac != '(incomplete)' and mac != 'ff:ff:ff:ff:ff:ff':
+                        # Normalize MAC to always use 2-digit hex octets
+                        parts = mac.split(':')
+                        mac = ':'.join(p.zfill(2) for p in parts)
+                        arp_map[ip] = mac
+
+        except Exception as e:
+            logger.error(f"Error reading ARP table: {e}")
+
+        return arp_map
+
     def scan_subnet_with_nmap(self, subnet: str) -> List[DeviceInfo]:
-        """Scan subnet using nmap"""
+        """Scan subnet using nmap, then resolve MACs from ARP table"""
         devices = []
         try:
-            # Use nmap -sn for ping scan (fast ARP-based discovery)
+            # Use nmap -sn for ping scan (triggers ARP resolution)
             cmd = ['nmap', '-sn', subnet, '-oG', '-']
-            result = subprocess.run(cmd, capture_output=True, timeout=60, text=True)
+            result = subprocess.run(cmd, capture_output=True, timeout=120, text=True)
 
             if result.returncode != 0 and result.returncode != 1:
                 logger.warning(f"nmap scan had issues: {result.stderr}")
 
-            # Parse nmap output
-            # Format: Host: IP (hostname) Status
+            # Collect discovered IPs and hostnames
+            discovered = []
             for line in result.stdout.split('\n'):
                 if line.startswith('Host:'):
-                    # Extract IP
                     match = re.search(r'Host:\s+([\d.]+)', line)
                     if match:
                         ip = match.group(1)
-
-                        # Extract hostname if present
                         hostname_match = re.search(r'\((.*?)\)', line)
                         hostname = hostname_match.group(1) if hostname_match else None
+                        discovered.append((ip, hostname))
 
-                        # For nmap, we need to get MAC address separately
-                        # This is a limitation - nmap -sn may not show MAC addresses
-                        # For now, generate a pseudo MAC based on IP
-                        mac = self._generate_mac_from_ip(ip)
+            # Now read the ARP table to get real MAC addresses
+            arp_map = self._read_arp_table()
 
-                        device = DeviceInfo(
-                            mac_address=mac,
-                            ip_address=ip,
-                            hostname=hostname
-                        )
-                        devices.append(device)
-                        logger.debug(f"Discovered device: {ip}")
+            for ip, hostname in discovered:
+                mac = arp_map.get(ip)
+                if not mac:
+                    logger.debug(f"No MAC in ARP table for {ip}, skipping")
+                    continue
+
+                vendor = self._get_vendor(mac)
+                device = DeviceInfo(
+                    mac_address=mac,
+                    ip_address=ip,
+                    hostname=hostname,
+                    vendor=vendor
+                )
+                devices.append(device)
+                logger.debug(f"Discovered device: {ip} ({mac})")
 
         except subprocess.TimeoutExpired:
             logger.error("nmap scan timed out")
@@ -184,15 +216,22 @@ class ARPScanner:
 
         return devices
 
-    def _generate_mac_from_ip(self, ip_address: str) -> str:
-        """Generate a pseudo MAC address from IP (for testing purposes)"""
-        # Extract last two octets from IP
-        parts = ip_address.split('.')
-        if len(parts) == 4:
-            # Use last 4 octets to generate a MAC-like string
-            mac = f"02:{parts[1]}:{parts[2]}:{parts[3]}:00:01"
-            return mac
-        return "02:00:00:00:00:01"
+    def scan_arp_table_only(self) -> List[DeviceInfo]:
+        """Scan using just the ARP table (no nmap/arp-scan needed)"""
+        devices = []
+        arp_map = self._read_arp_table()
+
+        for ip, mac in arp_map.items():
+            vendor = self._get_vendor(mac)
+            device = DeviceInfo(
+                mac_address=mac,
+                ip_address=ip,
+                vendor=vendor
+            )
+            devices.append(device)
+            logger.debug(f"ARP table device: {ip} ({mac})")
+
+        return devices
 
     def scan_subnet(self, subnet: str) -> List[DeviceInfo]:
         """Scan a subnet for devices (/24 CIDR notation)"""
@@ -205,14 +244,19 @@ class ARPScanner:
 
         devices = []
 
-        # Try arp-scan first, then nmap
+        # Try arp-scan first, then nmap + ARP table, then ARP table alone
         if self.has_arp_scan:
             devices = self.scan_subnet_with_arp_scan(subnet)
         elif self.has_nmap:
             devices = self.scan_subnet_with_nmap(subnet)
         else:
-            logger.error("No scanning tool available (arp-scan or nmap)")
-            return []
+            logger.warning("No scanning tool available, falling back to ARP table only")
+            devices = self.scan_arp_table_only()
+
+        # If nmap found nothing with ARP resolution, try ARP table as supplement
+        if not devices:
+            logger.info("No devices from primary scan, trying ARP table fallback")
+            devices = self.scan_arp_table_only()
 
         logger.info(f"Scan completed, found {len(devices)} devices")
         return devices
@@ -406,8 +450,13 @@ class NetworkDeviceService:
                     self.create_or_update_device(device_info.mac_address, device_info.ip_address)
                     scan_results['devices_updated'] += 1
                 else:
-                    # Create new device
-                    self.create_or_update_device(device_info.mac_address, device_info.ip_address)
+                    # Create new device with vendor lookup
+                    device = self.create_or_update_device(device_info.mac_address, device_info.ip_address)
+                    # Auto-populate vendor from OUI database
+                    vendor = device_info.vendor or self.oui_service.lookup_vendor(device_info.mac_address)
+                    if vendor and vendor != "Unknown Vendor":
+                        self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor)
+                    # TODO: Set hostname when DB schema supports it
                     scan_results['devices_added'] += 1
 
                 online_macs.add(device_info.mac_address)

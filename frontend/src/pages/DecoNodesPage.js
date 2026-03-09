@@ -13,8 +13,10 @@ function DecoNodesPage() {
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [fallbackClients, setFallbackClients] = useState([]);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(60000); // 60 seconds
+  const [importResult, setImportResult] = useState(null);
 
   /**
    * Fetch Deco nodes from API
@@ -100,6 +102,29 @@ function DecoNodesPage() {
     }
   }, [autoRefreshEnabled, refreshInterval]);
 
+  useEffect(() => {
+    const fetchFallbackClients = async () => {
+      try {
+        const response = await fetch(buildUrl('/devices'));
+        if (!response.ok) return;
+        const data = await response.json();
+        // Show all devices, sorted: online first, then by friendly_name presence, then by last_seen
+        const allDevices = (data.devices || []).sort((a, b) => {
+          if (a.status !== b.status) return a.status === 'online' ? -1 : 1;
+          const aName = a.friendly_name || '';
+          const bName = b.friendly_name || '';
+          if (!!aName !== !!bName) return aName ? -1 : 1;
+          return (b.last_seen || '').localeCompare(a.last_seen || '');
+        });
+        setFallbackClients(allDevices);
+      } catch (err) {
+        console.error('Failed to fetch fallback client list:', err);
+      }
+    };
+
+    fetchFallbackClients();
+  }, [nodes, loading, error]);
+
   /**
    * Get statistics about nodes
    */
@@ -115,6 +140,7 @@ function DecoNodesPage() {
   };
 
   const stats = getNodeStats();
+  const noClientData = !loading && nodes.length > 0 && nodes.every((n) => (n.connected_clients || 0) === 0);
 
   /**
    * Format last refresh time
@@ -139,6 +165,25 @@ function DecoNodesPage() {
         </div>
 
         <div className="header-controls">
+          <button
+            className="btn btn-secondary"
+            style={{ marginRight: '0.5rem' }}
+            onClick={async () => {
+              try {
+                const res = await fetch(buildUrl('/deco/import-client-names'), { method: 'POST' });
+                const data = await res.json();
+                setImportResult(`Imported ${data.imported} names from ${data.total_clients} Deco clients`);
+                setTimeout(() => setImportResult(null), 5000);
+                fetchNodes();
+              } catch (err) {
+                setImportResult(`Import failed: ${err.message}`);
+                setTimeout(() => setImportResult(null), 5000);
+              }
+            }}
+            disabled={loading}
+          >
+            Import Deco Names
+          </button>
           <button
             onClick={handleManualRefresh}
             disabled={loading}
@@ -171,6 +216,12 @@ function DecoNodesPage() {
           <div className="last-refresh">Last updated: {formatLastRefresh()}</div>
         </div>
       </div>
+
+      {importResult && (
+        <div className="warning-message" style={{ background: '#1a2e1a', borderColor: '#00ff88' }}>
+          {importResult}
+        </div>
+      )}
 
       {/* Statistics Summary */}
       {nodes.length > 0 && (
@@ -214,6 +265,41 @@ function DecoNodesPage() {
         </div>
       )}
 
+      {noClientData && !error && (
+        <div className="warning-message">
+          <strong>No per-node client data from TP-Link cloud API.</strong>{' '}
+          Use the <strong>Device Naming</strong> tab to identify devices using Alexa names.
+        </div>
+      )}
+
+      {fallbackClients.length > 0 && (
+        <div className="fallback-clients-card">
+          <h3>Network Devices ({fallbackClients.length})</h3>
+          <p>
+            All discovered devices on the network.
+            {fallbackClients.filter(c => !c.friendly_name).length > 0 && (
+              <> <strong>{fallbackClients.filter(c => !c.friendly_name).length} unnamed</strong> — use Device Naming tab to identify them.</>
+            )}
+          </p>
+          <div className="fallback-clients-grid">
+            {fallbackClients.map((client) => (
+              <div
+                key={client.device_id || client.mac_address}
+                className={`fallback-client-item ${client.status === 'online' ? 'online' : 'offline'}`}
+              >
+                <div className="fallback-client-header">
+                  <span className={`status-dot-sm ${client.status === 'online' ? 'green' : 'gray'}`}></span>
+                  <strong>{client.friendly_name || '(unnamed)'}</strong>
+                </div>
+                <span className="client-detail">IP: {client.current_ip || 'None'}</span>
+                <span className="client-detail mac-mono">{client.mac_address || 'No MAC'}</span>
+                <span className="client-detail vendor-tag">{client.vendor_name || 'Unknown vendor'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Loading State */}
       {loading && nodes.length === 0 && !error && (
         <div className="loading-container">
@@ -253,7 +339,11 @@ function DecoNodesPage() {
       {/* Node Detail Modal */}
       {selectedNode && (
         <div className="node-detail-modal">
-          <div className="modal-overlay" onClick={() => setSelectedNode(null)}></div>
+          <div
+            className="modal-overlay"
+            style={{ backdropFilter: 'none', WebkitBackdropFilter: 'none' }}
+            onClick={() => setSelectedNode(null)}
+          ></div>
           <div className="modal-content">
             <button
               className="modal-close"
@@ -332,6 +422,29 @@ function DecoNodesPage() {
               </div>
 
               {/* Raw Data (Debug) */}
+              {selectedNode.clients && selectedNode.clients.length > 0 && (
+                <details className="node-clients-details" open>
+                  <summary>Connected Clients ({selectedNode.clients.length})</summary>
+                  <div className="node-clients-list">
+                    {selectedNode.clients.map((client, idx) => (
+                      <div className="node-client-item" key={`${client.mac_address || client.name}-${idx}`}>
+                        <div className="client-main">
+                          <strong>{client.name || 'Unknown client'}</strong>
+                          <span>{client.mac_address || 'No MAC'}</span>
+                        </div>
+                        <div className="client-meta">
+                          {client.ip_address && <span>IP: {client.ip_address}</span>}
+                          {client.connection_type && <span>Type: {client.connection_type}</span>}
+                          {client.signal_rssi !== null && client.signal_rssi !== undefined && (
+                            <span>RSSI: {client.signal_rssi}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
               {selectedNode.raw_data && (
                 <details className="raw-data-details">
                   <summary>Raw API Data</summary>

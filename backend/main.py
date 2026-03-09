@@ -26,6 +26,14 @@ from services.deco_service import DecoService
 from services.deco_client import DecoClient
 from services.correlation_service import CorrelationService
 from routes import deco as deco_routes
+from routes import settings as settings_routes
+from routes import alexa as alexa_routes
+from routes import chester as chester_routes
+from routes import oauth as oauth_routes
+from services.alexa_client import AlexaClient
+from services.alexa_service import AlexaService
+from services.chester_client import ChesterClient
+from services.chester_service import ChesterService
 import uuid
 from pydantic import BaseModel
 
@@ -44,8 +52,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Deco routes
+# Include routes
 app.include_router(deco_routes.router)
+app.include_router(settings_routes.router)
+app.include_router(alexa_routes.router)
+app.include_router(chester_routes.router)
+app.include_router(oauth_routes.router)
 
 # Pydantic models
 class DeviceUpdate(BaseModel):
@@ -96,12 +108,16 @@ deco_service = None
 deco_client = None
 correlation_service = None
 device_repo = None
+alexa_client_instance = None
+alexa_service_instance = None
+chester_client = None
+chester_service = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo
+    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -133,14 +149,32 @@ async def startup_event():
     alert_repo = DeviceAlertRepository(db)
     logger.info("Event service and repositories initialized")
 
+    # Initialize settings routes
+    settings_routes.set_db(db)
+
     # Initialize Deco client and service
     try:
         deco_client = DecoClient()
         deco_service = DecoService(deco_client=deco_client)
         deco_routes.set_deco_service(deco_service)
+        settings_routes.set_deco_client(deco_client)
+        # Load saved credentials from database
+        settings_routes.load_deco_credentials_on_startup()
         logger.info("Deco service initialized and routes configured")
     except Exception as e:
         logger.warning(f"Failed to initialize Deco service: {e}")
+
+    # Initialize Chester client and service
+    try:
+        chester_client = ChesterClient()
+        chester_service = ChesterService(chester_client)
+        chester_routes.set_chester_client(chester_client)
+        chester_routes.set_chester_service(chester_service)
+        settings_routes.set_chester_client(chester_client)
+        settings_routes.load_chester_credentials_on_startup()
+        logger.info("Chester service initialized and routes configured")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Chester service: {e}")
 
     # Initialize correlation service
     try:
@@ -151,10 +185,32 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to initialize correlation service: {e}")
 
+    # Initialize Alexa client and service
+    try:
+        alexa_client_instance = AlexaClient()
+        alexa_service_instance = AlexaService(alexa_client_instance, db)
+        alexa_routes.set_alexa_client(alexa_client_instance)
+        alexa_routes.set_alexa_service(alexa_service_instance)
+        alexa_routes.set_db(db)
+        alexa_routes.set_deco_service(deco_service)
+        alexa_routes.set_deco_client(deco_client)
+        alexa_routes.set_chester_service(chester_service)
+        alexa_routes.set_chester_client(chester_client)
+        alexa_routes.load_alexa_credentials_on_startup()
+        logger.info("Alexa service initialized and routes configured")
+
+        # Update correlation service with Alexa integration
+        if correlation_service:
+            correlation_service.alexa_service = alexa_service_instance
+            correlation_service.db = db
+            logger.info("Correlation service updated with Alexa integration")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Alexa service: {e}")
+
     # Initialize polling service
     polling_manager = PollingServiceManager()
     polling_interval = int(os.getenv("POLLING_INTERVAL_SECONDS", "60"))
-    subnet = os.getenv("NETWORK_SUBNET", "192.168.1.0/24")
+    subnet = os.getenv("NETWORK_SUBNET", "192.168.12.0/24")
     polling_manager.initialize(device_service, polling_interval, subnet)
     logger.info(f"Polling service initialized (interval: {polling_interval}s, subnet: {subnet})")
 
@@ -169,7 +225,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global db, polling_manager, deco_client
+    global db, polling_manager, deco_client, chester_client
 
     logger.info("Shutting down HomeSentinel Backend...")
 
@@ -182,6 +238,16 @@ async def shutdown_event():
     if deco_client:
         deco_client.close()
         logger.info("Deco client closed")
+
+    # Close Chester client
+    if chester_client:
+        chester_client.close()
+        logger.info("Chester client closed")
+
+    # Close Alexa client
+    if alexa_client_instance:
+        alexa_client_instance.close()
+        logger.info("Alexa client closed")
 
     # Close database
     if db:
@@ -339,7 +405,7 @@ async def trigger_manual_scan():
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
     try:
-        subnet = os.getenv("NETWORK_SUBNET", "192.168.1.0/24")
+        subnet = os.getenv("NETWORK_SUBNET", "192.168.12.0/24")
         result = device_service.scan_and_update(subnet)
         return {
             "success": True,
@@ -633,7 +699,7 @@ async def get_event_stats():
 
 if __name__ == "__main__":
     # SSL certificate setup
-    cert_dir = "./backend/certs"
+    cert_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs")
     cert_file = f"{cert_dir}/cert.pem"
     key_file = f"{cert_dir}/key.pem"
 
