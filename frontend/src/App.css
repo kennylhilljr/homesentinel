@@ -279,34 +279,34 @@
 
 .devices-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  justify-content: flex-start;
+  align-items: center;
   margin-bottom: 15px;
-  gap: 16px;
+  gap: 14px;
 }
 
 .devices-header-left {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
 .devices-header h2 {
   margin: 0;
+  white-space: nowrap;
 }
 
 .devices-filter-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
+  min-width: 280px;
 }
 
 .devices-search-input {
-  width: min(360px, 62vw);
+  width: 100%;
+  max-width: 360px;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -331,6 +331,10 @@
   font-size: 0.9rem;
   min-width: 130px;
   cursor: pointer;
+}
+
+.devices-actions {
+  margin-left: auto;
 }
 
 .scan-button {
@@ -406,6 +410,10 @@
 .devices-table td {
   padding: 10px 12px;
   border-bottom: 1px solid #e7edf9;
+  color: var(--text);
+  font-family: 'Manrope', 'Segoe UI', Tahoma, sans-serif;
+  font-size: 0.98rem;
+  font-weight: 500;
 }
 
 .device-row {
@@ -427,8 +435,9 @@
 
 .mac-address,
 .ip-address {
-  font-family: 'SFMono-Regular', Menlo, Monaco, monospace;
-  font-size: 0.9em;
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: 0;
 }
 
 .devices-table .status-badge {
@@ -468,8 +477,8 @@
 }
 
 .timestamp {
-  font-size: 0.9em;
-  color: var(--text-muted);
+  font-size: inherit;
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -479,18 +488,18 @@
 }
 
 .vendor-name {
-  font-weight: 600;
-  color: var(--brand-strong);
+  font-weight: 500;
+  color: var(--text);
 }
 
 .device-name {
-  font-weight: 700;
+  font-weight: 500;
   color: var(--text);
 }
 
 .device-type {
   text-transform: capitalize;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 /* Alexa Name cell with dropdown */
@@ -509,8 +518,8 @@
 
 .alexa-device-type {
   text-transform: capitalize;
-  color: var(--text-muted);
-  font-size: 0.85em;
+  color: var(--text);
+  font-size: inherit;
 }
 
 .name-action-wrapper {
@@ -801,10 +810,18 @@
 
   .devices-header {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .devices-header-left {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .devices-filter-row {
     width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
   }
 
   .devices-search-input {

@@ -89,6 +89,11 @@ def set_chester_client(client):
     chester_client = client
 
 
+def _normalize_mac(mac: str) -> str:
+    """Normalize MAC address for comparisons (aa:bb -> aabb)."""
+    return "".join(ch for ch in (mac or "").lower() if ch.isalnum())
+
+
 def _get_setting(key: str) -> Optional[str]:
     if db is None:
         return None
@@ -297,6 +302,119 @@ async def get_alexa_devices() -> Dict[str, Any]:
 
     try:
         devices = alexa_service.get_all_devices_with_state()
+
+        link_map: Dict[str, str] = {}
+        alexa_mac_map: Dict[str, str] = {}
+        network_by_id: Dict[str, Dict[str, Any]] = {}
+        network_by_mac: Dict[str, Dict[str, Any]] = {}
+        network_by_ip: Dict[str, Dict[str, Any]] = {}
+        network_by_alexa_name: Dict[str, Dict[str, Any]] = {}
+
+        if db is not None:
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute("SELECT alexa_endpoint_id, network_device_id FROM alexa_device_links")
+                for row in cursor.fetchall():
+                    endpoint_id = row["alexa_endpoint_id"] if "alexa_endpoint_id" in row.keys() else row[0]
+                    network_id = row["network_device_id"] if "network_device_id" in row.keys() else row[1]
+                    link_map[str(endpoint_id)] = str(network_id)
+
+                cursor.execute(
+                    "SELECT endpoint_id, mac_address FROM alexa_devices "
+                    "WHERE mac_address IS NOT NULL AND mac_address != ''"
+                )
+                for row in cursor.fetchall():
+                    endpoint_id = row["endpoint_id"] if "endpoint_id" in row.keys() else row[0]
+                    mac_address = row["mac_address"] if "mac_address" in row.keys() else row[1]
+                    if endpoint_id and mac_address:
+                        alexa_mac_map[str(endpoint_id)] = str(mac_address)
+
+                cursor.execute(
+                    "SELECT device_id, status, mac_address, current_ip, alexa_name "
+                    "FROM network_devices"
+                )
+                for row in cursor.fetchall():
+                    device = dict(row)
+                    device_id = str(device.get("device_id", ""))
+                    if not device_id:
+                        continue
+                    network_by_id[device_id] = device
+
+                    mac_norm = _normalize_mac(str(device.get("mac_address") or ""))
+                    if mac_norm and mac_norm not in network_by_mac:
+                        network_by_mac[mac_norm] = device
+
+                    ip = str(device.get("current_ip") or "").strip()
+                    if ip and ip not in network_by_ip:
+                        network_by_ip[ip] = device
+
+                    alexa_name = str(device.get("alexa_name") or "").strip().lower()
+                    if alexa_name and alexa_name not in network_by_alexa_name:
+                        network_by_alexa_name[alexa_name] = device
+
+        for device in devices:
+            endpoint_id = str(device.get("endpoint_id", ""))
+            matched_network: Optional[Dict[str, Any]] = None
+            online_source = "alexa"
+
+            linked_network_id = link_map.get(endpoint_id)
+            if linked_network_id:
+                matched_network = network_by_id.get(linked_network_id)
+                if matched_network:
+                    online_source = "deco"
+
+            if matched_network is None:
+                candidate_macs = []
+                if device.get("mac_address"):
+                    candidate_macs.append(str(device.get("mac_address")))
+                if endpoint_id in alexa_mac_map:
+                    candidate_macs.append(alexa_mac_map[endpoint_id])
+
+                for candidate_mac in candidate_macs:
+                    matched_network = network_by_mac.get(_normalize_mac(candidate_mac))
+                    if matched_network:
+                        online_source = "deco"
+                        # Backfill for frontend visibility if mac came from DB.
+                        device["mac_address"] = candidate_mac
+                        break
+
+            if matched_network is None:
+                raw_data = device.get("raw_data") or {}
+                candidate_ips = [
+                    device.get("ip_address"),
+                    device.get("current_ip"),
+                    raw_data.get("ipAddress"),
+                    raw_data.get("ip_address"),
+                ]
+                for candidate_ip in candidate_ips:
+                    ip = str(candidate_ip or "").strip()
+                    if not ip:
+                        continue
+                    matched_network = network_by_ip.get(ip)
+                    if matched_network:
+                        online_source = "deco"
+                        break
+
+            if matched_network is None:
+                name_key = str(device.get("friendly_name") or "").strip().lower()
+                if name_key:
+                    matched_network = network_by_alexa_name.get(name_key)
+                    if matched_network:
+                        online_source = "deco"
+
+            network_status = str(matched_network.get("status", "")) if matched_network else None
+            is_online = (
+                network_status == "online"
+                if matched_network is not None
+                else bool(device.get("is_reachable", not device.get("is_stale", True)))
+            )
+
+            device["network_status"] = network_status
+            device["network_device_id"] = matched_network.get("device_id") if matched_network else None
+            device["is_online"] = is_online
+            device["online_source"] = online_source
+
         # Remove raw_data from response to keep it clean
         clean_devices = []
         for d in devices:

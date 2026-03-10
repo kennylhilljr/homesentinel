@@ -90,7 +90,7 @@ function AlexaDevicesPage() {
 
   // Stats
   const deviceTypes = [...new Set(smartDevices.map(d => d.device_type))];
-  const onlineCount = smartDevices.filter(d => d.parsed_state?.power === 'ON').length;
+  const onlineCount = smartDevices.filter(d => d.is_online).length;
 
   // Not authenticated
   if (!loading && status && !status.authenticated) {
@@ -135,7 +135,7 @@ function AlexaDevicesPage() {
           </div>
           <div className="alexa-stat">
             <div className="stat-value">{onlineCount}</div>
-            <div className="stat-label">Powered On</div>
+            <div className="stat-label">Online</div>
           </div>
           <div className="alexa-stat">
             <div className="stat-value">{echoDevices.length}</div>
@@ -195,7 +195,7 @@ function AlexaDevicesPage() {
             <div className="alexa-device-list">
               {filteredDevices.map((device) => {
                 const isExpanded = expandedListDevice === device.endpoint_id;
-                const power = device.parsed_state?.power;
+                const isOnline = !!device.is_online;
                 return (
                   <div key={device.endpoint_id} className={`alexa-list-row ${isExpanded ? 'expanded' : ''}`}>
                     <div className="alexa-list-summary">
@@ -206,8 +206,8 @@ function AlexaDevicesPage() {
                         </p>
                       </div>
                       <div className="summary-side">
-                        <span className={`power-chip ${power === 'ON' ? 'on' : 'off'}`}>
-                          {power === 'ON' ? 'On' : 'Off'}
+                        <span className={`power-chip ${isOnline ? 'on' : 'off'}`}>
+                          {isOnline ? 'Online' : 'Offline'}
                         </span>
                         <button
                           type="button"

@@ -256,11 +256,6 @@ const DeviceSearch = ({ onSearchResults }) => {
         </div>
       )}
 
-      {!query && !showResults && (
-        <div className="search-hint">
-          Enter a search query to find devices
-        </div>
-      )}
     </div>
   );
 };
