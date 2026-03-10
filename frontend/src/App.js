@@ -7,6 +7,7 @@ import DecoTopologyPage from './pages/DecoTopologyPage';
 import SettingsPage from './pages/SettingsPage';
 import AlexaDevicesPage from './pages/AlexaDevicesPage';
 import SmartHomePage from './pages/SmartHomePage';
+import AlarmComPage from './pages/AlarmComPage';
 import { buildUrl } from './utils/apiConfig';
 import ViewModeToggle from './components/ViewModeToggle';
 
@@ -385,6 +386,12 @@ function App() {
             Smart Home
           </button>
           <button
+            className={`nav-button ${currentPage === 'alarm-com' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('alarm-com')}
+          >
+            Alarm.com
+          </button>
+          <button
             className={`nav-button ${currentPage === 'settings' ? 'active' : ''}`}
             onClick={() => setCurrentPage('settings')}
           >
@@ -404,6 +411,9 @@ function App() {
 
         {/* Smart Home Control Page */}
         {currentPage === 'smart-home' && <SmartHomePage />}
+
+        {/* Alarm.com Page */}
+        {currentPage === 'alarm-com' && <AlarmComPage />}
 
         {/* Settings Page */}
         {currentPage === 'settings' && (

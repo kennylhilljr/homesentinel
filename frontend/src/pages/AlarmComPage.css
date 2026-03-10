@@ -1,0 +1,283 @@
+.alarm-com-page {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.alarm-com-page .page-header {
+  margin-bottom: 24px;
+}
+
+.alarm-com-page .page-header h2 {
+  margin: 0 0 4px 0;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.alarm-com-page .subtitle {
+  color: var(--text-secondary, #999);
+  margin: 0 0 16px 0;
+  font-size: 14px;
+}
+
+.alarm-com-page .header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.alarm-com-page .login-btn,
+.alarm-com-page .refresh-btn,
+.alarm-com-page .settings-btn,
+.alarm-com-page .save-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.alarm-com-page .login-btn {
+  background: #27ae60;
+  color: #fff;
+  border-color: #27ae60;
+}
+
+.alarm-com-page .refresh-btn {
+  background: var(--card-bg, #2a2a2a);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.alarm-com-page .settings-btn {
+  background: var(--card-bg, #2a2a2a);
+  color: var(--text-secondary, #999);
+}
+
+.alarm-com-page .save-btn {
+  background: #4a9eff;
+  color: #fff;
+  border-color: #4a9eff;
+}
+
+/* Setup / credential forms */
+.alarm-com-page .setup-card {
+  background: var(--card-bg, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 500px;
+}
+
+.alarm-com-page .setup-card h3 {
+  margin: 0 0 8px 0;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.alarm-com-page .setup-card p {
+  color: var(--text-secondary, #999);
+  margin-bottom: 16px;
+}
+
+.alarm-com-page .cred-form,
+.alarm-com-page .otp-form,
+.alarm-com-page .cred-form-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alarm-com-page .cred-form-inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--card-bg, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+}
+
+.alarm-com-page .cred-form input,
+.alarm-com-page .otp-form input,
+.alarm-com-page .cred-form-inline input {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  background: var(--input-bg, #1a1a1a);
+  color: var(--text-primary, #e0e0e0);
+  font-size: 14px;
+}
+
+.alarm-com-page .otp-form input {
+  font-size: 20px;
+  letter-spacing: 4px;
+  text-align: center;
+  max-width: 200px;
+}
+
+/* Tabs */
+.alarm-com-page .alarm-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.alarm-com-page .tab-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--card-bg, #2a2a2a);
+  color: var(--text-secondary, #999);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.alarm-com-page .tab-btn.active {
+  background: #4a9eff;
+  color: #fff;
+  border-color: #4a9eff;
+}
+
+/* Device grid */
+.alarm-com-page .device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.alarm-com-page .device-card {
+  background: var(--card-bg, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 8px;
+  padding: 16px;
+  position: relative;
+}
+
+.alarm-com-page .device-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.alarm-com-page .device-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.alarm-com-page .device-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.alarm-com-page .device-name {
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+  font-size: 15px;
+}
+
+.alarm-com-page .device-type {
+  color: var(--text-secondary, #999);
+  font-size: 11px;
+}
+
+.alarm-com-page .state-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.alarm-com-page .malfunction-badge {
+  background: #c0392b22;
+  border: 1px solid #c0392b;
+  color: #e74c3c;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.alarm-com-page .battery-info,
+.alarm-com-page .mac-info {
+  color: var(--text-secondary, #999);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.alarm-com-page .mac-info {
+  font-family: monospace;
+}
+
+/* Controls */
+.alarm-com-page .device-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.alarm-com-page .ctrl-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  color: #fff;
+  transition: opacity 0.15s;
+}
+
+.alarm-com-page .ctrl-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.alarm-com-page .ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.alarm-com-page .ctrl-btn.arm-away { background: #c0392b; }
+.alarm-com-page .ctrl-btn.arm-stay { background: #e67e22; }
+.alarm-com-page .ctrl-btn.arm-night { background: #8e44ad; }
+.alarm-com-page .ctrl-btn.disarm { background: #27ae60; }
+.alarm-com-page .ctrl-btn.lock { background: #2980b9; }
+.alarm-com-page .ctrl-btn.unlock { background: #f39c12; }
+
+/* Spinner */
+.alarm-com-page .action-spinner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent-color, #4a9eff);
+  border-radius: 50%;
+  animation: alarm-spin 0.6s linear infinite;
+}
+
+@keyframes alarm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Loading / empty */
+.alarm-com-page .loading,
+.alarm-com-page .empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary, #999);
+  font-size: 15px;
+}
+
+.alarm-com-page .error-banner {
+  background: #c0392b22;
+  border: 1px solid #c0392b;
+  color: #e74c3c;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}

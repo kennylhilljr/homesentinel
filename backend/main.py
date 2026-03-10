@@ -30,6 +30,8 @@ from routes import settings as settings_routes
 from routes import alexa as alexa_routes
 from routes import chester as chester_routes
 from routes import oauth as oauth_routes
+from routes import alarm_com as alarm_com_routes
+from services.alarm_com_client import AlarmComClient
 from services.alexa_client import AlexaClient
 from services.alexa_service import AlexaService
 from services.chester_client import ChesterClient
@@ -58,6 +60,7 @@ app.include_router(settings_routes.router)
 app.include_router(alexa_routes.router)
 app.include_router(chester_routes.router)
 app.include_router(oauth_routes.router)
+app.include_router(alarm_com_routes.router)
 
 # Pydantic models
 class DeviceUpdate(BaseModel):
@@ -112,12 +115,13 @@ alexa_client_instance = None
 alexa_service_instance = None
 chester_client = None
 chester_service = None
+alarm_com_client_instance = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service
+    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service, alarm_com_client_instance
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -212,6 +216,16 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to initialize Alexa service: {e}")
 
+    # Initialize Alarm.com client
+    try:
+        alarm_com_client_instance = AlarmComClient()
+        alarm_com_routes.set_alarm_com_client(alarm_com_client_instance)
+        alarm_com_routes.set_db(db)
+        alarm_com_routes.load_alarm_com_credentials_on_startup()
+        logger.info("Alarm.com client initialized and routes configured")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Alarm.com client: {e}")
+
     # Initialize polling service
     polling_manager = PollingServiceManager()
     polling_interval = int(os.getenv("POLLING_INTERVAL_SECONDS", "60"))
@@ -230,7 +244,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global db, polling_manager, deco_client, chester_client
+    global db, polling_manager, deco_client, chester_client, alarm_com_client_instance
 
     logger.info("Shutting down HomeSentinel Backend...")
 
@@ -253,6 +267,11 @@ async def shutdown_event():
     if alexa_client_instance:
         alexa_client_instance.close()
         logger.info("Alexa client closed")
+
+    # Close Alarm.com client
+    if alarm_com_client_instance:
+        await alarm_com_client_instance.close()
+        logger.info("Alarm.com client closed")
 
     # Close database
     if db:
