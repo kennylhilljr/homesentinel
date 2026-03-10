@@ -387,11 +387,6 @@ function AlarmComPage() {
                       onClick={() => sendPartitionCommand(device.id, 'arm_stay')}
                     >Arm Stay</button>
                     <button
-                      className="ctrl-btn arm-night"
-                      disabled={isBusy}
-                      onClick={() => sendPartitionCommand(device.id, 'arm_night')}
-                    >Arm Night</button>
-                    <button
                       className="ctrl-btn disarm"
                       disabled={isBusy}
                       onClick={() => sendPartitionCommand(device.id, 'disarm')}

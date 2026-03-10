@@ -31,10 +31,11 @@ class OtpRequest(BaseModel):
 
 class OtpSubmit(BaseModel):
     code: str
+    method: str = "app"  # "app", "email", "sms"
 
 
 class PartitionCommand(BaseModel):
-    command: str  # arm_away, arm_stay, arm_night, disarm
+    command: str  # arm_away, arm_stay, disarm
 
 
 class LockCommand(BaseModel):
@@ -185,7 +186,7 @@ async def submit_otp(body: OtpSubmit) -> Dict[str, Any]:
     if alarm_com_client is None:
         raise HTTPException(status_code=500, detail="Alarm.com client not initialized")
     try:
-        result = await alarm_com_client.submit_otp(body.code)
+        result = await alarm_com_client.submit_otp(body.code, body.method)
         # Persist the 2FA cookie so future restarts don't need OTP again
         if result.get("two_factor_cookie"):
             existing = _get_setting("alarm_com_credentials")
@@ -234,7 +235,6 @@ async def send_partition_command(partition_id: str, body: PartitionCommand) -> D
     cmd_map = {
         "arm_away": alarm_com_client.arm_away,
         "arm_stay": alarm_com_client.arm_stay,
-        "arm_night": alarm_com_client.arm_night,
         "disarm": alarm_com_client.disarm,
     }
     handler = cmd_map.get(body.command)

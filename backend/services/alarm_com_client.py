@@ -115,15 +115,27 @@ class AlarmComClient:
         except Exception as e:
             raise AlarmComAPIError(f"Failed to request OTP: {e}")
 
-    async def submit_otp(self, code: str) -> Dict[str, Any]:
-        """Submit OTP code to complete 2FA login."""
+    async def submit_otp(self, code: str, method: str = "app") -> Dict[str, Any]:
+        """Submit OTP code to complete 2FA login.
+        # 2026-03-10: async_submit_otp requires (code, method, device_name, remember_me).
+        """
         if not self._controller:
             raise AlarmComAPIError("Must call login() first")
         try:
-            result = await self._controller.async_submit_otp(code)
+            from pyalarmdotcomajax.const import OtpType
+            otp_map = {"app": OtpType.APP, "email": OtpType.EMAIL, "sms": OtpType.SMS}
+            otp_type = otp_map.get(method, OtpType.APP)
+
+            await self._controller.async_submit_otp(
+                code=code,
+                method=otp_type,
+                device_name="HomeSentinel",
+                remember_me=True,
+            )
             # Save the 2FA cookie for future logins
-            if hasattr(result, "two_factor_cookie") and result.two_factor_cookie:
-                self.two_factor_cookie = result.two_factor_cookie
+            cookie = self._controller.two_factor_cookie
+            if cookie:
+                self.two_factor_cookie = cookie
             self._logged_in = True
             return {
                 "success": True,
@@ -246,16 +258,14 @@ class AlarmComClient:
         """Arm partition in Stay mode."""
         return await self._send_partition_command(partition_id, "arm_stay")
 
-    async def arm_night(self, partition_id: str) -> Dict[str, Any]:
-        """Arm partition in Night mode."""
-        return await self._send_partition_command(partition_id, "arm_night")
-
     async def disarm(self, partition_id: str) -> Dict[str, Any]:
         """Disarm partition."""
         return await self._send_partition_command(partition_id, "disarm")
 
     async def _send_partition_command(self, partition_id: str, command: str) -> Dict[str, Any]:
-        """Send arm/disarm command to a partition."""
+        """Send arm/disarm command to a partition.
+        # 2026-03-10: async_send_command signature is (device_type, event, device_id).
+        """
         await self._ensure_logged_in()
 
         partition = self._controller.devices.partitions.get(partition_id)
@@ -263,18 +273,22 @@ class AlarmComClient:
             raise AlarmComAPIError(f"Partition {partition_id} not found")
 
         try:
+            from pyalarmdotcomajax.devices import DeviceType
             from pyalarmdotcomajax.devices.partition import Partition
             cmd_map = {
                 "arm_away": Partition.Command.ARM_AWAY,
                 "arm_stay": Partition.Command.ARM_STAY,
-                "arm_night": Partition.Command.ARM_NIGHT,
                 "disarm": Partition.Command.DISARM,
             }
             cmd = cmd_map.get(command)
             if not cmd:
                 raise AlarmComAPIError(f"Unknown partition command: {command}")
 
-            await self._controller.async_send_command(cmd, partition)
+            await self._controller.async_send_command(
+                device_type=DeviceType.PARTITION,
+                event=cmd,
+                device_id=partition_id,
+            )
             return {"success": True, "command": command, "partition_id": partition_id}
         except AlarmComAPIError:
             raise
@@ -290,14 +304,17 @@ class AlarmComClient:
         return await self._send_lock_command(lock_id, "unlock")
 
     async def _send_lock_command(self, lock_id: str, command: str) -> Dict[str, Any]:
-        """Send lock/unlock command."""
+        """Send lock/unlock command.
+        # 2026-03-10: async_send_command signature is (device_type, event, device_id).
+        """
         await self._ensure_logged_in()
 
-        lock = self._controller.devices.locks.get(lock_id)
-        if not lock:
+        lock_dev = self._controller.devices.locks.get(lock_id)
+        if not lock_dev:
             raise AlarmComAPIError(f"Lock {lock_id} not found")
 
         try:
+            from pyalarmdotcomajax.devices import DeviceType
             from pyalarmdotcomajax.devices.lock import Lock
             cmd_map = {
                 "lock": Lock.Command.LOCK,
@@ -307,7 +324,11 @@ class AlarmComClient:
             if not cmd:
                 raise AlarmComAPIError(f"Unknown lock command: {command}")
 
-            await self._controller.async_send_command(cmd, lock)
+            await self._controller.async_send_command(
+                device_type=DeviceType.LOCK,
+                event=cmd,
+                device_id=lock_id,
+            )
             return {"success": True, "command": command, "lock_id": lock_id}
         except AlarmComAPIError:
             raise
