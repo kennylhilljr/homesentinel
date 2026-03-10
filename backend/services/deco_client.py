@@ -644,18 +644,55 @@ class DecoClient:
         finally:
             local_client.close()
 
-    def rename_client(self, mac_address: str, new_name: str) -> bool:
+    def get_node_list_local(self) -> List[Dict[str, Any]]:
+        """Fetch Deco node/device list directly from local API.
+
+        Uses a temporary local client to avoid session conflicts with the main
+        cloud session. This is generally more accurate for real-time node
+        online/offline than cloud metadata.
+        """
+        if not HAS_CRYPTO:
+            raise APIConnectionError("pycryptodome required for local API")
+
+        logger.info("Creating temporary local DecoClient for node list fetch")
+        local_client = DecoClient(
+            local_endpoint=self.local_endpoint,
+            use_cloud=False,
+            verify_ssl=False,
+        )
+        local_client.username = "admin"
+        local_client.password = self.password
+
+        try:
+            local_client.authenticate()
+            result = local_client._local_encrypted_request(
+                "admin/device?form=device_list",
+                json.dumps({"operation": "read"})
+            )
+            nodes = result.get("device_list", [])
+            for node in nodes:
+                if "alias" in node:
+                    node["alias"] = self._decode_alias(node["alias"])
+                if "name" in node:
+                    node["name"] = self._decode_alias(node["name"])
+            logger.info(f"Fetched {len(nodes)} nodes from local Deco API")
+            return nodes
+        finally:
+            local_client.close()
+
+    def rename_client(self, mac_address: str, new_name: str) -> Dict[str, Any]:
         """Rename a client device on the Deco router via local API.
 
-        # 2026-03-09: Uses the same admin/client?form=client_list endpoint
-        # as get_client_list_local, but with operation="write".
-        # Deco expects MAC in AA-BB-CC-DD-EE-FF format and name base64-encoded.
+        # 2026-03-10: Uses admin/client?form=client_list with operation="write".
+        # CRITICAL: Must include "user_set_name_type": True in the client entry,
+        # otherwise the Deco accepts the write (error_code: 0) but silently ignores it.
+        # Verified working through brute-force testing of payload variants.
 
         Args:
             mac_address: Client MAC in any format (will be normalized to AA-BB-CC-DD-EE-FF)
             new_name: New display name for the client
         Returns:
-            True if rename succeeded
+            Dict with Deco response and verification result
         """
         if not HAS_CRYPTO:
             raise APIConnectionError("pycryptodome required for local API")
@@ -669,7 +706,7 @@ class DecoClient:
         # Deco stores names as base64
         name_encoded = base64.b64encode(new_name.encode("utf-8")).decode("ascii")
 
-        logger.info(f"Renaming Deco client {deco_mac} to '{new_name}'")
+        logger.info(f"Renaming Deco client {deco_mac} to '{new_name}' (b64={name_encoded})")
         local_client = DecoClient(
             local_endpoint=self.local_endpoint,
             use_cloud=False,
@@ -680,21 +717,52 @@ class DecoClient:
 
         try:
             local_client.authenticate()
-            result = local_client._local_encrypted_request(
+
+            # Write the new name — user_set_name_type: True is required for the
+            # Deco to actually apply the rename (without it, write returns success
+            # but name stays unchanged)
+            write_payload = {
+                "operation": "write",
+                "params": {
+                    "device_mac": "default",
+                    "client_list": [{
+                        "mac": deco_mac,
+                        "name": name_encoded,
+                        "user_set_name_type": True,
+                        "client_type": "",
+                        "owner_id": 0,
+                        "enable_priority": False,
+                        "time_period": 0,
+                    }]
+                }
+            }
+            write_result = local_client._local_encrypted_request(
                 "admin/client?form=client_list",
-                json.dumps({
-                    "operation": "write",
-                    "params": {
-                        "device_mac": "default",
-                        "client_list": [{
-                            "mac": deco_mac,
-                            "name": name_encoded,
-                        }]
-                    }
-                })
+                json.dumps(write_payload)
             )
+            logger.info(f"Deco rename write response: {write_result}")
+
+            # Verify by reading back
+            read_result = local_client._local_encrypted_request(
+                "admin/client?form=client_list",
+                json.dumps({"operation": "read", "params": {"device_mac": "default"}})
+            )
+            verified_name = None
+            for client in read_result.get("client_list", []):
+                if client.get("mac", "").upper() == deco_mac:
+                    raw_name = client.get("name", "")
+                    verified_name = self._decode_alias(raw_name)
+                    break
+
+            result = {
+                "write_response": write_result,
+                "verified_name": verified_name,
+                "rename_confirmed": verified_name == new_name,
+                "mac": deco_mac,
+                "requested_name": new_name,
+            }
             logger.info(f"Deco rename result: {result}")
-            return True
+            return result
         except Exception as e:
             logger.error(f"Failed to rename Deco client {deco_mac}: {e}")
             raise

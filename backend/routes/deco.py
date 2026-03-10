@@ -325,12 +325,22 @@ async def rename_deco_client(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="mac_address and new_name are required")
 
     try:
-        deco_service.deco_client.rename_client(mac_address, new_name)
+        rename_result = deco_service.deco_client.rename_client(mac_address, new_name)
     except Exception as e:
         logger.error(f"Deco rename failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to rename on Deco: {str(e)}")
 
-    # Update deco_name in network_devices
+    # Update deco_name in network_devices only if Deco confirmed the rename
+    rename_confirmed = rename_result.get("rename_confirmed", False) if isinstance(rename_result, dict) else True
+    if not rename_confirmed:
+        return {
+            "success": False,
+            "mac_address": mac_address,
+            "new_name": new_name,
+            "rename_confirmed": False,
+            "detail": "Deco accepted write but name did not change",
+            "deco_response": rename_result if isinstance(rename_result, dict) else {},
+        }
     if correlation_service and correlation_service.db:
         mac_clean = mac_address.lower().replace("-", "").replace(":", "").replace(" ", "")
         if len(mac_clean) == 12:
@@ -343,7 +353,13 @@ async def rename_deco_client(request: Request) -> Dict[str, Any]:
                 )
                 conn.commit()
 
-    return {"success": True, "mac_address": mac_address, "new_name": new_name}
+    return {
+        "success": True,
+        "mac_address": mac_address,
+        "new_name": new_name,
+        "rename_confirmed": rename_confirmed,
+        "deco_response": rename_result if isinstance(rename_result, dict) else {},
+    }
 
 
 @router.get("/clients-merged")

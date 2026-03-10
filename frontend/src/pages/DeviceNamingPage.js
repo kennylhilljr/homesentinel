@@ -13,6 +13,7 @@ function DeviceNamingPage() {
   const [selectedAlexa, setSelectedAlexa] = useState({}); // networkDeviceId -> alexaEndpointId
   const [customNames, setCustomNames] = useState({}); // networkDeviceId -> custom name string
   const [importResult, setImportResult] = useState(null);
+  const [writingToDeco, setWritingToDeco] = useState({}); // deviceId -> bool
 
   useEffect(() => {
     fetchSuggestions();
@@ -88,6 +89,58 @@ function DeviceNamingPage() {
     }
   };
 
+  const writeNameToDeco = async (macAddress, friendlyName, deviceId) => {
+    setWritingToDeco(prev => ({ ...prev, [deviceId]: true }));
+    try {
+      const res = await fetch(buildUrl('/deco/rename-client'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac_address: macAddress, new_name: friendlyName }),
+      });
+      const data = await res.json();
+      if (data.rename_confirmed) {
+        setImportResult(`Wrote "${friendlyName}" to Deco for ${macAddress}`);
+      } else {
+        setImportResult(`Write failed: Deco did not confirm rename for ${macAddress}`);
+      }
+      setTimeout(() => setImportResult(null), 5000);
+    } catch (err) {
+      setImportResult(`Write to Deco failed: ${err.message}`);
+      setTimeout(() => setImportResult(null), 5000);
+    } finally {
+      setWritingToDeco(prev => ({ ...prev, [deviceId]: false }));
+    }
+  };
+
+  const writeAllNamesToDeco = async () => {
+    const namedDevices = suggestions
+      .filter(s => s.network_device.friendly_name && s.network_device.mac_address)
+      .map(s => s.network_device);
+    if (namedDevices.length === 0) {
+      setImportResult('No named devices to write');
+      setTimeout(() => setImportResult(null), 3000);
+      return;
+    }
+    setImportResult(`Writing ${namedDevices.length} names to Deco...`);
+    let success = 0, failed = 0;
+    for (const dev of namedDevices) {
+      try {
+        const res = await fetch(buildUrl('/deco/rename-client'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mac_address: dev.mac_address, new_name: dev.friendly_name }),
+        });
+        const data = await res.json();
+        if (data.rename_confirmed) success++;
+        else failed++;
+      } catch {
+        failed++;
+      }
+    }
+    setImportResult(`Wrote ${success} names to Deco${failed > 0 ? `, ${failed} failed` : ''}`);
+    setTimeout(() => setImportResult(null), 8000);
+  };
+
   // Filter suggestions
   const filtered = suggestions.filter(s => {
     const net = s.network_device;
@@ -107,6 +160,14 @@ function DeviceNamingPage() {
           <p>Match network devices to Alexa names to identify everything on your network</p>
         </div>
         <div className="header-controls">
+          <button
+            className="refresh-btn"
+            style={{ marginRight: '0.5rem', background: '#1a3a1a', borderColor: '#00ff88' }}
+            onClick={writeAllNamesToDeco}
+            disabled={loading}
+          >
+            Write All to Deco
+          </button>
           <button
             className="refresh-btn"
             style={{ marginRight: '0.5rem' }}
@@ -300,6 +361,18 @@ function DeviceNamingPage() {
                       {isSaving ? '...' : 'Rename'}
                     </button>
                   </div>
+
+                  {/* Write to Deco button — push friendly_name to the router */}
+                  {net.friendly_name && net.mac_address && (
+                    <button
+                      className="name-btn"
+                      style={{ marginTop: '0.25rem', background: '#1a3a1a', borderColor: '#00ff88', color: '#00ff88', fontSize: '0.75rem' }}
+                      disabled={writingToDeco[deviceId]}
+                      onClick={() => writeNameToDeco(net.mac_address, net.friendly_name, deviceId)}
+                    >
+                      {writingToDeco[deviceId] ? 'Writing...' : `Write "${net.friendly_name}" to Deco`}
+                    </button>
+                  )}
                 </div>
               </div>
             );
