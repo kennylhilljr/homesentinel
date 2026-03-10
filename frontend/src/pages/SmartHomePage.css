@@ -335,3 +335,86 @@
 .smart-home-page .candidate-status.offline {
   color: #e74c3c;
 }
+
+/* 2026-03-10: Two-step identify flow — prompt, confirm, results */
+.smart-home-page .identify-prompt {
+  margin-top: 10px;
+  padding: 14px;
+  background: #f39c1215;
+  border: 2px solid #f39c12;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.smart-home-page .prompt-icon {
+  font-size: 28px;
+}
+
+.smart-home-page .prompt-text {
+  color: var(--text-primary, #e0e0e0);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.smart-home-page .prompt-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.smart-home-page .control-btn.confirm-cut {
+  background: #e67e22;
+  color: #fff;
+  font-size: 14px;
+  padding: 8px 18px;
+}
+
+.smart-home-page .control-btn.confirm-cut:hover:not(:disabled) {
+  background: #f39c12;
+}
+
+.smart-home-page .control-btn.confirm-cut.small {
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+.smart-home-page .control-btn.cancel-identify {
+  background: var(--border-color, #444);
+  color: var(--text-secondary, #999);
+}
+
+.smart-home-page .control-btn.cancel-identify:hover:not(:disabled) {
+  background: #555;
+}
+
+.smart-home-page .dropped-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.smart-home-page .dropped-row:last-child {
+  border-bottom: none;
+}
+
+.smart-home-page .dropped-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.smart-home-page .power-reminder {
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: #27ae6020;
+  border: 1px solid #27ae60;
+  border-radius: 4px;
+  color: #2ecc71;
+  font-size: 12px;
+  font-weight: 600;
+}

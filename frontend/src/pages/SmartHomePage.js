@@ -1,19 +1,26 @@
-// 2026-03-10: Smart Home Control page — toggle plugs/lights on/off
-// to identify which physical device is which, then link to network devices.
+// 2026-03-10: Smart Home Control page — toggle plugs/lights on/off,
+// manual two-step identify flow to find MAC/IP of physical devices.
 import React, { useState, useEffect, useCallback } from 'react';
 import { buildUrl } from '../utils/apiConfig';
 import './SmartHomePage.css';
+
+// Identify flow states per device:
+//   null        — idle
+//   "snapshot"  — taking before snapshot
+//   "waiting"   — snapshot taken, waiting for user to cut power
+//   "scanning"  — user clicked "I cut the power", taking after snapshot
+//   "done"      — results ready
 
 function SmartHomePage() {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filter, setFilter] = useState('all'); // 'all', 'light', 'plug'
-  const [actionLoading, setActionLoading] = useState({}); // entity_id -> bool
+  const [filter, setFilter] = useState('all');
+  const [actionLoading, setActionLoading] = useState({});
+  const [identifyState, setIdentifyState] = useState({}); // entity_id -> flow state
   const [identifyResults, setIdentifyResults] = useState({}); // entity_id -> result
-  const [identifying, setIdentifying] = useState({}); // entity_id -> bool
-  const [candidates, setCandidates] = useState({}); // entity_id -> {candidates, hw_type}
-  const [showCandidates, setShowCandidates] = useState({}); // entity_id -> bool
+  const [candidates, setCandidates] = useState({});
+  const [showCandidates, setShowCandidates] = useState({});
 
   const fetchDevices = useCallback(async () => {
     setLoading(true);
@@ -75,34 +82,77 @@ function SmartHomePage() {
     }
   };
 
-  const identifyDevice = async (entityId, deviceName) => {
-    if (!window.confirm(
-      `Identify "${deviceName}"?\n\nThis will turn it OFF for ~10 seconds, then back ON, ` +
-      `while watching the Deco client list to find its MAC address.`
-    )) return;
-
-    setIdentifying(prev => ({ ...prev, [entityId]: true }));
+  // Step 1: Start identify — take "before" snapshot
+  const identifyStart = async (entityId) => {
+    setIdentifyState(prev => ({ ...prev, [entityId]: 'snapshot' }));
     setIdentifyResults(prev => ({ ...prev, [entityId]: null }));
     try {
-      const resp = await fetch(buildUrl(`/alexa/smart-home/${entityId}/identify`), {
+      const resp = await fetch(buildUrl(`/alexa/smart-home/${entityId}/identify/start`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setIdentifyState(prev => ({ ...prev, [entityId]: 'waiting' }));
+      } else {
+        alert(`Snapshot failed: ${data.detail || 'Unknown error'}`);
+        setIdentifyState(prev => ({ ...prev, [entityId]: null }));
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+      setIdentifyState(prev => ({ ...prev, [entityId]: null }));
+    }
+  };
+
+  // Step 2: Complete identify — take "after" snapshot and diff
+  const identifyComplete = async (entityId) => {
+    setIdentifyState(prev => ({ ...prev, [entityId]: 'scanning' }));
+    try {
+      const resp = await fetch(buildUrl(`/alexa/smart-home/${entityId}/identify/complete`), {
+        method: 'POST',
       });
       const data = await resp.json();
       if (resp.ok) {
         setIdentifyResults(prev => ({ ...prev, [entityId]: data }));
+        setIdentifyState(prev => ({ ...prev, [entityId]: 'done' }));
       } else {
-        alert(`Identify failed: ${data.detail || 'Unknown error'}`);
+        alert(`Scan failed: ${data.detail || 'Unknown error'}`);
+        setIdentifyState(prev => ({ ...prev, [entityId]: null }));
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
-    } finally {
-      setIdentifying(prev => ({ ...prev, [entityId]: false }));
+      setIdentifyState(prev => ({ ...prev, [entityId]: null }));
     }
   };
 
-  const filtered = filter === 'all' ? devices : devices.filter(d => d.kind === filter);
+  // Step 3: Associate a dropped MAC with this entity
+  const associateDevice = async (entityId, macAddress, deviceName) => {
+    try {
+      const resp = await fetch(buildUrl(`/alexa/smart-home/${entityId}/identify/associate`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac_address: macAddress, alexa_name: deviceName }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        alert(`Associated ${macAddress} with "${deviceName}"`);
+        // Clear identify state
+        setIdentifyState(prev => ({ ...prev, [entityId]: null }));
+        setIdentifyResults(prev => ({ ...prev, [entityId]: null }));
+      } else {
+        alert(`Association failed: ${data.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    }
+  };
 
+  // Cancel identify flow
+  const identifyCancel = (entityId) => {
+    setIdentifyState(prev => ({ ...prev, [entityId]: null }));
+    setIdentifyResults(prev => ({ ...prev, [entityId]: null }));
+  };
+
+  const filtered = filter === 'all' ? devices : devices.filter(d => d.kind === filter);
   const lightCount = devices.filter(d => d.kind === 'light').length;
   const plugCount = devices.filter(d => d.kind === 'plug').length;
 
@@ -141,9 +191,9 @@ function SmartHomePage() {
 
       <div className="device-grid">
         {filtered.map(device => {
+          const idState = identifyState[device.entity_id];
           const result = identifyResults[device.entity_id];
-          const isIdentifying = identifying[device.entity_id];
-          const isBusy = actionLoading[device.entity_id] || isIdentifying;
+          const isBusy = actionLoading[device.entity_id] || idState === 'snapshot' || idState === 'scanning';
           const devCandidates = candidates[device.entity_id];
           const showingCandidates = showCandidates[device.entity_id];
 
@@ -163,25 +213,24 @@ function SmartHomePage() {
                   disabled={isBusy || !device.available}
                   onClick={() => sendCommand(device.entity_id, 'turnOn')}
                   title="Turn On"
-                >
-                  ON
-                </button>
+                >ON</button>
                 <button
                   className="control-btn off"
                   disabled={isBusy || !device.available}
                   onClick={() => sendCommand(device.entity_id, 'turnOff')}
                   title="Turn Off"
-                >
-                  OFF
-                </button>
-                <button
-                  className="control-btn identify"
-                  disabled={isBusy || !device.available}
-                  onClick={() => identifyDevice(device.entity_id, device.name)}
-                  title="Turn off for 10s and watch Deco to find MAC"
-                >
-                  {isIdentifying ? 'Identifying...' : 'Identify'}
-                </button>
+                >OFF</button>
+
+                {/* Identify button — starts the two-step flow */}
+                {!idState && (
+                  <button
+                    className="control-btn identify"
+                    disabled={isBusy}
+                    onClick={() => identifyStart(device.entity_id)}
+                    title="Identify this device by cutting its power"
+                  >Identify</button>
+                )}
+
                 {devCandidates && devCandidates.candidates.length > 0 && (
                   <button
                     className="control-btn candidates"
@@ -189,10 +238,9 @@ function SmartHomePage() {
                       ...prev, [device.entity_id]: !prev[device.entity_id]
                     }))}
                     title="Show candidate MACs by manufacturer"
-                  >
-                    MACs ({devCandidates.candidates.length})
-                  </button>
+                  >MACs ({devCandidates.candidates.length})</button>
                 )}
+
                 {device.has_brightness && (
                   <div className="brightness-controls">
                     {[10, 50, 100].map(level => (
@@ -202,44 +250,129 @@ function SmartHomePage() {
                         disabled={isBusy || !device.available}
                         onClick={() => sendCommand(device.entity_id, 'setBrightness', { brightness: level })}
                         title={`${level}%`}
-                      >
-                        {level}%
-                      </button>
+                      >{level}%</button>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Identify results */}
-              {result && (
+              {/* Identify flow: taking snapshot */}
+              {idState === 'snapshot' && (
+                <div className="identify-progress">
+                  Taking network snapshot...
+                </div>
+              )}
+
+              {/* Identify flow: waiting for user to cut power */}
+              {idState === 'waiting' && (
+                <div className="identify-prompt">
+                  <div className="prompt-icon">⚡</div>
+                  <div className="prompt-text">
+                    <strong>Network snapshot taken.</strong><br />
+                    Now physically cut power to this device (unplug it or flip the breaker).
+                    Wait a few seconds for it to drop off WiFi, then click below.
+                  </div>
+                  <div className="prompt-actions">
+                    <button
+                      className="control-btn confirm-cut"
+                      onClick={() => identifyComplete(device.entity_id)}
+                    >
+                      I've Cut the Power
+                    </button>
+                    <button
+                      className="control-btn cancel-identify"
+                      onClick={() => identifyCancel(device.entity_id)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Identify flow: scanning after power cut */}
+              {idState === 'scanning' && (
+                <div className="identify-progress">
+                  Scanning network for dropped devices...
+                </div>
+              )}
+
+              {/* Identify flow: results */}
+              {idState === 'done' && result && (
                 <div className={`identify-result ${result.dropped_count > 0 ? 'found' : 'none'}`}>
                   {result.dropped_count === 0 && (
                     <div className="identify-none">
-                      No MAC dropped offline. Device may not disconnect when powered off
-                      (some lights keep WiFi via the fixture), or try again with a longer wait.
-                    </div>
-                  )}
-                  {result.dropped_count === 1 && (
-                    <div className="identify-match">
-                      <div className="match-label">Match found:</div>
-                      <div className="match-mac">{result.dropped[0].mac}</div>
-                      <div className="match-detail">
-                        IP: {result.dropped[0].ip}
-                        {result.dropped[0].name && ` — Deco name: ${result.dropped[0].name}`}
-                        {result.dropped[0].friendly_name && ` — DB name: ${result.dropped[0].friendly_name}`}
-                        {result.dropped[0].vendor && ` — ${result.dropped[0].vendor}`}
+                      <strong>No devices dropped offline.</strong><br />
+                      Make sure the device is fully unplugged and wait longer before clicking
+                      "I've Cut the Power". Some devices take 10-15 seconds to drop.
+                      <div className="prompt-actions" style={{ marginTop: 8 }}>
+                        <button className="control-btn identify" onClick={() => identifyStart(device.entity_id)}>
+                          Try Again
+                        </button>
+                        <button className="control-btn cancel-identify" onClick={() => identifyCancel(device.entity_id)}>
+                          Close
+                        </button>
                       </div>
                     </div>
                   )}
+
+                  {result.dropped_count === 1 && (
+                    <div className="identify-match">
+                      <div className="match-label">Match found — 1 device dropped:</div>
+                      <div className="match-mac">{result.dropped[0].mac}</div>
+                      <div className="match-detail">
+                        IP: {result.dropped[0].ip}
+                        {result.dropped[0].name && ` — Deco: ${result.dropped[0].name}`}
+                        {result.dropped[0].friendly_name && ` — DB: ${result.dropped[0].friendly_name}`}
+                        {result.dropped[0].vendor && ` — ${result.dropped[0].vendor}`}
+                      </div>
+                      <div className="prompt-actions" style={{ marginTop: 8 }}>
+                        <button
+                          className="control-btn confirm-cut"
+                          onClick={() => associateDevice(device.entity_id, result.dropped[0].mac, device.name)}
+                        >
+                          Associate This MAC
+                        </button>
+                        <button className="control-btn cancel-identify" onClick={() => identifyCancel(device.entity_id)}>
+                          Dismiss
+                        </button>
+                      </div>
+                      <div className="power-reminder">
+                        Turn the device back on now.
+                      </div>
+                    </div>
+                  )}
+
                   {result.dropped_count > 1 && (
                     <div className="identify-multi">
-                      <div className="match-label">{result.dropped_count} MACs dropped (ambiguous):</div>
+                      <div className="match-label">{result.dropped_count} devices dropped — select the correct one:</div>
                       {result.dropped.map(d => (
-                        <div key={d.mac} className="match-detail">
-                          {d.mac} — {d.ip} — {d.name || '?'}
-                          {d.vendor && ` (${d.vendor})`}
+                        <div key={d.mac} className="dropped-row">
+                          <div className="dropped-info">
+                            <span className="match-mac">{d.mac}</span>
+                            <span className="match-detail">
+                              {d.ip} — {d.name || d.friendly_name || '?'}
+                              {d.vendor && ` (${d.vendor})`}
+                            </span>
+                          </div>
+                          <button
+                            className="control-btn confirm-cut small"
+                            onClick={() => associateDevice(device.entity_id, d.mac, device.name)}
+                          >
+                            This One
+                          </button>
                         </div>
                       ))}
+                      <div className="prompt-actions" style={{ marginTop: 8 }}>
+                        <button className="control-btn identify" onClick={() => identifyStart(device.entity_id)}>
+                          Try Again
+                        </button>
+                        <button className="control-btn cancel-identify" onClick={() => identifyCancel(device.entity_id)}>
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="power-reminder">
+                        Turn the device back on now.
+                      </div>
                     </div>
                   )}
                 </div>
@@ -266,11 +399,6 @@ function SmartHomePage() {
                 </div>
               )}
 
-              {isIdentifying && (
-                <div className="identify-progress">
-                  Turning off, waiting 10s, checking Deco...
-                </div>
-              )}
               {isBusy && <div className="action-spinner" />}
             </div>
           );

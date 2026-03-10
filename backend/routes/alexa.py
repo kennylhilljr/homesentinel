@@ -951,27 +951,24 @@ async def control_smart_home_device(entity_id: str, cmd: SmartHomeCommand) -> Di
 # turning it back on. The MAC that disappears is the match.
 
 
-@router.post("/smart-home/{entity_id}/identify")
-async def identify_smart_home_device(entity_id: str) -> Dict[str, Any]:
-    """Identify a smart home device's MAC by power-cycling it and watching the Deco client list.
+# 2026-03-10: Two-step manual identify flow.
+# Step 1: "Start" — snapshot all online MACs, tell user to cut power.
+# Step 2: "Complete" — snapshot again, diff, show dropped MACs.
+# Step 3 (optional): "Associate" — link a dropped MAC to the Alexa entity.
+_identify_snapshots: Dict[str, Dict] = {}  # entity_id -> {"before": {...}, "ts": float}
 
-    1. Snapshot online Deco clients
-    2. Turn off the Alexa device
-    3. Wait ~10 seconds for it to disconnect from WiFi
-    4. Snapshot online Deco clients again
-    5. Turn it back on
-    6. Return MACs that dropped offline during the power-off window
+
+@router.post("/smart-home/{entity_id}/identify/start")
+async def identify_start(entity_id: str) -> Dict[str, Any]:
+    """Step 1: Take a 'before' snapshot of all online network clients.
+    Returns snapshot stats. Frontend then prompts user to physically cut power.
     """
-    if alexa_client is None or not alexa_client.has_cookies():
-        raise HTTPException(status_code=400, detail="Alexa cookies not configured")
     if deco_client is None:
         raise HTTPException(status_code=500, detail="Deco client not initialized")
 
-    import asyncio
-
     loop = asyncio.get_event_loop()
 
-    # Step 1: Snapshot "before" — get all online clients from Deco
+    # Snapshot Deco client list (local API — returns all clients with online status)
     try:
         before_clients = await loop.run_in_executor(None, deco_client.get_client_list_local)
     except Exception as e:
@@ -987,52 +984,63 @@ async def identify_smart_home_device(entity_id: str) -> Dict[str, Any]:
                 "ip": c.get("ip", "?"),
             }
 
-    logger.info(f"Identify: {len(before_online)} clients online before power-off")
+    # Store snapshot keyed by entity_id
+    _identify_snapshots[entity_id] = {
+        "before": before_online,
+        "ts": time.time(),
+    }
 
-    # Step 2: Turn off the device
-    try:
-        off_result = alexa_client.smart_home_control(entity_id, "turnOff")
-        if not off_result.get("success"):
-            raise HTTPException(status_code=500, detail="Failed to turn off device")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Turn off failed: {e}")
+    logger.info(f"Identify start: {len(before_online)} clients online (entity {entity_id})")
 
-    # Step 3: Wait for the device to drop off WiFi
-    # Smart plugs typically disconnect within 3-5 seconds.
-    # Light bulbs lose power immediately but their WiFi chip takes a moment.
-    await asyncio.sleep(10)
+    return {
+        "entity_id": entity_id,
+        "online_count": len(before_online),
+        "message": "Snapshot taken. Cut power to the device, wait a few seconds, then call /identify/complete.",
+    }
 
-    # Step 4: Snapshot "after"
+
+@router.post("/smart-home/{entity_id}/identify/complete")
+async def identify_complete(entity_id: str) -> Dict[str, Any]:
+    """Step 2: Take an 'after' snapshot and diff against the 'before' snapshot.
+    Returns MACs that dropped offline (the device whose power was cut).
+    """
+    if deco_client is None:
+        raise HTTPException(status_code=500, detail="Deco client not initialized")
+
+    snapshot = _identify_snapshots.get(entity_id)
+    if not snapshot:
+        raise HTTPException(status_code=400, detail="No 'before' snapshot found. Call /identify/start first.")
+
+    # Check staleness — snapshot older than 5 minutes is unreliable
+    age = time.time() - snapshot["ts"]
+    if age > 300:
+        del _identify_snapshots[entity_id]
+        raise HTTPException(status_code=400, detail="Snapshot too old (>5 min). Start again.")
+
+    before_online = snapshot["before"]
+
+    loop = asyncio.get_event_loop()
+
+    # Take "after" snapshot
     try:
         after_clients = await loop.run_in_executor(None, deco_client.get_client_list_local)
     except Exception as e:
-        # Turn back on even if snapshot fails
-        try:
-            alexa_client.smart_home_control(entity_id, "turnOn")
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Failed to read Deco client list after: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to read Deco client list: {e}")
 
     after_online = set()
     for c in after_clients:
         if c.get("online"):
             after_online.add(c.get("mac", "").upper())
 
-    # Step 5: Turn it back on
-    try:
-        alexa_client.smart_home_control(entity_id, "turnOn")
-    except Exception as e:
-        logger.warning(f"Failed to turn device back on: {e}")
-
-    # Step 6: Find MACs that dropped offline
+    # Find MACs that dropped
     dropped = []
     for mac, info in before_online.items():
         if mac not in after_online:
-            dropped.append(info)
+            dropped.append(dict(info))
 
-    logger.info(f"Identify: {len(dropped)} MAC(s) dropped offline: {[d['mac'] for d in dropped]}")
+    logger.info(f"Identify complete: {len(dropped)} MAC(s) dropped — {[d['mac'] for d in dropped]}")
 
-    # Also check the DB for existing device info on the dropped MACs
+    # Enrich dropped MACs with DB info
     if db is not None and dropped:
         with db.get_connection() as conn:
             cursor = conn.cursor()
@@ -1050,12 +1058,68 @@ async def identify_smart_home_device(entity_id: str) -> Dict[str, Any]:
                     d["hostname"] = row[2]
                     d["vendor"] = row[3]
 
+    # Clean up snapshot
+    del _identify_snapshots[entity_id]
+
     return {
         "entity_id": entity_id,
         "before_online": len(before_online),
         "after_online": len(after_online),
+        "elapsed_seconds": round(age, 1),
         "dropped_count": len(dropped),
         "dropped": dropped,
+    }
+
+
+class AssociateRequest(BaseModel):
+    mac_address: str
+    alexa_name: Optional[str] = None
+
+
+@router.post("/smart-home/{entity_id}/identify/associate")
+async def identify_associate(entity_id: str, body: AssociateRequest) -> Dict[str, Any]:
+    """Step 3: Link a dropped MAC to this Alexa entity in the DB.
+    Sets alexa_name and alexa_device_type on the network_devices row.
+    """
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    mac_norm = body.mac_address.lower().replace("-", ":")
+
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        # Check device exists
+        cursor.execute("SELECT device_id FROM network_devices WHERE mac_address = ?", (mac_norm,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"No network device with MAC {mac_norm}")
+
+        # Look up the Alexa entity name if not provided
+        alexa_name = body.alexa_name
+        if not alexa_name and alexa_client and alexa_client.has_cookies():
+            try:
+                entities = alexa_client.get_smart_home_devices()
+                for e in entities:
+                    if e.get("id") == entity_id:
+                        alexa_name = e.get("displayName", "")
+                        break
+            except Exception:
+                pass
+
+        # Update the network device with Alexa association
+        cursor.execute(
+            "UPDATE network_devices SET alexa_name = ?, alexa_entity_id = ?, updated_at = CURRENT_TIMESTAMP WHERE mac_address = ?",
+            (alexa_name or "", entity_id, mac_norm),
+        )
+        conn.commit()
+
+        logger.info(f"Associated MAC {mac_norm} with Alexa entity {entity_id} ({alexa_name})")
+
+    return {
+        "success": True,
+        "mac_address": mac_norm,
+        "entity_id": entity_id,
+        "alexa_name": alexa_name,
     }
 
 
