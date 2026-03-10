@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import logging
 import json
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +84,40 @@ def _set_setting(key: str, value: str):
 
 
 def load_deco_credentials_on_startup():
-    """Load saved Deco credentials into the DecoClient on startup"""
-    if deco_client is None or db is None:
+    """Load Deco credentials — env vars take priority over DB.
+
+    # 2026-03-10: Prefer env vars (DECO_USERNAME, DECO_PASSWORD, DECO_MODE,
+    # DECO_LOCAL_ENDPOINT) so secrets don't need to live in the database.
+    """
+    if deco_client is None:
         return
 
+    # Check env vars first
+    env_user = os.getenv("DECO_USERNAME", "")
+    env_pass = os.getenv("DECO_PASSWORD", "")
+    env_mode = os.getenv("DECO_MODE", "")
+    env_endpoint = os.getenv("DECO_LOCAL_ENDPOINT", "")
+
+    if env_user and env_pass:
+        deco_client.username = env_user
+        deco_client.password = env_pass
+        mode = env_mode or "cloud"
+        if mode == "local":
+            local_ep = env_endpoint or deco_client.DEFAULT_LOCAL_ENDPOINT
+            deco_client.use_cloud = False
+            deco_client.active_endpoint = local_ep
+            deco_client.local_endpoint = local_ep
+            deco_client.verify_ssl = False
+        else:
+            deco_client.use_cloud = True
+            deco_client.active_endpoint = deco_client.cloud_endpoint
+            deco_client.verify_ssl = True
+        logger.info(f"Loaded Deco credentials from environment (mode: {mode})")
+        return
+
+    # Fall back to DB
+    if db is None:
+        return
     creds_json = _get_setting("deco_credentials")
     if not creds_json:
         return
@@ -114,10 +145,30 @@ def load_deco_credentials_on_startup():
 
 
 def load_chester_credentials_on_startup():
-    """Load saved Chester credentials into the ChesterClient on startup"""
-    if chester_client is None or db is None:
+    """Load Chester credentials — env vars take priority over DB.
+
+    # 2026-03-10: Prefer env vars (CHESTER_HOST, CHESTER_PASSWORD, etc.)
+    """
+    if chester_client is None:
         return
 
+    # Check env vars first
+    env_pass = os.getenv("CHESTER_PASSWORD", "")
+    if env_pass:
+        chester_client.set_credentials(
+            host=os.getenv("CHESTER_HOST", "192.168.12.1"),
+            username=os.getenv("CHESTER_USERNAME", "admin"),
+            password=env_pass,
+            port=int(os.getenv("CHESTER_PORT", "80")),
+            use_https=os.getenv("CHESTER_USE_HTTPS", "false").lower() == "true",
+            verify_ssl=os.getenv("CHESTER_VERIFY_SSL", "false").lower() == "true",
+        )
+        logger.info("Loaded Chester credentials from environment")
+        return
+
+    # Fall back to DB
+    if db is None:
+        return
     creds_json = _get_setting("chester_credentials")
     if not creds_json:
         return

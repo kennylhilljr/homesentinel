@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import logging
 import json
+import os
 
 import time
 import asyncio
@@ -123,17 +124,29 @@ def _set_setting(key: str, value: str):
 
 
 def load_alexa_credentials_on_startup():
-    """Load saved Alexa credentials, tokens, and cookies on startup"""
-    if alexa_client is None or db is None:
+    """Load Alexa credentials — env vars take priority over DB.
+
+    # 2026-03-10: Prefer env vars (ALEXA_CLIENT_ID, ALEXA_CLIENT_SECRET)
+    # so secrets don't need to live in the database.
+    """
+    if alexa_client is None:
         return
 
-    creds_json = _get_setting("alexa_credentials")
-    if creds_json:
-        try:
-            creds = json.loads(creds_json)
-            alexa_client.set_credentials(creds.get("client_id", ""), creds.get("client_secret", ""))
-        except Exception as e:
-            logger.warning(f"Failed to load Alexa credentials: {e}")
+    # Check env vars first
+    env_id = os.getenv("ALEXA_CLIENT_ID", "")
+    env_secret = os.getenv("ALEXA_CLIENT_SECRET", "")
+    if env_id and env_secret:
+        alexa_client.set_credentials(env_id, env_secret)
+        logger.info("Loaded Alexa credentials from environment")
+    elif db is not None:
+        creds_json = _get_setting("alexa_credentials")
+        if creds_json:
+            try:
+                creds = json.loads(creds_json)
+                alexa_client.set_credentials(creds.get("client_id", ""), creds.get("client_secret", ""))
+                logger.info("Loaded Alexa credentials from database")
+            except Exception as e:
+                logger.warning(f"Failed to load Alexa credentials: {e}")
 
     tokens_json = _get_setting("alexa_tokens")
     if tokens_json:
