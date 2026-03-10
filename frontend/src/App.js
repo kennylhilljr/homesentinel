@@ -6,6 +6,7 @@ import DecoNodesPage from './pages/DecoNodesPage';
 import DecoTopologyPage from './pages/DecoTopologyPage';
 import SettingsPage from './pages/SettingsPage';
 import AlexaDevicesPage from './pages/AlexaDevicesPage';
+import SmartHomePage from './pages/SmartHomePage';
 import { buildUrl } from './utils/apiConfig';
 import ViewModeToggle from './components/ViewModeToggle';
 
@@ -378,6 +379,12 @@ function App() {
             Alexa
           </button>
           <button
+            className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('smart-home')}
+          >
+            Smart Home
+          </button>
+          <button
             className={`nav-button ${currentPage === 'settings' ? 'active' : ''}`}
             onClick={() => setCurrentPage('settings')}
           >
@@ -394,6 +401,9 @@ function App() {
 
         {/* Alexa Devices Page */}
         {currentPage === 'alexa' && <AlexaDevicesPage />}
+
+        {/* Smart Home Control Page */}
+        {currentPage === 'smart-home' && <SmartHomePage />}
 
         {/* Settings Page */}
         {currentPage === 'settings' && (

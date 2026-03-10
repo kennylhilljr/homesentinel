@@ -1,0 +1,208 @@
+.smart-home-page {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.smart-home-page .page-header {
+  margin-bottom: 24px;
+}
+
+.smart-home-page .page-header h2 {
+  margin: 0 0 4px 0;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.smart-home-page .subtitle {
+  color: var(--text-secondary, #999);
+  margin: 0 0 16px 0;
+  font-size: 14px;
+}
+
+.smart-home-page .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.smart-home-page .filter-group {
+  display: flex;
+  gap: 4px;
+}
+
+.smart-home-page .filter-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--card-bg, #2a2a2a);
+  color: var(--text-secondary, #999);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.smart-home-page .filter-btn.active {
+  background: var(--accent-color, #4a9eff);
+  color: #fff;
+  border-color: var(--accent-color, #4a9eff);
+}
+
+.smart-home-page .refresh-btn {
+  padding: 6px 16px;
+  background: var(--card-bg, #2a2a2a);
+  color: var(--text-primary, #e0e0e0);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.smart-home-page .device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.smart-home-page .device-card {
+  background: var(--card-bg, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+}
+
+.smart-home-page .device-card.light {
+  border-left: 3px solid #f5c542;
+}
+
+.smart-home-page .device-card.plug {
+  border-left: 3px solid #4a9eff;
+}
+
+.smart-home-page .device-card.unavailable {
+  opacity: 0.5;
+}
+
+.smart-home-page .device-icon {
+  font-size: 24px;
+}
+
+.smart-home-page .device-name {
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+  font-size: 15px;
+}
+
+.smart-home-page .device-desc {
+  color: var(--text-secondary, #999);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.smart-home-page .device-offline {
+  color: #e74c3c;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.smart-home-page .device-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.smart-home-page .control-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.smart-home-page .control-btn.on {
+  background: #27ae60;
+  color: #fff;
+}
+
+.smart-home-page .control-btn.on:hover:not(:disabled) {
+  background: #2ecc71;
+}
+
+.smart-home-page .control-btn.off {
+  background: #c0392b;
+  color: #fff;
+}
+
+.smart-home-page .control-btn.off:hover:not(:disabled) {
+  background: #e74c3c;
+}
+
+.smart-home-page .control-btn.dim {
+  background: var(--border-color, #444);
+  color: var(--text-primary, #e0e0e0);
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.smart-home-page .control-btn.dim:hover:not(:disabled) {
+  background: #555;
+}
+
+.smart-home-page .control-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.smart-home-page .brightness-controls {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.smart-home-page .action-spinner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent-color, #4a9eff);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.smart-home-page .loading,
+.smart-home-page .empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary, #999);
+  font-size: 15px;
+}
+
+.smart-home-page .error-banner {
+  background: #c0392b22;
+  border: 1px solid #c0392b;
+  color: #e74c3c;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.smart-home-page .link-btn {
+  background: none;
+  border: none;
+  color: var(--accent-color, #4a9eff);
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: 8px;
+}

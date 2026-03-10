@@ -603,6 +603,86 @@ class AlexaClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    # ---------- Cookie-based Smart Home Control (phoenix/state) ----------
+    # 2026-03-10: The OAuth directive API requires alexa::smart_home scope
+    # which our LWA app doesn't have. The cookie-based phoenix/state API
+    # works with browser session cookies and supports turnOn/turnOff/
+    # setBrightness/setColor for all linked smart home devices.
+
+    def smart_home_control(self, entity_id: str, action: str,
+                           params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Control a smart home device via the cookie-based phoenix/state API.
+
+        Args:
+            entity_id: The behaviors/entities UUID (from get_smart_home_devices)
+            action: "turnOn", "turnOff", "setBrightness", "setColor", etc.
+            params: Optional parameters (e.g. {"brightness": 50})
+        Returns:
+            Response dict with controlResponses and errors
+        """
+        if not self._cookies:
+            raise AlexaAPIError("Browser cookies not configured")
+
+        headers = self._get_alexa_web_headers()
+        cookies = self._get_cookie_jar()
+
+        request_params = {"action": action}
+        if params:
+            request_params.update(params)
+
+        payload = {
+            "controlRequests": [{
+                "entityId": entity_id,
+                "entityType": "APPLIANCE",
+                "parameters": request_params,
+            }]
+        }
+
+        try:
+            response = self._http_session.put(
+                f"{self.ALEXA_API_BASE}/api/phoenix/state",
+                headers=headers, cookies=cookies, timeout=10,
+                json=payload,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                controls = data.get("controlResponses", [])
+                errors = data.get("errors", [])
+                if errors:
+                    logger.warning(f"Smart home control errors: {errors}")
+                success = any(c.get("code") == "SUCCESS" for c in controls)
+                return {"success": success, "responses": controls, "errors": errors}
+            elif response.status_code == 401:
+                raise AlexaAPIError("Cookies expired. Please update cookies in Settings.")
+            else:
+                raise AlexaAPIError(f"phoenix/state returned {response.status_code}: {response.text[:200]}")
+        except AlexaAPIError:
+            raise
+        except Exception as e:
+            raise AlexaAPIError(f"Smart home control failed: {e}")
+
+    def get_smart_home_groups(self) -> List[Dict[str, Any]]:
+        """Get smart home device groups (rooms) via the cookie-based API."""
+        if not self._cookies:
+            return []
+        headers = self._get_alexa_web_headers()
+        cookies = self._get_cookie_jar()
+        try:
+            response = self._http_session.get(
+                f"{self.ALEXA_API_BASE}/api/behaviors/entities?skillId=amzn1.ask.1p.smarthome",
+                headers=headers, cookies=cookies, timeout=15,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    return [d for d in data
+                            if isinstance(d, dict)
+                            and d.get("providerData", {}).get("categoryType") == "GROUP"]
+            return []
+        except Exception as e:
+            logger.warning(f"Smart home groups fetch failed: {e}")
+            return []
+
     def close(self):
         """Close HTTP session"""
         if self._http_session:

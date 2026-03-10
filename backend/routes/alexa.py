@@ -869,6 +869,82 @@ async def import_alexa_mac_addresses() -> Dict[str, Any]:
     }
 
 
+# ─── Smart Home Plug/Light Control (cookie-based) ─────────────────────────
+# 2026-03-10: Uses the phoenix/state API via browser cookies to control
+# smart home devices (plugs, lights). This works without alexa::smart_home
+# OAuth scope — just needs valid alexa.amazon.com session cookies.
+
+
+@router.get("/smart-home/devices")
+async def get_smart_home_controllable() -> Dict[str, Any]:
+    """Get all controllable smart home devices (plugs, lights, etc.)
+    with on/off capability. Excludes Echo devices, scenes, and groups."""
+    if alexa_client is None:
+        raise HTTPException(status_code=500, detail="Alexa client not initialized")
+    if not alexa_client.has_cookies():
+        raise HTTPException(status_code=400, detail="Alexa cookies not configured")
+
+    try:
+        entities = alexa_client.get_smart_home_devices()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch devices: {e}")
+
+    controllable = []
+    for entity in entities:
+        ops = entity.get("supportedOperations", [])
+        has_power = any("turnOn" in op or "turnOff" in op for op in ops)
+        provider = entity.get("providerData", {})
+        cat = provider.get("categoryType", "")
+        dev_type = provider.get("deviceType", "")
+
+        if not has_power or cat == "SCENE" or cat == "GROUP" or dev_type == "ALEXA_VOICE_ENABLED":
+            continue
+
+        has_brightness = any("Brightness" in op or "setBrightness" in op for op in ops)
+        has_color = any("setColor" in op for op in ops)
+
+        controllable.append({
+            "entity_id": entity.get("id", ""),
+            "name": entity.get("displayName", "?"),
+            "description": entity.get("description", ""),
+            "kind": "light" if (has_brightness or has_color) else "plug",
+            "has_brightness": has_brightness,
+            "has_color": has_color,
+            "available": entity.get("availability") == "AVAILABLE",
+        })
+
+    return {
+        "devices": sorted(controllable, key=lambda d: (d["kind"], d["name"])),
+        "total": len(controllable),
+    }
+
+
+class SmartHomeCommand(BaseModel):
+    action: str  # "turnOn", "turnOff", "setBrightness", "setColor"
+    params: Optional[Dict[str, Any]] = None
+
+
+@router.post("/smart-home/{entity_id}/control")
+async def control_smart_home_device(entity_id: str, cmd: SmartHomeCommand) -> Dict[str, Any]:
+    """Control a smart home device (plug/light) via cookie-based API."""
+    if alexa_client is None:
+        raise HTTPException(status_code=500, detail="Alexa client not initialized")
+    if not alexa_client.has_cookies():
+        raise HTTPException(status_code=400, detail="Alexa cookies not configured")
+
+    try:
+        result = alexa_client.smart_home_control(entity_id, cmd.action, cmd.params)
+        return {
+            "success": result.get("success", False),
+            "entity_id": entity_id,
+            "action": cmd.action,
+            "responses": result.get("responses", []),
+            "errors": result.get("errors", []),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Command failed: {e}")
+
+
 # ─── Lambda-facing endpoints ───────────────────────────────────────────────
 # DISABLED 2026-03-09: All Lambda↔local endpoints return 503.
 # These were exposing unauthenticated device discovery, state, and control
