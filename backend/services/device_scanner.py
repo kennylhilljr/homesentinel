@@ -413,6 +413,30 @@ class NetworkDeviceService:
         """
         self._deco_client = deco_client
 
+    @staticmethod
+    def _normalize_mac(mac_address: Optional[str]) -> str:
+        """Normalize MAC to lowercase aa:bb:cc:dd:ee:ff for comparisons."""
+        mac = (mac_address or "").strip().lower()
+        mac = mac.replace("-", "").replace(":", "").replace(" ", "")
+        if len(mac) != 12:
+            return ""
+        return ":".join(mac[i:i+2] for i in range(0, 12, 2))
+
+    @staticmethod
+    def _deco_status_is_online(raw_status: object) -> bool:
+        """Normalize Deco node status variants to a boolean online signal."""
+        if isinstance(raw_status, bool):
+            return raw_status
+        if isinstance(raw_status, int):
+            return raw_status >= 1
+        status_text = str(raw_status or "").strip().lower()
+        if status_text in {"online", "connected", "active", "up", "1", "true"}:
+            return True
+        if status_text in {"offline", "disconnected", "inactive", "down", "0", "false"}:
+            return False
+        # Unknown status strings default to online to avoid false negatives.
+        return True
+
     def create_or_update_device(self, mac_address: str, ip_address: Optional[str] = None) -> dict:
         """Create or update a network device"""
         # Generate device ID from MAC address
@@ -472,26 +496,38 @@ class NetworkDeviceService:
             discovered_devices = self.arp_scanner.scan_subnet(subnet)
             scan_results['devices_found'] = len(discovered_devices)
 
-            # Track which MACs are currently online
+            # Track online identities across multiple signals.
             online_macs = set()
+            online_ips = set()
+            online_device_ids = set()
+            deco_supplement_ok = self._deco_client is None
 
             # Update database with discovered devices
             for device_info in discovered_devices:
-                existing = self.get_device_by_mac(device_info.mac_address)
+                normalized_scan_mac = self._normalize_mac(device_info.mac_address)
+                if not normalized_scan_mac:
+                    continue
+
+                if device_info.ip_address:
+                    online_ips.add(device_info.ip_address)
+
+                existing = self.get_device_by_mac(normalized_scan_mac)
                 if existing:
                     # Update existing device
-                    self.create_or_update_device(device_info.mac_address, device_info.ip_address)
+                    updated = self.create_or_update_device(normalized_scan_mac, device_info.ip_address)
                     scan_results['devices_updated'] += 1
                 else:
                     # Create new device with vendor lookup
-                    device = self.create_or_update_device(device_info.mac_address, device_info.ip_address)
+                    updated = self.create_or_update_device(normalized_scan_mac, device_info.ip_address)
                     # Auto-populate vendor from OUI database
-                    vendor = device_info.vendor or self.oui_service.lookup_vendor(device_info.mac_address)
+                    vendor = device_info.vendor or self.oui_service.lookup_vendor(normalized_scan_mac)
                     if vendor and vendor != "Unknown Vendor":
-                        self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor)
+                        self.device_repo.update_device_metadata(updated['device_id'], vendor_name=vendor)
                     scan_results['devices_added'] += 1
 
-                online_macs.add(device_info.mac_address)
+                if updated and updated.get('device_id'):
+                    online_device_ids.add(updated['device_id'])
+                online_macs.add(normalized_scan_mac)
 
             # ── Deco client list supplement ──────────────────────────────────
             # The Deco router (DHCP server/gateway) knows every connected client.
@@ -500,44 +536,152 @@ class NetworkDeviceService:
             if self._deco_client:
                 try:
                     deco_clients = self._deco_client.get_client_list_local()
+                    deco_supplement_ok = True
                     for client in deco_clients:
                         client_mac_raw = client.get("mac", "") or client.get("macAddress", "")
                         client_ip = client.get("ip", "") or client.get("ipAddress", "")
                         if not client_mac_raw:
                             continue
-                        # Normalize MAC to aa:bb:cc:dd:ee:ff
-                        mac_clean = client_mac_raw.lower().replace("-", "").replace(":", "").replace(" ", "")
-                        if len(mac_clean) != 12:
+                        normalized_mac = self._normalize_mac(client_mac_raw)
+                        if not normalized_mac:
                             continue
-                        normalized_mac = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                        if client_ip:
+                            online_ips.add(client_ip)
 
                         if normalized_mac not in online_macs:
                             # Device is on Deco but not found by ARP scan — mark it online
                             existing = self.get_device_by_mac(normalized_mac)
                             if existing:
-                                self.create_or_update_device(normalized_mac, client_ip or existing.get('current_ip'))
+                                updated = self.create_or_update_device(normalized_mac, client_ip or existing.get('current_ip'))
                             else:
-                                device = self.create_or_update_device(normalized_mac, client_ip)
+                                updated = self.create_or_update_device(normalized_mac, client_ip)
                                 vendor = self.oui_service.lookup_vendor(normalized_mac)
                                 if vendor and vendor != "Unknown Vendor":
-                                    self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor)
+                                    self.device_repo.update_device_metadata(updated['device_id'], vendor_name=vendor)
                                 scan_results['devices_added'] += 1
 
+                            if updated and updated.get('device_id'):
+                                online_device_ids.add(updated['device_id'])
                             online_macs.add(normalized_mac)
                             scan_results['deco_online'] += 1
 
                     logger.info(f"Deco supplement: {scan_results['deco_online']} additional devices marked online")
                 except Exception as e:
                     logger.warning(f"Deco client list supplement failed: {e}")
+                    deco_supplement_ok = False
+
+                # Deco node-status supplement:
+                # Node devices are often not part of client_list, so use node status too.
+                try:
+                    # Prefer local node list for real-time status. Fallback to cloud list.
+                    if hasattr(self._deco_client, "get_node_list_local"):
+                        try:
+                            deco_nodes = self._deco_client.get_node_list_local()
+                        except Exception as local_err:
+                            logger.warning(f"Local Deco node list failed, falling back to cloud: {local_err}")
+                            deco_nodes = self._deco_client.get_node_list()
+                    else:
+                        deco_nodes = self._deco_client.get_node_list()
+                    deco_supplement_ok = True
+                    node_online_added = 0
+                    devices_by_ip: Dict[str, List[dict]] = {}
+                    for known_device in self.list_devices():
+                        known_ip = known_device.get('current_ip')
+                        if known_ip:
+                            devices_by_ip.setdefault(known_ip, []).append(known_device)
+                    for node in deco_nodes:
+                        if not isinstance(node, dict):
+                            continue
+
+                        raw_status = (
+                            node.get("status")
+                            or node.get("inet_status")
+                            or node.get("group_status")
+                            or node.get("nodeStatus")
+                        )
+                        if not self._deco_status_is_online(raw_status):
+                            continue
+
+                        node_mac_raw = (
+                            node.get("mac")
+                            or node.get("macAddress")
+                            or node.get("mac_address")
+                            or node.get("device_mac")
+                            or node.get("master_mac")
+                        )
+                        normalized_node_mac = self._normalize_mac(node_mac_raw)
+                        if normalized_node_mac and normalized_node_mac in online_macs:
+                            continue
+
+                        node_ip = (
+                            node.get("ip")
+                            or node.get("ipAddress")
+                            or node.get("ip_address")
+                            or node.get("lan_ip")
+                        )
+                        if node_ip:
+                            online_ips.add(node_ip)
+
+                        existing = self.get_device_by_mac(normalized_node_mac) if normalized_node_mac else None
+                        if not existing and node_ip:
+                            # Mesh nodes can report different interface MACs; reconcile by management IP.
+                            ip_matches = devices_by_ip.get(node_ip, [])
+                            existing = ip_matches[0] if ip_matches else None
+
+                        if existing:
+                            existing_mac = self._normalize_mac(existing.get('mac_address'))
+                            if existing_mac:
+                                updated = self.create_or_update_device(
+                                    existing_mac,
+                                    node_ip or existing.get('current_ip'),
+                                )
+                                if updated and updated.get('device_id'):
+                                    online_device_ids.add(updated['device_id'])
+                                    scan_results['devices_updated'] += 1
+                        else:
+                            if not normalized_node_mac:
+                                continue
+                            updated = self.create_or_update_device(normalized_node_mac, node_ip)
+                            if updated and updated.get('device_id'):
+                                online_device_ids.add(updated['device_id'])
+                                vendor = self.oui_service.lookup_vendor(normalized_node_mac)
+                                if vendor and vendor != "Unknown Vendor":
+                                    self.device_repo.update_device_metadata(
+                                        updated['device_id'],
+                                        vendor_name=vendor,
+                                    )
+                                scan_results['devices_added'] += 1
+
+                        if normalized_node_mac:
+                            online_macs.add(normalized_node_mac)
+                        node_online_added += 1
+
+                    if node_online_added:
+                        scan_results['deco_online'] += node_online_added
+                        logger.info("Deco node supplement: %d nodes marked online", node_online_added)
+                except Exception as e:
+                    logger.warning(f"Deco node status supplement failed: {e}")
 
             scan_results['devices_found'] = len(online_macs)
 
-            # Mark devices as offline if not in scan results AND not in Deco
-            all_online = self.list_online_devices()
-            for device in all_online:
-                if device['mac_address'] not in online_macs:
-                    self.mark_offline(device['device_id'])
-                    scan_results['devices_offline'] += 1
+            # Mark devices as offline only when scan inputs are trustworthy.
+            # If Deco supplement failed, avoid false-offline flips.
+            if not self._deco_client or deco_supplement_ok:
+                all_online = self.list_online_devices()
+                for device in all_online:
+                    if device.get('device_id') in online_device_ids:
+                        continue
+                    device_ip = device.get('current_ip')
+                    if device_ip and device_ip in online_ips:
+                        continue
+                    device_mac = self._normalize_mac(device.get('mac_address'))
+                    if device_mac and device_mac not in online_macs:
+                        self.mark_offline(device['device_id'])
+                        scan_results['devices_offline'] += 1
+            else:
+                logger.warning(
+                    "Skipping offline marking: Deco supplement unavailable; preserving prior online states."
+                )
 
             # Update last scan timestamp
             self.config_repo.update_last_scan(datetime.utcnow())
