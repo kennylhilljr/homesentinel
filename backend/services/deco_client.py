@@ -644,6 +644,63 @@ class DecoClient:
         finally:
             local_client.close()
 
+    def rename_client(self, mac_address: str, new_name: str) -> bool:
+        """Rename a client device on the Deco router via local API.
+
+        # 2026-03-09: Uses the same admin/client?form=client_list endpoint
+        # as get_client_list_local, but with operation="write".
+        # Deco expects MAC in AA-BB-CC-DD-EE-FF format and name base64-encoded.
+
+        Args:
+            mac_address: Client MAC in any format (will be normalized to AA-BB-CC-DD-EE-FF)
+            new_name: New display name for the client
+        Returns:
+            True if rename succeeded
+        """
+        if not HAS_CRYPTO:
+            raise APIConnectionError("pycryptodome required for local API")
+
+        # Normalize MAC to Deco format: AA-BB-CC-DD-EE-FF
+        mac_clean = mac_address.lower().replace(":", "").replace("-", "").replace(" ", "")
+        if len(mac_clean) != 12:
+            raise ValueError(f"Invalid MAC address: {mac_address}")
+        deco_mac = "-".join(mac_clean[i:i+2].upper() for i in range(0, 12, 2))
+
+        # Deco stores names as base64
+        name_encoded = base64.b64encode(new_name.encode("utf-8")).decode("ascii")
+
+        logger.info(f"Renaming Deco client {deco_mac} to '{new_name}'")
+        local_client = DecoClient(
+            local_endpoint=self.local_endpoint,
+            use_cloud=False,
+            verify_ssl=False,
+        )
+        local_client.username = "admin"
+        local_client.password = self.password
+
+        try:
+            local_client.authenticate()
+            result = local_client._local_encrypted_request(
+                "admin/client?form=client_list",
+                json.dumps({
+                    "operation": "write",
+                    "params": {
+                        "device_mac": "default",
+                        "client_list": [{
+                            "mac": deco_mac,
+                            "name": name_encoded,
+                        }]
+                    }
+                })
+            )
+            logger.info(f"Deco rename result: {result}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to rename Deco client {deco_mac}: {e}")
+            raise
+        finally:
+            local_client.close()
+
     def get_wifi_settings(self) -> Dict[str, Any]:
         """Fetch WiFi configuration settings."""
         if self.use_cloud:

@@ -613,9 +613,9 @@ async def import_alexa_mac_addresses() -> Dict[str, Any]:
         logger.error(f"get_all_device_macs() failed: {e}")
         device_macs = []
 
-    # Convert to endpoint_macs format: (identifier, friendly_name, mac_normalized)
+    # Convert to endpoint_macs format: (identifier, friendly_name, mac_normalized, device_family)
     endpoint_macs = [
-        (dm["serialNumber"], dm["accountName"], dm["macAddress"])
+        (dm["serialNumber"], dm["accountName"], dm["macAddress"], dm.get("deviceFamily", ""))
         for dm in device_macs
         if dm.get("macAddress")
     ]
@@ -662,7 +662,7 @@ async def import_alexa_mac_addresses() -> Dict[str, Any]:
             except Exception:
                 cursor.execute("ALTER TABLE alexa_devices ADD COLUMN mac_address TEXT")
 
-            for serial_or_id, friendly_name, mac in endpoint_macs:
+            for serial_or_id, friendly_name, mac, device_family in endpoint_macs:
                 # Store MAC on alexa_devices record (match by endpoint_id which may be serial)
                 # Note: endpoint_id in alexa_devices may differ from serial number used here,
                 # so this UPDATE may affect 0 rows — that's fine.
@@ -685,6 +685,13 @@ async def import_alexa_mac_addresses() -> Dict[str, Any]:
                 net_friendly_name = row[1]
                 matched += 1
                 logger.info(f"MAC match: {mac} ({friendly_name}) -> network device {net_device_id} ({net_friendly_name})")
+
+                # 2026-03-09: Write alexa_name and alexa_device_type to network_devices
+                # (always overwrite with latest Alexa data)
+                cursor.execute(
+                    "UPDATE network_devices SET alexa_name = ?, alexa_device_type = ? WHERE device_id = ?",
+                    (friendly_name, device_family, net_device_id),
+                )
 
                 # Auto-create link if the alexa device exists in DB
                 # (serial_or_id may not match an alexa_devices.endpoint_id, so check first
@@ -725,8 +732,8 @@ async def import_alexa_mac_addresses() -> Dict[str, Any]:
         "linked": linked,
         "named": named,
         "endpoints": [
-            {"endpoint_id": serial_or_id, "friendly_name": name, "mac_address": mac}
-            for serial_or_id, name, mac in endpoint_macs
+            {"endpoint_id": serial_or_id, "friendly_name": name, "mac_address": mac, "device_family": family}
+            for serial_or_id, name, mac, family in endpoint_macs
         ],
     }
 

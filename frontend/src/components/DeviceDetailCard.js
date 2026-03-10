@@ -8,8 +8,8 @@ import { buildUrl } from '../utils/apiConfig';
  * Displays: ID, MAC, IP history, hostname, vendor, friendly name, device type, groups, status, timestamps, notes
  */
 function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
-  const [isEditing, setIsEditing] = useState(false);
   const [editField, setEditField] = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
@@ -125,11 +125,20 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
               {device.friendly_name || 'Unnamed Device'}
             </p>
           </div>
-          <div className={`detail-card-status status-${device.status}`}>
-            <span className={`status-indicator status-${device.status}`}></span>
-            <span className="status-text">
-              {device.status === 'online' ? 'Online' : 'Offline'}
-            </span>
+          <div className="detail-card-header-actions">
+            <button
+              className="detail-advanced-toggle"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              title="Show less-used diagnostic fields"
+            >
+              {showAdvanced ? 'Hide Advanced' : 'Show Advanced'}
+            </button>
+            <div className={`detail-card-status status-${device.status}`}>
+              <span className={`status-indicator status-${device.status}`}></span>
+              <span className="status-text">
+                {device.status === 'online' ? 'Online' : 'Offline'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -146,12 +155,6 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
           <section className="detail-section">
             <h3 className="detail-section-title">Core Information</h3>
 
-            {/* Device ID */}
-            <div className="detail-field">
-              <label className="detail-label">Device ID (UUID)</label>
-              <div className="detail-value monospace">{device.device_id}</div>
-            </div>
-
             {/* MAC Address */}
             <div className="detail-field">
               <label className="detail-label">MAC Address</label>
@@ -163,28 +166,6 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
               <label className="detail-label">Current IP Address</label>
               <div className="detail-value monospace">{device.current_ip || 'N/A'}</div>
             </div>
-
-            {/* IP History */}
-            {device.ip_history && device.ip_history.length > 0 && (
-              <div className="detail-field">
-                <label className="detail-label">IP History</label>
-                <div className="ip-history-list">
-                  {device.ip_history.map((ip, idx) => (
-                    <div key={idx} className="ip-history-item">
-                      <span className="ip-value monospace">{ip}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Hostname */}
-            {device.hostname && (
-              <div className="detail-field">
-                <label className="detail-label">Hostname</label>
-                <div className="detail-value">{device.hostname}</div>
-              </div>
-            )}
           </section>
 
           {/* Device Classification */}
@@ -301,7 +282,7 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
           </section>
 
           {/* Groups */}
-          {device.device_group_ids && device.device_group_ids.length > 0 && (
+          {showAdvanced && device.device_group_ids && device.device_group_ids.length > 0 && (
             <section className="detail-section">
               <h3 className="detail-section-title">Groups</h3>
               <div className="detail-field">
@@ -332,22 +313,53 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
             </div>
 
             <div className="detail-field">
-              <label className="detail-label">First Seen</label>
-              <div className="detail-value timestamp">{formatDate(device.first_seen)}</div>
-            </div>
-
-            <div className="detail-field">
               <label className="detail-label">Last Seen</label>
               <div className="detail-value timestamp">{formatDate(device.last_seen)}</div>
             </div>
-
-            {device.last_ip_change && (
-              <div className="detail-field">
-                <label className="detail-label">Last IP Change</label>
-                <div className="detail-value timestamp">{formatDate(device.last_ip_change)}</div>
-              </div>
-            )}
           </section>
+
+          {showAdvanced && (
+            <section className="detail-section">
+              <h3 className="detail-section-title">Advanced</h3>
+
+              <div className="detail-field">
+                <label className="detail-label">Device ID (UUID)</label>
+                <div className="detail-value monospace">{device.device_id}</div>
+              </div>
+
+              {device.hostname && (
+                <div className="detail-field">
+                  <label className="detail-label">Hostname</label>
+                  <div className="detail-value">{device.hostname}</div>
+                </div>
+              )}
+
+              <div className="detail-field">
+                <label className="detail-label">First Seen</label>
+                <div className="detail-value timestamp">{formatDate(device.first_seen)}</div>
+              </div>
+
+              {device.last_ip_change && (
+                <div className="detail-field">
+                  <label className="detail-label">Last IP Change</label>
+                  <div className="detail-value timestamp">{formatDate(device.last_ip_change)}</div>
+                </div>
+              )}
+
+              {device.ip_history && device.ip_history.length > 0 && (
+                <div className="detail-field">
+                  <label className="detail-label">IP History</label>
+                  <div className="ip-history-list">
+                    {device.ip_history.map((ip, idx) => (
+                      <div key={idx} className="ip-history-item">
+                        <span className="ip-value monospace">{ip}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Notes - Editable */}
           <section className="detail-section">

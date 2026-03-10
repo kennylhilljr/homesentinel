@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import DeviceCard from './components/DeviceCard';
 import DeviceDetailCard from './components/DeviceDetailCard';
-import DeviceSearch from './components/DeviceSearch';
 import DecoNodesPage from './pages/DecoNodesPage';
 import DecoTopologyPage from './pages/DecoTopologyPage';
 import SettingsPage from './pages/SettingsPage';
 import AlexaDevicesPage from './pages/AlexaDevicesPage';
-import DeviceNamingPage from './pages/DeviceNamingPage';
 import { buildUrl } from './utils/apiConfig';
 import ViewModeToggle from './components/ViewModeToggle';
 
@@ -24,7 +22,13 @@ function App() {
   const [editingDevice, setEditingDevice] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [deviceViewMode, setDeviceViewMode] = useState('grid');
+  const [deviceViewMode, setDeviceViewMode] = useState('list');
+  const [deviceQuery, setDeviceQuery] = useState('');
+  const [deviceStatusFilter, setDeviceStatusFilter] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'lastSeen', direction: 'desc' });
+  const [nameDropdownDevice, setNameDropdownDevice] = useState(null); // device_id of open dropdown
+  const [customNameInput, setCustomNameInput] = useState('');
+  const [nameActionLoading, setNameActionLoading] = useState(false);
   const [formData, setFormData] = useState({
     friendly_name: '',
     device_type: '',
@@ -153,17 +157,29 @@ function App() {
     setSelectedDevice(updatedDevice);
   };
 
-  // Handle Escape key to close detail card
+  // Handle Escape key to close detail card and name dropdown
   useEffect(() => {
     const handleEscapeKey = (e) => {
-      if (e.key === 'Escape' && showDetailCard) {
-        handleDetailCardClose();
+      if (e.key === 'Escape') {
+        if (nameDropdownDevice) {
+          setNameDropdownDevice(null);
+        } else if (showDetailCard) {
+          handleDetailCardClose();
+        }
       }
     };
 
+    const handleClickOutside = () => {
+      if (nameDropdownDevice) setNameDropdownDevice(null);
+    };
+
     window.addEventListener('keydown', handleEscapeKey);
-    return () => window.removeEventListener('keydown', handleEscapeKey);
-  }, [showDetailCard]);
+    window.addEventListener('click', handleClickOutside);
+    return () => {
+      window.removeEventListener('keydown', handleEscapeKey);
+      window.removeEventListener('click', handleClickOutside);
+    };
+  }, [showDetailCard, nameDropdownDevice]);
 
   const openEditModal = (device) => {
     setEditingDevice(device);
@@ -212,11 +228,112 @@ function App() {
     }
   };
 
+  // Set a display name for a device (stored in DB as friendly_name).
+  // Note: Deco client names are read-only (auto-detected by router fingerprinting).
+  // The Deco local API has no endpoint for renaming clients — names on the Deco app
+  // are stored in the TP-Link cloud, not on the router.
+  const setCustomName = async (device, newName) => {
+    setNameActionLoading(true);
+    try {
+      const res = await fetch(buildUrl(`/devices/${device.device_id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ friendly_name: newName }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setDevices(prev => prev.map(d =>
+          d.device_id === updated.device_id ? updated : d
+        ));
+      }
+    } catch (e) {
+      console.error('Failed to set custom name:', e);
+    } finally {
+      setNameActionLoading(false);
+      setNameDropdownDevice(null);
+      setCustomNameInput('');
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Never';
     const date = new Date(dateString);
     return date.toLocaleString();
   };
+
+  const getSortableValue = (device, key) => {
+    switch (key) {
+      case 'decoName':
+        return (device.deco_name || device.friendly_name || device.mac_address || '').toLowerCase();
+      case 'alexaName':
+        return (device.alexa_name || '').toLowerCase();
+      case 'alexaType':
+        return (device.alexa_device_type || '').toLowerCase();
+      case 'status':
+        return (device.status || '').toLowerCase();
+      case 'ip':
+        return (device.current_ip || '').toLowerCase();
+      case 'mac':
+        return (device.mac_address || '').toLowerCase();
+      case 'vendor':
+        return (device.vendor_name || '').toLowerCase();
+      case 'lastSeen':
+        return device.last_seen ? new Date(device.last_seen).getTime() : 0;
+      default:
+        return '';
+    }
+  };
+
+  const requestSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const getSortIndicator = (key) => {
+    if (sortConfig.key !== key) return '↕';
+    return sortConfig.direction === 'asc' ? '▲' : '▼';
+  };
+
+  const filteredDevices = devices.filter((device) => {
+    if (deviceStatusFilter && device.status !== deviceStatusFilter) {
+      return false;
+    }
+
+    const q = deviceQuery.trim().toLowerCase();
+    if (!q) return true;
+
+    const searchableFields = [
+      device.deco_name,
+      device.alexa_name,
+      device.alexa_device_type,
+      device.friendly_name,
+      device.hostname,
+      device.mac_address,
+      device.current_ip,
+      device.vendor_name,
+      device.status,
+    ];
+
+    return searchableFields.some((field) => String(field || '').toLowerCase().includes(q));
+  });
+
+  const displayedDevices = [...filteredDevices].sort((a, b) => {
+    const aValue = getSortableValue(a, sortConfig.key);
+    const bValue = getSortableValue(b, sortConfig.key);
+
+    let comparison = 0;
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      comparison = aValue - bValue;
+    } else {
+      comparison = String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    return sortConfig.direction === 'asc' ? comparison : -comparison;
+  });
 
   const getDeviceDisplayName = (device) => {
     return device.friendly_name || device.mac_address;
@@ -261,12 +378,6 @@ function App() {
             Alexa
           </button>
           <button
-            className={`nav-button ${currentPage === 'naming' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('naming')}
-          >
-            Device Naming
-          </button>
-          <button
             className={`nav-button ${currentPage === 'settings' ? 'active' : ''}`}
             onClick={() => setCurrentPage('settings')}
           >
@@ -283,9 +394,6 @@ function App() {
 
         {/* Alexa Devices Page */}
         {currentPage === 'alexa' && <AlexaDevicesPage />}
-
-        {/* Device Naming Page */}
-        {currentPage === 'naming' && <DeviceNamingPage />}
 
         {/* Settings Page */}
         {currentPage === 'settings' && (
@@ -346,14 +454,29 @@ function App() {
           </div>
         )}
 
-        {/* Device Search Component */}
-        <div className="search-section">
-          <DeviceSearch />
-        </div>
-
         <div className="devices-card">
           <div className="devices-header">
-            <h2>Network Devices ({devices.length})</h2>
+            <div className="devices-header-left">
+              <h2>Network Devices ({displayedDevices.length})</h2>
+              <div className="devices-filter-row">
+                <input
+                  type="text"
+                  className="devices-search-input"
+                  placeholder="Search devices..."
+                  value={deviceQuery}
+                  onChange={(e) => setDeviceQuery(e.target.value)}
+                />
+                <select
+                  className="devices-status-filter"
+                  value={deviceStatusFilter}
+                  onChange={(e) => setDeviceStatusFilter(e.target.value)}
+                >
+                  <option value="">All Status</option>
+                  <option value="online">Online</option>
+                  <option value="offline">Offline</option>
+                </select>
+              </div>
+            </div>
             <div className="devices-actions">
               <ViewModeToggle
                 label="Devices"
@@ -374,10 +497,10 @@ function App() {
               )}
             </div>
           </div>
-          {devices.length > 0 ? (
+          {displayedDevices.length > 0 ? (
             deviceViewMode === 'grid' ? (
               <div className="devices-grid">
-                {devices.map((device) => (
+                {displayedDevices.map((device) => (
                   <DeviceCard
                     key={device.device_id}
                     device={device}
@@ -390,21 +513,60 @@ function App() {
               <table className="devices-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>IP</th>
-                    <th>MAC</th>
-                    <th>Vendor</th>
-                    <th>Type</th>
-                    <th>Last Seen</th>
+                    <th>
+                      <button className="sort-button" onClick={() => requestSort('decoName')}>
+                        Deco Name <span className="sort-indicator">{getSortIndicator('decoName')}</span>
+                      </button>
+                    </th>
+                    <th>
+                      <button className="sort-button" onClick={() => requestSort('alexaName')}>
+                        Alexa Name <span className="sort-indicator">{getSortIndicator('alexaName')}</span>
+                      </button>
+                    </th>
+                    <th>
+                      <button className="sort-button" onClick={() => requestSort('alexaType')}>
+                        Alexa Type <span className="sort-indicator">{getSortIndicator('alexaType')}</span>
+                      </button>
+                    </th>
+                    <th>
+                      <button className="sort-button" onClick={() => requestSort('status')}>
+                        Status <span className="sort-indicator">{getSortIndicator('status')}</span>
+                      </button>
+                    </th>
+                    <th>
+                      <button className="sort-button" onClick={() => requestSort('ip')}>
+                        IP <span className="sort-indicator">{getSortIndicator('ip')}</span>
+                      </button>
+                    </th>
+                    <th>
+                      <button className="sort-button" onClick={() => requestSort('mac')}>
+                        MAC <span className="sort-indicator">{getSortIndicator('mac')}</span>
+                      </button>
+                    </th>
+                    <th>
+                      <button className="sort-button" onClick={() => requestSort('vendor')}>
+                        Vendor <span className="sort-indicator">{getSortIndicator('vendor')}</span>
+                      </button>
+                    </th>
+                    <th>
+                      <button className="sort-button" onClick={() => requestSort('lastSeen')}>
+                        Last Seen <span className="sort-indicator">{getSortIndicator('lastSeen')}</span>
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {devices.map((device) => (
+                  {displayedDevices.map((device) => {
+                    const decoName = device.deco_name || '';
+                    const alexaName = device.alexa_name || '';
+                    const hasMismatch = decoName && alexaName && decoName !== alexaName;
+                    const isDropdownOpen = nameDropdownDevice === device.device_id;
+
+                    return (
                     <tr
                       key={device.device_id}
                       className={`device-row ${device.status === 'online' ? 'online' : 'offline'}`}
-                      onClick={() => handleDeviceClick(device)}
+                      onClick={() => !isDropdownOpen && handleDeviceClick(device)}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(event) => {
@@ -413,7 +575,72 @@ function App() {
                         }
                       }}
                     >
-                      <td className="device-name">{getDeviceDisplayName(device)}</td>
+                      <td className="device-name">
+                        {decoName || device.friendly_name || device.mac_address}
+                      </td>
+                      <td className="alexa-name-cell">
+                        {alexaName || <span className="na-text">N/A</span>}
+                        {(hasMismatch || alexaName || decoName) && (
+                          <div className="name-action-wrapper">
+                            <button
+                              className="name-action-btn"
+                              title="Name actions"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNameDropdownDevice(isDropdownOpen ? null : device.device_id);
+                                setCustomNameInput('');
+                              }}
+                            >
+                              &#9662;
+                            </button>
+                            {isDropdownOpen && (
+                              <div className="name-dropdown" onClick={(e) => e.stopPropagation()}>
+                                {alexaName && alexaName !== device.friendly_name && (
+                                  <button
+                                    className="dropdown-item"
+                                    disabled={nameActionLoading}
+                                    onClick={() => setCustomName(device, alexaName)}
+                                  >
+                                    Use Alexa name "{alexaName}"
+                                  </button>
+                                )}
+                                {decoName && decoName !== device.friendly_name && decoName !== alexaName && (
+                                  <button
+                                    className="dropdown-item"
+                                    disabled={nameActionLoading}
+                                    onClick={() => setCustomName(device, decoName)}
+                                  >
+                                    Use Deco name "{decoName}"
+                                  </button>
+                                )}
+                                <div className="dropdown-custom">
+                                  <input
+                                    type="text"
+                                    placeholder="Custom name..."
+                                    value={customNameInput}
+                                    onChange={(e) => setCustomNameInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && customNameInput.trim()) {
+                                        setCustomName(device, customNameInput.trim());
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    className="dropdown-item custom-save"
+                                    disabled={nameActionLoading || !customNameInput.trim()}
+                                    onClick={() => setCustomName(device, customNameInput.trim())}
+                                  >
+                                    Set Name
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="alexa-device-type">
+                        {device.alexa_device_type || <span className="na-text">N/A</span>}
+                      </td>
                       <td className="status">
                         <span className={`status-badge ${device.status === 'online' ? 'online' : 'offline'}`}>
                           {device.status === 'online' ? 'Online' : 'Offline'}
@@ -422,15 +649,19 @@ function App() {
                       <td className="ip-address">{device.current_ip || 'N/A'}</td>
                       <td className="mac-address">{device.mac_address}</td>
                       <td className="vendor-name">{device.vendor_name || 'Unknown'}</td>
-                      <td className="device-type">{device.device_type || '-'}</td>
                       <td className="timestamp">{formatDate(device.last_seen)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             )
           ) : (
-            <p className="no-devices">No devices discovered yet. Click "Scan Now" to start discovery.</p>
+            <p className="no-devices">
+              {devices.length > 0
+                ? 'No devices match the current search or status filter.'
+                : 'No devices discovered yet. Click "Scan Now" to start discovery.'}
+            </p>
           )}
         </div>
 
