@@ -161,6 +161,11 @@ async def startup_event():
         # Load saved credentials from database
         settings_routes.load_deco_credentials_on_startup()
         logger.info("Deco service initialized and routes configured")
+        # 2026-03-09: Wire Deco client into device scanner for online status supplement.
+        # If either ARP scan or Deco client list says a device is on, it shows as online.
+        if device_service:
+            device_service.set_deco_client(deco_client)
+            logger.info("Deco client linked to device scanner for online status merging")
     except Exception as e:
         logger.warning(f"Failed to initialize Deco service: {e}")
 

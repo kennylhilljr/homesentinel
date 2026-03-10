@@ -3,7 +3,7 @@ Deco API Routes
 Endpoints for Deco node management and monitoring
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
@@ -279,6 +279,12 @@ async def import_deco_client_names() -> Dict[str, Any]:
                     else:
                         continue
 
+                    # 2026-03-09: Write to deco_name column (always overwrite with latest Deco name).
+                    # Also set friendly_name if it's currently empty.
+                    cursor.execute(
+                        "UPDATE network_devices SET deco_name = ? WHERE mac_address = ?",
+                        (client_name, normalized),
+                    )
                     cursor.execute(
                         "UPDATE network_devices SET friendly_name = ? WHERE mac_address = ? AND (friendly_name IS NULL OR friendly_name = '')",
                         (client_name, normalized),
@@ -297,6 +303,47 @@ async def import_deco_client_names() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to import Deco client names: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to import client names: {str(e)}")
+
+
+@router.post("/rename-client")
+async def rename_deco_client(request: Request) -> Dict[str, Any]:
+    """Rename a client device on the Deco router and update network_devices.
+
+    # 2026-03-09: Called from dashboard table when user selects a name from the
+    # mismatch dropdown or enters a custom name and chooses "Write to Deco".
+
+    Body: { "mac_address": "aa:bb:cc:dd:ee:ff", "new_name": "Kitchen Echo" }
+    """
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    body = await request.json()
+    mac_address = body.get("mac_address", "")
+    new_name = body.get("new_name", "")
+
+    if not mac_address or not new_name:
+        raise HTTPException(status_code=400, detail="mac_address and new_name are required")
+
+    try:
+        deco_service.deco_client.rename_client(mac_address, new_name)
+    except Exception as e:
+        logger.error(f"Deco rename failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to rename on Deco: {str(e)}")
+
+    # Update deco_name in network_devices
+    if correlation_service and correlation_service.db:
+        mac_clean = mac_address.lower().replace("-", "").replace(":", "").replace(" ", "")
+        if len(mac_clean) == 12:
+            normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+            with correlation_service.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE network_devices SET deco_name = ?, friendly_name = ? WHERE mac_address = ?",
+                    (new_name, new_name, normalized),
+                )
+                conn.commit()
+
+    return {"success": True, "mac_address": mac_address, "new_name": new_name}
 
 
 @router.get("/clients-merged")

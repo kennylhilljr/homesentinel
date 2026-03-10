@@ -101,9 +101,14 @@ class ARPScanner:
         """Scan subnet using arp-scan"""
         devices = []
         try:
-            # arp-scan requires root privileges
-            cmd = ['sudo', 'arp-scan', '-l', subnet]
+            # Try without sudo first (works if BPF permissions are set),
+            # fall back to sudo (works if NOPASSWD sudo is configured).
+            # -l = scan local network, --interface selects the right adapter.
+            cmd = ['arp-scan', '-l']
             result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
+            if result.returncode != 0 and 'Permission denied' in (result.stderr or ''):
+                cmd = ['sudo', '-n', 'arp-scan', '-l']
+                result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
 
             if result.returncode != 0:
                 logger.warning(f"arp-scan failed: {result.stderr}")
@@ -234,7 +239,13 @@ class ARPScanner:
         return devices
 
     def scan_subnet(self, subnet: str) -> List[DeviceInfo]:
-        """Scan a subnet for devices (/24 CIDR notation)"""
+        """Scan a subnet for devices (/24 CIDR notation).
+
+        # 2026-03-09: Changed to always merge ARP table entries into scan results.
+        # Previously ARP table was fallback-only (only when nmap found zero devices).
+        # nmap ping scan misses many IoT devices that don't respond to ICMP/TCP probes,
+        # but those devices still appear in the ARP table from recent L2 traffic.
+        """
         logger.info(f"Starting subnet scan: {subnet}")
 
         # Validate subnet format
@@ -244,19 +255,25 @@ class ARPScanner:
 
         devices = []
 
-        # Try arp-scan first, then nmap + ARP table, then ARP table alone
+        # Try arp-scan first, then nmap, then ARP table alone
         if self.has_arp_scan:
             devices = self.scan_subnet_with_arp_scan(subnet)
         elif self.has_nmap:
             devices = self.scan_subnet_with_nmap(subnet)
-        else:
-            logger.warning("No scanning tool available, falling back to ARP table only")
-            devices = self.scan_arp_table_only()
 
-        # If nmap found nothing with ARP resolution, try ARP table as supplement
-        if not devices:
-            logger.info("No devices from primary scan, trying ARP table fallback")
-            devices = self.scan_arp_table_only()
+        # Always supplement with ARP table entries (catches devices that didn't
+        # respond to nmap probes but have recent ARP cache entries from L2 traffic)
+        seen_macs = {d.mac_address for d in devices}
+        arp_devices = self.scan_arp_table_only()
+        added_from_arp = 0
+        for arp_dev in arp_devices:
+            if arp_dev.mac_address not in seen_macs:
+                devices.append(arp_dev)
+                seen_macs.add(arp_dev.mac_address)
+                added_from_arp += 1
+
+        if added_from_arp:
+            logger.info(f"ARP table supplement added {added_from_arp} devices not found by scan")
 
         logger.info(f"Scan completed, found {len(devices)} devices")
         return devices
@@ -386,6 +403,15 @@ class NetworkDeviceService:
         self.oui_service = OUIService()
         self.arp_scanner = ARPScanner()
         self.dhcp_parser = DHCPParser()
+        self._deco_client = None  # Set via set_deco_client() for Deco online status
+
+    def set_deco_client(self, deco_client):
+        """Set the Deco client for supplementary online status detection.
+        # 2026-03-09: The Deco router is the DHCP server/gateway, so it has the
+        # most complete view of connected devices. We use its client list to
+        # supplement the ARP scan — if either source says a device is on, it's on.
+        """
+        self._deco_client = deco_client
 
     def create_or_update_device(self, mac_address: str, ip_address: Optional[str] = None) -> dict:
         """Create or update a network device"""
@@ -423,19 +449,26 @@ class NetworkDeviceService:
         return self.device_repo.mark_online(device_id)
 
     def scan_and_update(self, subnet: str) -> dict:
-        """Scan subnet and update device database"""
+        """Scan subnet and update device database.
+
+        # 2026-03-09: Now merges Deco client list as supplementary online source.
+        # If either ARP scan or Deco says a device is online, it's online.
+        # This fixes the issue where nmap ping scan only finds ~12 responsive hosts
+        # while Deco (as DHCP server/gateway) sees 58+ connected clients.
+        """
         start_time = datetime.utcnow()
         scan_results = {
             'devices_found': 0,
             'devices_added': 0,
             'devices_updated': 0,
             'devices_offline': 0,
+            'deco_online': 0,
             'timestamp': start_time.isoformat(),
             'scan_time_seconds': 0
         }
 
         try:
-            # Scan for devices
+            # Scan for devices via ARP/nmap
             discovered_devices = self.arp_scanner.scan_subnet(subnet)
             scan_results['devices_found'] = len(discovered_devices)
 
@@ -456,12 +489,50 @@ class NetworkDeviceService:
                     vendor = device_info.vendor or self.oui_service.lookup_vendor(device_info.mac_address)
                     if vendor and vendor != "Unknown Vendor":
                         self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor)
-                    # TODO: Set hostname when DB schema supports it
                     scan_results['devices_added'] += 1
 
                 online_macs.add(device_info.mac_address)
 
-            # Mark devices as offline if not in scan results
+            # ── Deco client list supplement ──────────────────────────────────
+            # The Deco router (DHCP server/gateway) knows every connected client.
+            # Devices that don't respond to ARP/nmap probes but are connected
+            # to WiFi or Ethernet will appear here.
+            if self._deco_client:
+                try:
+                    deco_clients = self._deco_client.get_client_list_local()
+                    for client in deco_clients:
+                        client_mac_raw = client.get("mac", "") or client.get("macAddress", "")
+                        client_ip = client.get("ip", "") or client.get("ipAddress", "")
+                        if not client_mac_raw:
+                            continue
+                        # Normalize MAC to aa:bb:cc:dd:ee:ff
+                        mac_clean = client_mac_raw.lower().replace("-", "").replace(":", "").replace(" ", "")
+                        if len(mac_clean) != 12:
+                            continue
+                        normalized_mac = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+
+                        if normalized_mac not in online_macs:
+                            # Device is on Deco but not found by ARP scan — mark it online
+                            existing = self.get_device_by_mac(normalized_mac)
+                            if existing:
+                                self.create_or_update_device(normalized_mac, client_ip or existing.get('current_ip'))
+                            else:
+                                device = self.create_or_update_device(normalized_mac, client_ip)
+                                vendor = self.oui_service.lookup_vendor(normalized_mac)
+                                if vendor and vendor != "Unknown Vendor":
+                                    self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor)
+                                scan_results['devices_added'] += 1
+
+                            online_macs.add(normalized_mac)
+                            scan_results['deco_online'] += 1
+
+                    logger.info(f"Deco supplement: {scan_results['deco_online']} additional devices marked online")
+                except Exception as e:
+                    logger.warning(f"Deco client list supplement failed: {e}")
+
+            scan_results['devices_found'] = len(online_macs)
+
+            # Mark devices as offline if not in scan results AND not in Deco
             all_online = self.list_online_devices()
             for device in all_online:
                 if device['mac_address'] not in online_macs:
