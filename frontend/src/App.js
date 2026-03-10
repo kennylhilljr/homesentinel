@@ -458,24 +458,24 @@ function App() {
           <div className="devices-header">
             <div className="devices-header-left">
               <h2>Network Devices ({displayedDevices.length})</h2>
-              <div className="devices-filter-row">
-                <input
-                  type="text"
-                  className="devices-search-input"
-                  placeholder="Search devices..."
-                  value={deviceQuery}
-                  onChange={(e) => setDeviceQuery(e.target.value)}
-                />
-                <select
-                  className="devices-status-filter"
-                  value={deviceStatusFilter}
-                  onChange={(e) => setDeviceStatusFilter(e.target.value)}
-                >
-                  <option value="">All Status</option>
-                  <option value="online">Online</option>
-                  <option value="offline">Offline</option>
-                </select>
-              </div>
+            </div>
+            <div className="devices-filter-row">
+              <input
+                type="text"
+                className="devices-search-input"
+                placeholder="Search devices..."
+                value={deviceQuery}
+                onChange={(e) => setDeviceQuery(e.target.value)}
+              />
+              <select
+                className="devices-status-filter"
+                value={deviceStatusFilter}
+                onChange={(e) => setDeviceStatusFilter(e.target.value)}
+              >
+                <option value="">All Status</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+              </select>
             </div>
             <div className="devices-actions">
               <ViewModeToggle
@@ -535,12 +535,12 @@ function App() {
                     </th>
                     <th>
                       <button className="sort-button" onClick={() => requestSort('ip')}>
-                        IP <span className="sort-indicator">{getSortIndicator('ip')}</span>
+                        IP Address <span className="sort-indicator">{getSortIndicator('ip')}</span>
                       </button>
                     </th>
                     <th>
                       <button className="sort-button" onClick={() => requestSort('mac')}>
-                        MAC <span className="sort-indicator">{getSortIndicator('mac')}</span>
+                        MAC Address <span className="sort-indicator">{getSortIndicator('mac')}</span>
                       </button>
                     </th>
                     <th>
