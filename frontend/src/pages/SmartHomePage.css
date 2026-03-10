@@ -143,6 +143,24 @@
   background: #e74c3c;
 }
 
+.smart-home-page .control-btn.identify {
+  background: #8e44ad;
+  color: #fff;
+}
+
+.smart-home-page .control-btn.identify:hover:not(:disabled) {
+  background: #9b59b6;
+}
+
+.smart-home-page .control-btn.candidates {
+  background: #2980b9;
+  color: #fff;
+}
+
+.smart-home-page .control-btn.candidates:hover {
+  background: #3498db;
+}
+
 .smart-home-page .control-btn.dim {
   background: var(--border-color, #444);
   color: var(--text-primary, #e0e0e0);
@@ -205,4 +223,115 @@
   cursor: pointer;
   text-decoration: underline;
   margin-left: 8px;
+}
+
+/* Identify results */
+.smart-home-page .identify-result {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.smart-home-page .identify-result.found {
+  background: #27ae6020;
+  border: 1px solid #27ae60;
+}
+
+.smart-home-page .identify-result.none {
+  background: #f39c1220;
+  border: 1px solid #f39c12;
+}
+
+.smart-home-page .identify-none {
+  color: #f39c12;
+}
+
+.smart-home-page .match-label {
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+  margin-bottom: 4px;
+}
+
+.smart-home-page .match-mac {
+  font-family: monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2ecc71;
+  margin-bottom: 4px;
+}
+
+.smart-home-page .match-detail {
+  color: var(--text-secondary, #bbb);
+  font-size: 12px;
+}
+
+.smart-home-page .identify-progress {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #8e44ad20;
+  border: 1px solid #8e44ad;
+  border-radius: 6px;
+  color: #b388d9;
+  font-size: 13px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Candidate MAC list */
+.smart-home-page .candidates-list {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #2980b920;
+  border: 1px solid #2980b9;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.smart-home-page .candidate-row {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-color, #333);
+  align-items: center;
+}
+
+.smart-home-page .candidate-row:last-child {
+  border-bottom: none;
+}
+
+.smart-home-page .candidate-mac {
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+  min-width: 140px;
+}
+
+.smart-home-page .candidate-ip {
+  font-family: monospace;
+  color: var(--text-secondary, #999);
+  min-width: 120px;
+}
+
+.smart-home-page .candidate-name {
+  color: var(--text-secondary, #bbb);
+  flex: 1;
+}
+
+.smart-home-page .candidate-status {
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.smart-home-page .candidate-status.online {
+  color: #27ae60;
+}
+
+.smart-home-page .candidate-status.offline {
+  color: #e74c3c;
 }

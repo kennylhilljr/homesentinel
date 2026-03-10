@@ -10,6 +10,10 @@ function SmartHomePage() {
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all', 'light', 'plug'
   const [actionLoading, setActionLoading] = useState({}); // entity_id -> bool
+  const [identifyResults, setIdentifyResults] = useState({}); // entity_id -> result
+  const [identifying, setIdentifying] = useState({}); // entity_id -> bool
+  const [candidates, setCandidates] = useState({}); // entity_id -> {candidates, hw_type}
+  const [showCandidates, setShowCandidates] = useState({}); // entity_id -> bool
 
   const fetchDevices = useCallback(async () => {
     setLoading(true);
@@ -29,7 +33,27 @@ function SmartHomePage() {
     }
   }, []);
 
-  useEffect(() => { fetchDevices(); }, [fetchDevices]);
+  useEffect(() => { fetchDevices(); fetchCandidates(); }, [fetchDevices]);
+
+  const fetchCandidates = async () => {
+    try {
+      const resp = await fetch(buildUrl('/alexa/smart-home/candidates'));
+      if (resp.ok) {
+        const data = await resp.json();
+        const map = {};
+        for (const d of (data.devices || [])) {
+          map[d.entity_id] = {
+            candidates: d.candidates || [],
+            hw_type: d.hw_type,
+            serial: d.serial,
+          };
+        }
+        setCandidates(map);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch candidates:', err);
+    }
+  };
 
   const sendCommand = async (entityId, action, params) => {
     setActionLoading(prev => ({ ...prev, [entityId]: true }));
@@ -48,6 +72,32 @@ function SmartHomePage() {
       alert(`Error: ${err.message}`);
     } finally {
       setActionLoading(prev => ({ ...prev, [entityId]: false }));
+    }
+  };
+
+  const identifyDevice = async (entityId, deviceName) => {
+    if (!window.confirm(
+      `Identify "${deviceName}"?\n\nThis will turn it OFF for ~10 seconds, then back ON, ` +
+      `while watching the Deco client list to find its MAC address.`
+    )) return;
+
+    setIdentifying(prev => ({ ...prev, [entityId]: true }));
+    setIdentifyResults(prev => ({ ...prev, [entityId]: null }));
+    try {
+      const resp = await fetch(buildUrl(`/alexa/smart-home/${entityId}/identify`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setIdentifyResults(prev => ({ ...prev, [entityId]: data }));
+      } else {
+        alert(`Identify failed: ${data.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setIdentifying(prev => ({ ...prev, [entityId]: false }));
     }
   };
 
@@ -74,7 +124,7 @@ function SmartHomePage() {
       <div className="page-header">
         <h2>Smart Home Control</h2>
         <p className="subtitle">
-          {lightCount} lights, {plugCount} plugs — toggle on/off to identify devices
+          {lightCount} lights, {plugCount} plugs — toggle on/off or use Identify to find MAC/IP
         </p>
         <div className="header-actions">
           <div className="filter-group">
@@ -90,52 +140,141 @@ function SmartHomePage() {
       </div>
 
       <div className="device-grid">
-        {filtered.map(device => (
-          <div key={device.entity_id} className={`device-card ${device.kind} ${device.available ? '' : 'unavailable'}`}>
-            <div className="device-icon">
-              {device.kind === 'light' ? '💡' : '🔌'}
-            </div>
-            <div className="device-info">
-              <div className="device-name">{device.name}</div>
-              <div className="device-desc">{device.description}</div>
-              {!device.available && <div className="device-offline">Offline</div>}
-            </div>
-            <div className="device-controls">
-              <button
-                className="control-btn on"
-                disabled={actionLoading[device.entity_id] || !device.available}
-                onClick={() => sendCommand(device.entity_id, 'turnOn')}
-                title="Turn On"
-              >
-                ON
-              </button>
-              <button
-                className="control-btn off"
-                disabled={actionLoading[device.entity_id] || !device.available}
-                onClick={() => sendCommand(device.entity_id, 'turnOff')}
-                title="Turn Off"
-              >
-                OFF
-              </button>
-              {device.has_brightness && (
-                <div className="brightness-controls">
-                  {[10, 50, 100].map(level => (
-                    <button
-                      key={level}
-                      className="control-btn dim"
-                      disabled={actionLoading[device.entity_id] || !device.available}
-                      onClick={() => sendCommand(device.entity_id, 'setBrightness', { brightness: level })}
-                      title={`${level}%`}
-                    >
-                      {level}%
-                    </button>
+        {filtered.map(device => {
+          const result = identifyResults[device.entity_id];
+          const isIdentifying = identifying[device.entity_id];
+          const isBusy = actionLoading[device.entity_id] || isIdentifying;
+          const devCandidates = candidates[device.entity_id];
+          const showingCandidates = showCandidates[device.entity_id];
+
+          return (
+            <div key={device.entity_id} className={`device-card ${device.kind} ${device.available ? '' : 'unavailable'}`}>
+              <div className="device-icon">
+                {device.kind === 'light' ? '💡' : '🔌'}
+              </div>
+              <div className="device-info">
+                <div className="device-name">{device.name}</div>
+                <div className="device-desc">{device.description}</div>
+                {!device.available && <div className="device-offline">Offline</div>}
+              </div>
+              <div className="device-controls">
+                <button
+                  className="control-btn on"
+                  disabled={isBusy || !device.available}
+                  onClick={() => sendCommand(device.entity_id, 'turnOn')}
+                  title="Turn On"
+                >
+                  ON
+                </button>
+                <button
+                  className="control-btn off"
+                  disabled={isBusy || !device.available}
+                  onClick={() => sendCommand(device.entity_id, 'turnOff')}
+                  title="Turn Off"
+                >
+                  OFF
+                </button>
+                <button
+                  className="control-btn identify"
+                  disabled={isBusy || !device.available}
+                  onClick={() => identifyDevice(device.entity_id, device.name)}
+                  title="Turn off for 10s and watch Deco to find MAC"
+                >
+                  {isIdentifying ? 'Identifying...' : 'Identify'}
+                </button>
+                {devCandidates && devCandidates.candidates.length > 0 && (
+                  <button
+                    className="control-btn candidates"
+                    onClick={() => setShowCandidates(prev => ({
+                      ...prev, [device.entity_id]: !prev[device.entity_id]
+                    }))}
+                    title="Show candidate MACs by manufacturer"
+                  >
+                    MACs ({devCandidates.candidates.length})
+                  </button>
+                )}
+                {device.has_brightness && (
+                  <div className="brightness-controls">
+                    {[10, 50, 100].map(level => (
+                      <button
+                        key={level}
+                        className="control-btn dim"
+                        disabled={isBusy || !device.available}
+                        onClick={() => sendCommand(device.entity_id, 'setBrightness', { brightness: level })}
+                        title={`${level}%`}
+                      >
+                        {level}%
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Identify results */}
+              {result && (
+                <div className={`identify-result ${result.dropped_count > 0 ? 'found' : 'none'}`}>
+                  {result.dropped_count === 0 && (
+                    <div className="identify-none">
+                      No MAC dropped offline. Device may not disconnect when powered off
+                      (some lights keep WiFi via the fixture), or try again with a longer wait.
+                    </div>
+                  )}
+                  {result.dropped_count === 1 && (
+                    <div className="identify-match">
+                      <div className="match-label">Match found:</div>
+                      <div className="match-mac">{result.dropped[0].mac}</div>
+                      <div className="match-detail">
+                        IP: {result.dropped[0].ip}
+                        {result.dropped[0].name && ` — Deco name: ${result.dropped[0].name}`}
+                        {result.dropped[0].friendly_name && ` — DB name: ${result.dropped[0].friendly_name}`}
+                        {result.dropped[0].vendor && ` — ${result.dropped[0].vendor}`}
+                      </div>
+                    </div>
+                  )}
+                  {result.dropped_count > 1 && (
+                    <div className="identify-multi">
+                      <div className="match-label">{result.dropped_count} MACs dropped (ambiguous):</div>
+                      {result.dropped.map(d => (
+                        <div key={d.mac} className="match-detail">
+                          {d.mac} — {d.ip} — {d.name || '?'}
+                          {d.vendor && ` (${d.vendor})`}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* OUI-based MAC candidates */}
+              {showingCandidates && devCandidates && (
+                <div className="candidates-list">
+                  <div className="match-label">
+                    Candidate MACs ({devCandidates.hw_type}):
+                  </div>
+                  {devCandidates.candidates.map(c => (
+                    <div key={c.mac} className="candidate-row">
+                      <span className="candidate-mac">{c.mac}</span>
+                      <span className="candidate-ip">{c.ip}</span>
+                      <span className="candidate-name">
+                        {c.friendly_name || c.deco_name || c.hostname || '?'}
+                      </span>
+                      <span className={`candidate-status ${c.status}`}>
+                        {c.status === 'online' ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
                   ))}
                 </div>
               )}
+
+              {isIdentifying && (
+                <div className="identify-progress">
+                  Turning off, waiting 10s, checking Deco...
+                </div>
+              )}
+              {isBusy && <div className="action-spinner" />}
             </div>
-            {actionLoading[device.entity_id] && <div className="action-spinner" />}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {filtered.length === 0 && (

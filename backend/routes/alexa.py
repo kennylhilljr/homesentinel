@@ -945,6 +945,220 @@ async def control_smart_home_device(entity_id: str, cmd: SmartHomeCommand) -> Di
         raise HTTPException(status_code=500, detail=f"Command failed: {e}")
 
 
+# ─── Smart Home Device Identification (power-cycle MAC matching) ──────────
+# 2026-03-10: Identifies which network MAC belongs to an Alexa plug/light by
+# turning it off, waiting for it to drop off the Deco client list, then
+# turning it back on. The MAC that disappears is the match.
+
+
+@router.post("/smart-home/{entity_id}/identify")
+async def identify_smart_home_device(entity_id: str) -> Dict[str, Any]:
+    """Identify a smart home device's MAC by power-cycling it and watching the Deco client list.
+
+    1. Snapshot online Deco clients
+    2. Turn off the Alexa device
+    3. Wait ~10 seconds for it to disconnect from WiFi
+    4. Snapshot online Deco clients again
+    5. Turn it back on
+    6. Return MACs that dropped offline during the power-off window
+    """
+    if alexa_client is None or not alexa_client.has_cookies():
+        raise HTTPException(status_code=400, detail="Alexa cookies not configured")
+    if deco_client is None:
+        raise HTTPException(status_code=500, detail="Deco client not initialized")
+
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+
+    # Step 1: Snapshot "before" — get all online clients from Deco
+    try:
+        before_clients = await loop.run_in_executor(None, deco_client.get_client_list_local)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read Deco client list: {e}")
+
+    before_online = {}
+    for c in before_clients:
+        if c.get("online"):
+            mac = c.get("mac", "").upper()
+            before_online[mac] = {
+                "mac": mac,
+                "name": c.get("name", "?"),
+                "ip": c.get("ip", "?"),
+            }
+
+    logger.info(f"Identify: {len(before_online)} clients online before power-off")
+
+    # Step 2: Turn off the device
+    try:
+        off_result = alexa_client.smart_home_control(entity_id, "turnOff")
+        if not off_result.get("success"):
+            raise HTTPException(status_code=500, detail="Failed to turn off device")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Turn off failed: {e}")
+
+    # Step 3: Wait for the device to drop off WiFi
+    # Smart plugs typically disconnect within 3-5 seconds.
+    # Light bulbs lose power immediately but their WiFi chip takes a moment.
+    await asyncio.sleep(10)
+
+    # Step 4: Snapshot "after"
+    try:
+        after_clients = await loop.run_in_executor(None, deco_client.get_client_list_local)
+    except Exception as e:
+        # Turn back on even if snapshot fails
+        try:
+            alexa_client.smart_home_control(entity_id, "turnOn")
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Failed to read Deco client list after: {e}")
+
+    after_online = set()
+    for c in after_clients:
+        if c.get("online"):
+            after_online.add(c.get("mac", "").upper())
+
+    # Step 5: Turn it back on
+    try:
+        alexa_client.smart_home_control(entity_id, "turnOn")
+    except Exception as e:
+        logger.warning(f"Failed to turn device back on: {e}")
+
+    # Step 6: Find MACs that dropped offline
+    dropped = []
+    for mac, info in before_online.items():
+        if mac not in after_online:
+            dropped.append(info)
+
+    logger.info(f"Identify: {len(dropped)} MAC(s) dropped offline: {[d['mac'] for d in dropped]}")
+
+    # Also check the DB for existing device info on the dropped MACs
+    if db is not None and dropped:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            for d in dropped:
+                mac_norm = d["mac"].lower().replace("-", ":")
+                cursor.execute(
+                    "SELECT device_id, friendly_name, hostname, vendor_name "
+                    "FROM network_devices WHERE mac_address = ?",
+                    (mac_norm,)
+                )
+                row = cursor.fetchone()
+                if row:
+                    d["device_id"] = row[0]
+                    d["friendly_name"] = row[1]
+                    d["hostname"] = row[2]
+                    d["vendor"] = row[3]
+
+    return {
+        "entity_id": entity_id,
+        "before_online": len(before_online),
+        "after_online": len(after_online),
+        "dropped_count": len(dropped),
+        "dropped": dropped,
+    }
+
+
+@router.get("/smart-home/candidates")
+async def get_smart_home_mac_candidates() -> Dict[str, Any]:
+    """Match Alexa smart home devices to network MACs by manufacturer OUI.
+
+    Uses known OUI prefixes for Amazon smart devices:
+    - Amazon Smart Plugs: 90:39:5f (Amazon Technologies)
+    - Amazon Smart Lights (Basics): Espressif 10:06:1c, d4:d4:da, 24:ce:33
+    - Amazon Smart Lights (branded): 68:13:f3 range
+
+    Returns each Alexa device with a list of candidate network MACs.
+    """
+    if alexa_client is None or not alexa_client.has_cookies():
+        raise HTTPException(status_code=400, detail="Alexa cookies not configured")
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    # Get Alexa smart home devices
+    try:
+        entities = alexa_client.get_smart_home_devices()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch Alexa devices: {e}")
+
+    # Get all network devices from DB
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT mac_address, friendly_name, deco_name, hostname,
+                   vendor_name, current_ip, status
+            FROM network_devices
+        """)
+        net_devices = {}
+        for row in cursor.fetchall():
+            mac = row[0]
+            net_devices[mac] = {
+                "mac": mac,
+                "friendly_name": row[1],
+                "deco_name": row[2],
+                "hostname": row[3],
+                "vendor": row[4],
+                "ip": row[5],
+                "status": row[6],
+            }
+
+    # OUI-based matching rules
+    # Serial prefix -> likely OUI prefixes on the network
+    # 2026-03-10: Determined by cross-referencing Amazon device types
+    PLUG_OUIS = ["90:39:5f"]  # Amazon Smart Plug
+    LIGHT_BASICS_OUIS = ["10:06:1c", "d4:d4:da"]  # Espressif (Amazon Basics bulbs)
+    LIGHT_BRANDED_OUIS = ["68:13:f3", "24:ce:33"]  # Amazon branded lights
+
+    results = []
+    for entity in entities:
+        provider = entity.get("providerData", {})
+        ops = entity.get("supportedOperations", [])
+        has_power = any("turnOn" in op or "turnOff" in op for op in ops)
+        cat = provider.get("categoryType", "")
+        dev_type = provider.get("deviceType", "")
+
+        if not has_power or cat in ("SCENE", "GROUP") or dev_type == "ALEXA_VOICE_ENABLED":
+            continue
+
+        name = entity.get("displayName", "?")
+        dms = provider.get("dmsDeviceIdentifiers", [])
+        serial = dms[0].get("deviceSerialNumber", "") if dms else ""
+
+        # Determine which OUI prefixes to look for
+        if dev_type in ("AIR_CONDITIONER", "SMARTPLUG"):
+            candidate_ouis = PLUG_OUIS
+            hw_type = "plug"
+        elif serial.startswith("GB"):
+            candidate_ouis = LIGHT_BASICS_OUIS
+            hw_type = "light_basics"
+        elif serial.startswith("G07"):
+            candidate_ouis = LIGHT_BRANDED_OUIS
+            hw_type = "light_branded"
+        else:
+            # Unknown — try all smart device OUIs
+            candidate_ouis = PLUG_OUIS + LIGHT_BASICS_OUIS + LIGHT_BRANDED_OUIS
+            hw_type = "unknown"
+
+        candidates = []
+        for mac, nd in net_devices.items():
+            oui = mac[:8]  # "aa:bb:cc"
+            if oui in candidate_ouis:
+                candidates.append(nd)
+
+        results.append({
+            "entity_id": entity.get("id", ""),
+            "name": name,
+            "description": entity.get("description", ""),
+            "device_type": dev_type,
+            "serial": serial,
+            "hw_type": hw_type,
+            "candidate_count": len(candidates),
+            "candidates": candidates,
+        })
+
+    return {"devices": results, "total": len(results)}
+
+
 # ─── Lambda-facing endpoints ───────────────────────────────────────────────
 # DISABLED 2026-03-09: All Lambda↔local endpoints return 503.
 # These were exposing unauthenticated device discovery, state, and control
