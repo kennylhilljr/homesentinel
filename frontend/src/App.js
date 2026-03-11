@@ -557,6 +557,38 @@ function App() {
               >
                 {loading ? 'Scanning...' : 'Scan Now'}
               </button>
+              {/* 2026-03-11: Download dashboard device list as CSV */}
+              <button
+                onClick={() => {
+                  const headers = ['Name', 'Alexa Name', 'Deco Node', 'Status', 'IP Address', 'MAC Address', 'Vendor', 'Last Seen'];
+                  const rows = displayedDevices.map(d => {
+                    const mac = (d.mac_address || '').toLowerCase();
+                    const nodeInfo = clientNodeMap[mac];
+                    return [
+                      d.friendly_name || d.deco_name || d.mac_address || '',
+                      d.alexa_name || '',
+                      nodeInfo ? nodeInfo.node_name : '',
+                      d.status || '',
+                      d.current_ip || '',
+                      d.mac_address || '',
+                      d.vendor_name || '',
+                      d.last_seen || '',
+                    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+                  });
+                  const csv = [headers.join(','), ...rows].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `homesentinel-devices-${new Date().toISOString().slice(0, 10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="scan-button"
+                title="Download device list as CSV"
+              >
+                Download CSV
+              </button>
               {lastScanTime && (
                 <span className="device-info">
                   Updated: {new Date(lastScanTime).toLocaleTimeString()}

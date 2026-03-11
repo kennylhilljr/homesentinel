@@ -224,6 +224,24 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
           <button onClick={handleRefresh} disabled={loading || graphLoading} className="btn btn-primary">
             {(loading || graphLoading) ? (<><span className="spinner"></span>Refreshing...</>) : (<><span className="refresh-icon">&#10227;</span>Refresh</>)}
           </button>
+          {/* 2026-03-11: Download topology diagram as SVG */}
+          {graphSvg && viewMode === 'graph' && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                const blob = new Blob([graphSvg], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `homesentinel-topology-${new Date().toISOString().slice(0, 10)}.svg`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              title="Download topology diagram as SVG"
+            >
+              Download Diagram
+            </button>
+          )}
           <div className="auto-refresh-toggle">
             <input type="checkbox" id="autoRefreshTopology" checked={autoRefreshEnabled} onChange={(e) => setAutoRefreshEnabled(e.target.checked)} />
             <label htmlFor="autoRefreshTopology">Auto-refresh</label>
