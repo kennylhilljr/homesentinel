@@ -637,6 +637,8 @@ async def get_client_node_map() -> Dict[str, Any]:
             logger.warning(f"Local topology fetch failed for client-node-map: {e}")
 
         node_names = {}
+        # 2026-03-11: Rich node info with backhaul type for signal icons
+        node_details = {}
         mapping = {}
 
         if local_data and local_data.get("nodes"):
@@ -650,7 +652,27 @@ async def get_client_node_map() -> Dict[str, Any]:
                 # 2026-03-11: Prefer HomeSentinel friendly_name over Deco nickname
                 # (Deco nickname can get corrupted with client device names)
                 db_name = _get_node_friendly_name(node_mac)
-                node_names[node_mac] = db_name or nickname or node.get("device_model", node_mac)
+                display_name = db_name or nickname or node.get("device_model", node_mac)
+                node_names[node_mac] = display_name
+                # connection_type for nodes = backhaul type (list or string)
+                ct = node.get("connection_type", [])
+                if isinstance(ct, str):
+                    ct = [ct]
+                role = node.get("role", "slave")
+                # Determine if wired backhaul
+                node_name_lower = display_name.lower()
+                is_wired_backhaul = (
+                    role == "master"
+                    or "wired" in ct
+                    or (ct and all(c not in ("band2_4", "band5", "band6") for c in ct))
+                    or "dining" in node_name_lower
+                )
+                node_details[node_mac] = {
+                    "name": display_name,
+                    "role": role,
+                    "backhaul": "wired" if is_wired_backhaul else "wireless",
+                    "backhaul_bands": ct,
+                }
 
             for node_mac, clients in local_data.get("node_clients", {}).items():
                 node_name = node_names.get(node_mac, node_mac)
@@ -664,11 +686,16 @@ async def get_client_node_map() -> Dict[str, Any]:
                             "node_mac": node_mac,
                             "connection_type": c.get("connection_type", ""),
                             "client_mesh": c.get("client_mesh", False),
+                            # 2026-03-11: Pass wire_type and speed for signal indicator
+                            "wire_type": c.get("wire_type", ""),
+                            "down_speed": c.get("down_speed", 0),
+                            "up_speed": c.get("up_speed", 0),
                         }
 
         return {
             "client_node_map": mapping,
             "nodes": node_names,
+            "node_details": node_details,
             "total_mapped": len(mapping),
         }
     except Exception as e:

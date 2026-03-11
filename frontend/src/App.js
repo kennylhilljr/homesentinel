@@ -40,6 +40,8 @@ function App() {
   const [decoNodeMacs, setDecoNodeMacs] = useState(new Set());
   // 2026-03-11: Map of Deco node MAC → node name (for connection preference dropdown)
   const [decoNodesMap, setDecoNodesMap] = useState({});
+  // 2026-03-11: Map of Deco node MAC → { name, role, backhaul, backhaul_bands }
+  const [decoNodeDetails, setDecoNodeDetails] = useState({});
   // 2026-03-11: Optimize network state
   const [optimizeLoading, setOptimizeLoading] = useState(false);
 
@@ -111,6 +113,16 @@ function App() {
             );
             setDecoNodeMacs(nodeMacs);
             setDecoNodesMap(data.nodes);
+            // 2026-03-11: Store node details for backhaul signal icons
+            if (data.node_details) {
+              // Normalize keys to lowercase colon format
+              const normalized = {};
+              for (const [k, v] of Object.entries(data.node_details)) {
+                const nk = k.toLowerCase().replace(/-/g, ':');
+                normalized[nk] = v;
+              }
+              setDecoNodeDetails(normalized);
+            }
           }
         }
       } catch (error) {
@@ -610,13 +622,12 @@ function App() {
               {/* 2026-03-11: Download dashboard device list as CSV */}
               <button
                 onClick={() => {
-                  const headers = ['Name', 'Alexa Name', 'Deco Node', 'Status', 'IP Address', 'MAC Address', 'Vendor', 'Last Seen'];
+                  const headers = ['Name', 'Deco Node', 'Status', 'IP Address', 'MAC Address', 'Vendor', 'Last Seen'];
                   const rows = displayedDevices.map(d => {
                     const mac = (d.mac_address || '').toLowerCase();
                     const nodeInfo = clientNodeMap[mac];
                     return [
                       d.friendly_name || d.deco_name || d.mac_address || '',
-                      d.alexa_name || '',
                       nodeInfo ? nodeInfo.node_name : '',
                       d.status || '',
                       d.current_ip || '',
@@ -671,18 +682,13 @@ function App() {
                       </button>
                     </th>
                     <th>
-                      <button className="sort-button" onClick={() => requestSort('alexaName')}>
-                        Alexa Name <span className="sort-indicator">{getSortIndicator('alexaName')}</span>
+                      <button className="sort-button" onClick={() => requestSort('status')}>
+                        Status <span className="sort-indicator">{getSortIndicator('status')}</span>
                       </button>
                     </th>
                     <th>
                       <button className="sort-button" onClick={() => requestSort('decoNode')}>
-                        Deco Mesh <span className="sort-indicator">{getSortIndicator('decoNode')}</span>
-                      </button>
-                    </th>
-                    <th>
-                      <button className="sort-button" onClick={() => requestSort('status')}>
-                        Status <span className="sort-indicator">{getSortIndicator('status')}</span>
+                        Deco Mesh Configuration <span className="sort-indicator">{getSortIndicator('decoNode')}</span>
                       </button>
                     </th>
                     <th>
@@ -727,144 +733,247 @@ function App() {
                         }
                       }}
                     >
-                      <td className="device-name">
+                      {/* 2026-03-11: Merged rename dropdown into Name column, removed Alexa Name column */}
+                      <td className="device-name alexa-name-cell">
                         {device.friendly_name || decoName || device.mac_address}
-                      </td>
-                      <td className="alexa-name-cell">
-                        {alexaName || <span className="na-text">N/A</span>}
-                        {/* 2026-03-10: Always show rename dropdown, not just when alexa/deco names exist */}
-                        {(
-                          <div className="name-action-wrapper">
-                            <button
-                              className="name-action-btn"
-                              title="Name actions"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setNameDropdownDevice(isDropdownOpen ? null : device.device_id);
-                                setCustomNameInput('');
-                              }}
-                            >
-                              &#9662;
-                            </button>
-                            {isDropdownOpen && (
-                              <div className="name-dropdown" onClick={(e) => e.stopPropagation()}>
-                                {alexaName && alexaName !== device.friendly_name && (
-                                  <button
-                                    className="dropdown-item"
-                                    disabled={nameActionLoading}
-                                    onClick={() => setCustomName(device, alexaName)}
-                                  >
-                                    Use Alexa name "{alexaName}"
-                                  </button>
-                                )}
-                                {decoName && decoName !== device.friendly_name && decoName !== alexaName && (
-                                  <button
-                                    className="dropdown-item"
-                                    disabled={nameActionLoading}
-                                    onClick={() => setCustomName(device, decoName)}
-                                  >
-                                    Use Deco name "{decoName}"
-                                  </button>
-                                )}
-                                <div className="dropdown-custom">
-                                  <input
-                                    type="text"
-                                    placeholder="Custom name..."
-                                    value={customNameInput}
-                                    onChange={(e) => setCustomNameInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' && customNameInput.trim()) {
-                                        setCustomName(device, customNameInput.trim());
-                                      }
-                                    }}
-                                  />
-                                  <button
-                                    className="dropdown-item custom-save"
-                                    disabled={nameActionLoading || !customNameInput.trim()}
-                                    onClick={() => setCustomName(device, customNameInput.trim())}
-                                  >
-                                    Set Name
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="deco-node-cell">
-                        {(() => {
-                          const mac = (device.mac_address || '').toLowerCase();
-                          const nodeInfo = clientNodeMap[mac];
-                          const isDecoNode = decoNodeMacs.has(mac);
-                          const meshValue = nodeInfo ? !!nodeInfo.client_mesh : false;
-                          // 2026-03-11: Connection preference — auto vs pinned
-                          const isPinned = !!device.preferred_deco_node;
-                          const pinnedNodeName = isPinned
-                            ? (decoNodesMap[device.preferred_deco_node] || device.preferred_deco_node)
-                            : null;
-                          const currentNodeName = nodeInfo ? nodeInfo.node_name : null;
-                          const isOnline = device.status === 'online';
-                          return (
-                            <div className="deco-node-info">
-                              {/* 2026-03-11: Dropdown with Auto + all Deco nodes */}
-                              {(nodeInfo || isPinned) ? (
-                                <select
-                                  className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
-                                  value={isPinned ? device.preferred_deco_node : ''}
-                                  title={isPinned ? `Pinned to ${pinnedNodeName}` : `Connected to ${currentNodeName} (auto)`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setPreferredDecoNode(device.device_id, val === '' ? null : val);
-                                  }}
+                        <div className="name-action-wrapper">
+                          <button
+                            className="name-action-btn"
+                            title="Name actions"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNameDropdownDevice(isDropdownOpen ? null : device.device_id);
+                              setCustomNameInput('');
+                            }}
+                          >
+                            &#9662;
+                          </button>
+                          {isDropdownOpen && (
+                            <div className="name-dropdown" onClick={(e) => e.stopPropagation()}>
+                              {alexaName && alexaName !== device.friendly_name && (
+                                <button
+                                  className="dropdown-item"
+                                  disabled={nameActionLoading}
+                                  onClick={() => setCustomName(device, alexaName)}
                                 >
-                                  <option value="">{currentNodeName ? `${currentNodeName} (Auto)` : 'Auto'}</option>
-                                  {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
-                                    <option key={nodeMac} value={nodeMac}>{name}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className="na-text">—</span>
+                                  Use Alexa name "{alexaName}"
+                                </button>
                               )}
-                              {/* 2026-03-11: Auto/Pinned badge — purple for auto, orange for pinned */}
-                              {!isDecoNode && (nodeInfo || isPinned) && (
-                                <span
-                                  className={`pref-badge ${isPinned ? 'pinned' : 'auto'}`}
-                                  title={isPinned ? `Pinned to ${pinnedNodeName} — click to revert to Auto` : 'Auto — connects to nearest node'}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isPinned) {
-                                      setPreferredDecoNode(device.device_id, null);
+                              {decoName && decoName !== device.friendly_name && decoName !== alexaName && (
+                                <button
+                                  className="dropdown-item"
+                                  disabled={nameActionLoading}
+                                  onClick={() => setCustomName(device, decoName)}
+                                >
+                                  Use Deco name "{decoName}"
+                                </button>
+                              )}
+                              <div className="dropdown-custom">
+                                <input
+                                  type="text"
+                                  placeholder="Custom name..."
+                                  value={customNameInput}
+                                  onChange={(e) => setCustomNameInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && customNameInput.trim()) {
+                                      setCustomName(device, customNameInput.trim());
                                     }
                                   }}
-                                  style={{ cursor: isPinned ? 'pointer' : 'default' }}
+                                />
+                                <button
+                                  className="dropdown-item custom-save"
+                                  disabled={nameActionLoading || !customNameInput.trim()}
+                                  onClick={() => setCustomName(device, customNameInput.trim())}
                                 >
-                                  {isPinned ? 'Pinned' : 'Auto'}
-                                </span>
-                              )}
-                              {!isDecoNode && (
-                                <label
-                                  className="mesh-toggle"
-                                  title={meshValue ? 'Mesh: ON — click to disable' : 'Mesh: OFF — click to enable'}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={meshValue}
-                                    onChange={() => toggleClientMesh(device.mac_address, meshValue)}
-                                  />
-                                  <span className="mesh-slider"></span>
-                                </label>
-                              )}
+                                  Set Name
+                                </button>
+                              </div>
                             </div>
-                          );
-                        })()}
+                          )}
+                        </div>
                       </td>
-                      <td className="status">
-                        <span className={`status-badge ${device.status === 'online' ? 'online' : 'offline'}`}>
-                          {device.status === 'online' ? 'Online' : 'Offline'}
-                        </span>
-                      </td>
+                      {/* 2026-03-11: Status + type badge column */}
+                      {(() => {
+                        const mac = (device.mac_address || '').toLowerCase();
+                        const nodeInfo = clientNodeMap[mac];
+                        const isDecoNode = decoNodeMacs.has(mac);
+                        const meshValue = nodeInfo ? !!nodeInfo.client_mesh : false;
+                        const isPinned = !!device.preferred_deco_node;
+                        const pinnedNodeName = isPinned
+                          ? (decoNodesMap[device.preferred_deco_node] || device.preferred_deco_node)
+                          : null;
+                        const currentNodeName = nodeInfo ? nodeInfo.node_name : null;
+                        const isOnline = device.status === 'online';
+                        const wireType = nodeInfo ? (nodeInfo.wire_type || '') : '';
+                        const connType = nodeInfo ? (nodeInfo.connection_type || '') : '';
+                        const isWired = wireType === 'wired' || connType === 'wired';
+                        // Signal strength
+                        let signalLevel = 'none';
+                        let signalTitle = '';
+                        if (nodeInfo && !isWired) {
+                          const downSpeed = nodeInfo.down_speed || 0;
+                          const upSpeed = nodeInfo.up_speed || 0;
+                          const totalSpeed = downSpeed + upSpeed;
+                          const band = connType.toLowerCase();
+                          if (band.includes('band5') || band.includes('band6')) {
+                            signalLevel = totalSpeed > 100 ? 'strong' : totalSpeed > 0 ? 'medium' : 'strong';
+                            signalTitle = `${band.includes('6') ? '6 GHz' : '5 GHz'} — ${downSpeed} kbps down, ${upSpeed} kbps up`;
+                          } else if (band.includes('band2')) {
+                            signalLevel = totalSpeed > 500 ? 'medium' : totalSpeed > 0 ? 'low' : 'low';
+                            signalTitle = `2.4 GHz — ${downSpeed} kbps down, ${upSpeed} kbps up`;
+                          } else {
+                            signalLevel = 'medium';
+                            signalTitle = `Wireless — ${downSpeed} kbps down, ${upSpeed} kbps up`;
+                          }
+                        } else if (isWired) {
+                          signalTitle = 'Wired (Ethernet)';
+                        }
+                        // Deco node backhaul info
+                        let backhaulWired = false;
+                        let bhSignalLevel = 'medium';
+                        let bhTitle = '';
+                        if (isDecoNode) {
+                          const nd = decoNodeDetails[mac] || {};
+                          backhaulWired = nd.backhaul === 'wired' || nd.role === 'master';
+                          const bands = nd.backhaul_bands || [];
+                          if (backhaulWired) {
+                            bhTitle = nd.role === 'master' ? 'Master node (WAN)' : 'Wired backhaul (Ethernet)';
+                          } else {
+                            const has5g = bands.some(b => b.includes('band5') || b.includes('band6'));
+                            const has24g = bands.some(b => b.includes('band2'));
+                            if (has5g) { bhSignalLevel = 'strong'; bhTitle = `Wireless backhaul (${bands.join(', ')})`; }
+                            else if (has24g) { bhSignalLevel = 'low'; bhTitle = `Wireless backhaul (2.4 GHz)`; }
+                            else { bhSignalLevel = 'medium'; bhTitle = `Wireless backhaul`; }
+                          }
+                        }
+                        return (
+                          <>
+                            <td className="status">
+                              <div className="status-badges">
+                                <span className={`status-badge ${isOnline ? 'online' : 'offline'}`}>
+                                  {isOnline ? 'Online' : 'Offline'}
+                                </span>
+                                {isDecoNode ? (
+                                  <span className="pref-badge mesh-node" title="This device is a Deco mesh node">Mesh Node</span>
+                                ) : isWired ? (
+                                  <span className="pref-badge wired" title="Wired (Ethernet) connection">Wired</span>
+                                ) : (
+                                  <span
+                                    className={`pref-badge ${isPinned ? 'pinned' : 'auto'}`}
+                                    title={isPinned ? `Pinned to ${pinnedNodeName} — click to revert to Auto` : 'Auto — connects to nearest node'}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isPinned) setPreferredDecoNode(device.device_id, null);
+                                    }}
+                                    style={{ cursor: isPinned ? 'pointer' : 'default' }}
+                                  >
+                                    {isPinned ? 'Pinned' : 'Auto'}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="deco-node-cell">
+                              <div className="deco-node-info">
+                                {/* Signal/backhaul icon — far left of column */}
+                                {isDecoNode ? (
+                                  backhaulWired ? (
+                                    <svg className="conn-icon" viewBox="0 0 24 24">
+                                      <title>{bhTitle}</title>
+                                      <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4z" fill="#546e7a"/>
+                                    </svg>
+                                  ) : (
+                                    <svg className="conn-icon" viewBox="0 0 24 24">
+                                      <title>{bhTitle}</title>
+                                      <path d="M1.3 8.7a16 16 0 0 1 21.4 0" fill="none"
+                                        stroke={bhSignalLevel === 'strong' ? '#2e7d32' : '#ccc'} strokeWidth="2.5" strokeLinecap="round"/>
+                                      <path d="M5.3 12.7a10 10 0 0 1 13.4 0" fill="none"
+                                        stroke={bhSignalLevel === 'strong' || bhSignalLevel === 'medium' ? (bhSignalLevel === 'strong' ? '#2e7d32' : '#f9a825') : '#ccc'} strokeWidth="2.5" strokeLinecap="round"/>
+                                      <path d="M9.3 16.7a4 4 0 0 1 5.4 0" fill="none"
+                                        stroke={bhSignalLevel !== 'none' ? (bhSignalLevel === 'low' ? '#e53935' : bhSignalLevel === 'medium' ? '#f9a825' : '#2e7d32') : '#ccc'} strokeWidth="2.5" strokeLinecap="round"/>
+                                      <circle cx="12" cy="20" r="1.5" fill={bhSignalLevel !== 'none' ? (bhSignalLevel === 'low' ? '#e53935' : bhSignalLevel === 'medium' ? '#f9a825' : '#2e7d32') : '#ccc'}/>
+                                    </svg>
+                                  )
+                                ) : nodeInfo ? (
+                                  isWired ? (
+                                    <svg className="conn-icon" viewBox="0 0 24 24">
+                                      <title>{signalTitle}</title>
+                                      <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4z" fill="#546e7a"/>
+                                    </svg>
+                                  ) : (
+                                    <svg className="conn-icon" viewBox="0 0 24 24">
+                                      <title>{signalTitle}</title>
+                                      <path d="M1.3 8.7a16 16 0 0 1 21.4 0" fill="none"
+                                        stroke={signalLevel === 'strong' ? '#2e7d32' : '#ccc'} strokeWidth="2.5" strokeLinecap="round"/>
+                                      <path d="M5.3 12.7a10 10 0 0 1 13.4 0" fill="none"
+                                        stroke={signalLevel === 'strong' || signalLevel === 'medium' ? (signalLevel === 'strong' ? '#2e7d32' : '#f9a825') : '#ccc'} strokeWidth="2.5" strokeLinecap="round"/>
+                                      <path d="M9.3 16.7a4 4 0 0 1 5.4 0" fill="none"
+                                        stroke={signalLevel !== 'none' ? (signalLevel === 'low' ? '#e53935' : signalLevel === 'medium' ? '#f9a825' : '#2e7d32') : '#ccc'} strokeWidth="2.5" strokeLinecap="round"/>
+                                      <circle cx="12" cy="20" r="1.5" fill={signalLevel !== 'none' ? (signalLevel === 'low' ? '#e53935' : signalLevel === 'medium' ? '#f9a825' : '#2e7d32') : '#ccc'}/>
+                                    </svg>
+                                  )
+                                ) : (
+                                  <span style={{ width: 18 }} />
+                                )}
+                                {/* Node dropdown */}
+                                {isDecoNode ? (
+                                  <select
+                                    className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
+                                    value={isPinned ? device.preferred_deco_node : ''}
+                                    title={isPinned ? `Uplink pinned to ${pinnedNodeName}` : 'Auto uplink'}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPreferredDecoNode(device.device_id, val === '' ? null : val);
+                                    }}
+                                  >
+                                    <option value="">{currentNodeName ? `${currentNodeName} (Auto)` : 'Auto'}</option>
+                                    {Object.entries(decoNodesMap)
+                                      .filter(([nodeMac]) => nodeMac.toLowerCase().replace(/-/g, ':') !== mac)
+                                      .map(([nodeMac, name]) => (
+                                        <option key={nodeMac} value={nodeMac}>{name}</option>
+                                      ))}
+                                  </select>
+                                ) : isWired ? (
+                                  <span className="deco-node-name" title="Wired connection — cannot change node">
+                                    {currentNodeName || '—'}
+                                  </span>
+                                ) : (
+                                  <select
+                                    className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
+                                    value={isPinned ? device.preferred_deco_node : ''}
+                                    title={isPinned ? `Pinned to ${pinnedNodeName}` : `Connected to ${currentNodeName} (auto)`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPreferredDecoNode(device.device_id, val === '' ? null : val);
+                                    }}
+                                  >
+                                    <option value="">{currentNodeName ? `${currentNodeName} (Auto)` : 'Auto'}</option>
+                                    {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
+                                      <option key={nodeMac} value={nodeMac}>{name}</option>
+                                    ))}
+                                  </select>
+                                )}
+                                {/* Mesh steering toggle at end (non-Deco nodes only) */}
+                                {!isDecoNode && (
+                                  <label
+                                    className="mesh-toggle"
+                                    title={meshValue ? 'Mesh: ON — click to disable' : 'Mesh: OFF — click to enable'}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={meshValue}
+                                      onChange={() => toggleClientMesh(device.mac_address, meshValue)}
+                                    />
+                                    <span className="mesh-slider"></span>
+                                  </label>
+                                )}
+                              </div>
+                            </td>
+                          </>
+                        );
+                      })()}
                       <td className="ip-address">{device.current_ip || 'N/A'}</td>
                       <td className="mac-address">{device.mac_address}</td>
                       <td className="vendor-name">{device.vendor_name || 'Unknown'}</td>

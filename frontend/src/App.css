@@ -431,11 +431,28 @@
 }
 
 .device-row.online {
-  background-color: #eefcf5;
+  background-color: transparent;
 }
 
 .device-row.offline {
-  background-color: #fff2f5;
+  background-color: transparent;
+}
+
+/* 2026-03-11: Status dot indicator left of device name */
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.online {
+  background-color: #0f9f65;
+}
+
+.status-dot.offline {
+  background-color: #c0204d;
 }
 
 .mac-address,
@@ -451,16 +468,20 @@
   font-size: 0.75rem;
   font-weight: 700;
   display: inline-block;
+  min-width: 52px;
+  text-align: center;
 }
 
 .devices-table .status-badge.online {
   background-color: #ddf8ea;
   color: #0f9f65;
+  border: 1px solid #a3e4c1;
 }
 
 .devices-table .status-badge.offline {
   background-color: #ffe3ea;
   color: #c0204d;
+  border: 1px solid #f5a3b8;
 }
 
 .status-badge {
@@ -487,7 +508,19 @@
   white-space: nowrap;
 }
 
-.status,
+.status {
+  text-align: center;
+}
+
+/* 2026-03-11: Online/Offline + type badge side by side in Status column */
+.status-badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
 .actions {
   text-align: center;
 }
@@ -530,15 +563,11 @@
 
 /* 2026-03-10: Deco node info + mesh toggle in dashboard */
 .deco-node-info {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(100px, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-}
-
-/* 2026-03-11: Push badge + slider to the right */
-.deco-node-info .pref-badge {
-  margin-left: auto;
 }
 
 .deco-node-info .na-text:only-child {
@@ -547,19 +576,23 @@
 
 .deco-node-name {
   font-size: inherit;
+  font-weight: inherit;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 2026-03-11: Deco connection preference dropdown — transparent to match row */
 .deco-pref-select {
-  font-size: 12px;
+  font-size: inherit;
   padding: 2px 4px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  max-width: 150px;
+  width: 100%;
   -webkit-appearance: none;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23666'/%3E%3C/svg%3E");
@@ -581,15 +614,17 @@
   border-color: var(--brand, #2363eb);
 }
 
-/* 2026-03-11: Auto/Pinned badge — purple for auto, orange for pinned */
+/* 2026-03-11: Auto/Pinned badge — same height as status-badge ovals */
 .pref-badge {
   display: inline-block;
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
   white-space: nowrap;
   letter-spacing: 0.02em;
+  min-width: 52px;
+  text-align: center;
 }
 
 .pref-badge.auto {
@@ -603,6 +638,26 @@
   color: #e65100;
   border: 1px solid #ffcc80;
   cursor: pointer;
+}
+
+.pref-badge.wired {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.pref-badge.mesh-node {
+  background: #e0f7fa;
+  color: #00695c;
+  border: 1px solid #80cbc4;
+}
+
+/* 2026-03-11: Wired/Wireless connection icon — sized for visibility */
+.conn-icon {
+  flex-shrink: 0;
+  vertical-align: middle;
+  width: 22px;
+  height: 22px;
 }
 
 .mesh-toggle {
