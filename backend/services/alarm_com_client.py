@@ -108,8 +108,9 @@ class AlarmComClient:
             raise AlarmComAPIError("Must call login() first")
         try:
             from pyalarmdotcomajax.const import OtpType
-            otp_map = {"app": OtpType.APP, "email": OtpType.EMAIL, "sms": OtpType.SMS}
-            otp_type = otp_map.get(method, OtpType.APP)
+            # 2026-03-10: OtpType enum uses lowercase: app, sms, email (not APP, SMS, EMAIL)
+            otp_map = {"app": OtpType.app, "email": OtpType.email, "sms": OtpType.sms}
+            otp_type = otp_map.get(method, OtpType.app)
             await self._controller.async_request_otp(otp_type)
             return {"success": True, "method": method}
         except Exception as e:
@@ -123,8 +124,9 @@ class AlarmComClient:
             raise AlarmComAPIError("Must call login() first")
         try:
             from pyalarmdotcomajax.const import OtpType
-            otp_map = {"app": OtpType.APP, "email": OtpType.EMAIL, "sms": OtpType.SMS}
-            otp_type = otp_map.get(method, OtpType.APP)
+            # 2026-03-10: OtpType enum uses lowercase: app, sms, email (not APP, SMS, EMAIL)
+            otp_map = {"app": OtpType.app, "email": OtpType.email, "sms": OtpType.sms}
+            otp_type = otp_map.get(method, OtpType.app)
 
             await self._controller.async_submit_otp(
                 code=code,
