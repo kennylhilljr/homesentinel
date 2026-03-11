@@ -1,9 +1,12 @@
 """
 Service layer for Chester 5G Wireless Data Terminal integration.
+
+2026-03-11: Added get_system_info() for full cellular/signal data,
+matching the Chester web UI home page fields.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from services.chester_client import ChesterClient
 
@@ -37,6 +40,34 @@ class ChesterService:
                 "info": info,
                 "wan": wan,
             },
+        }
+
+    # 2026-03-11: Full system info matching Chester web UI home page
+    def get_system_info(self) -> Dict[str, Any]:
+        """Get all system and cellular signal info in one call.
+
+        Returns the same fields shown on the Chester web UI status page:
+        Device Model, System Version, Hardware Version, IMEI, ICCID,
+        IPv4/IPv6 addresses, DNS, Connection Time/Type, CellID, PCID,
+        ARFCN, BAND, RSRP, RSRQ, SINR, CA BAND, MCC, MNC.
+        """
+        return {
+            "timestamp": datetime.utcnow().isoformat(),
+            **self.client.get_system_info(),
+        }
+
+    def get_lte_band_config(self) -> Dict[str, Any]:
+        """Get band lock configuration."""
+        return {
+            "timestamp": datetime.utcnow().isoformat(),
+            **self.client.get_lte_band(),
+        }
+
+    def get_lte_traffic_stats(self) -> Dict[str, Any]:
+        """Get data usage / traffic statistics."""
+        return {
+            "timestamp": datetime.utcnow().isoformat(),
+            **self.client.get_lte_traffic(),
         }
 
     def _safe_call(self, module: str, api: str) -> Dict[str, Any]:
