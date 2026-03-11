@@ -530,6 +530,23 @@ class NetworkDeviceService:
                 except Exception as e:
                     logger.warning(f"Deco client list supplement failed: {e}")
 
+                # 2026-03-10: Also mark Deco node MACs as online — they're routers, not clients,
+                # so they never appear in the client list but they are definitely online.
+                try:
+                    deco_nodes = self._deco_client.get_node_list()
+                    for node in deco_nodes:
+                        node_mac_raw = node.get("deviceMac", "") or node.get("mac", "")
+                        if not node_mac_raw:
+                            continue
+                        mac_clean = node_mac_raw.lower().replace("-", "").replace(":", "").replace(" ", "")
+                        if len(mac_clean) != 12:
+                            continue
+                        normalized_mac = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                        online_macs.add(normalized_mac)
+                    logger.info(f"Deco node MACs added to online set: {len(deco_nodes)} nodes")
+                except Exception as e:
+                    logger.debug(f"Failed to fetch Deco node MACs for online set: {e}")
+
             scan_results['devices_found'] = len(online_macs)
 
             # Mark devices as offline if not in scan results AND not in Deco

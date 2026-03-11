@@ -29,12 +29,41 @@ class DecoService:
             deco_client: DecoClient instance (creates new one if not provided)
         """
         self.deco_client = deco_client or DecoClient()
+        self._device_repo = None  # 2026-03-10: Set via set_device_repo() to sync node status to network_devices
         self._nodes_cache: Optional[List[Dict[str, Any]]] = None
         self._cache_timestamp: Optional[datetime] = None
         self._wifi_config_cache: Optional[Dict[str, Any]] = None
         self._wifi_config_timestamp: Optional[datetime] = None
         self._qos_cache: Optional[Dict[str, Any]] = None
         self._qos_timestamp: Optional[datetime] = None
+
+    def set_device_repo(self, device_repo):
+        """Inject device repo so we can sync Deco node status to network_devices table."""
+        self._device_repo = device_repo
+
+    def _sync_online_nodes_to_devices(self, enriched_nodes):
+        """2026-03-10: Mark Deco node MACs as online in network_devices when confirmed online."""
+        if not self._device_repo:
+            return
+        try:
+            # Build MAC→device_id lookup from DB (one query)
+            all_devices = self._device_repo.list_all()
+            mac_to_device = {d["mac_address"].lower(): d for d in all_devices if d.get("mac_address")}
+
+            for node in enriched_nodes:
+                if node["status"] != "online":
+                    continue
+                raw_mac = (node.get("raw_data", {}).get("deviceMac", "") or "").strip()
+                if not raw_mac:
+                    continue
+                # Deco MACs: uppercase no-separator (105A953D62E2) → lowercase colon-separated
+                normalized = ":".join(raw_mac[i:i+2] for i in range(0, len(raw_mac), 2)).lower()
+                device = mac_to_device.get(normalized)
+                if device and device.get("status") != "online":
+                    self._device_repo.mark_online(device["device_id"])
+                    logger.info(f"Synced Deco node {node['node_name']} ({normalized}) to online in network_devices")
+        except Exception as e:
+            logger.debug(f"Failed to sync Deco node statuses: {e}")
 
     def get_nodes_with_details(self) -> List[Dict[str, Any]]:
         """
@@ -59,6 +88,8 @@ class DecoService:
         # Check if cache is still valid
         if self._is_cache_valid():
             logger.debug("Returning cached node list")
+            # 2026-03-10: Still sync on cached returns in case device_repo wasn't ready on first call
+            self._sync_online_nodes_to_devices(self._nodes_cache)
             return self._nodes_cache
 
         try:
@@ -112,6 +143,9 @@ class DecoService:
                 for node in offline_satellites:
                     node["status"] = "online"
                 logger.info(f"Marked {len(offline_satellites)} satellite nodes online (mesh has {len(local_clients)} clients)")
+
+            # 2026-03-10: Sync online Deco nodes to network_devices table
+            self._sync_online_nodes_to_devices(enriched_nodes)
 
             # Update cache
             self._nodes_cache = enriched_nodes

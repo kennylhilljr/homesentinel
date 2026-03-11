@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import DeviceCard from './components/DeviceCard';
 import DeviceDetailCard from './components/DeviceDetailCard';
-import DecoNodesPage from './pages/DecoNodesPage';
 import DecoTopologyPage from './pages/DecoTopologyPage';
 import SettingsPage from './pages/SettingsPage';
 import AlexaDevicesPage from './pages/AlexaDevicesPage';
 import SmartHomePage from './pages/SmartHomePage';
-import AlarmComPage from './pages/AlarmComPage';
 import { buildUrl } from './utils/apiConfig';
 import ViewModeToggle from './components/ViewModeToggle';
 
@@ -362,12 +360,6 @@ function App() {
             Dashboard
           </button>
           <button
-            className={`nav-button ${currentPage === 'deco' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('deco')}
-          >
-            Deco Nodes
-          </button>
-          <button
             className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`}
             onClick={() => setCurrentPage('topology')}
           >
@@ -386,12 +378,6 @@ function App() {
             Smart Home
           </button>
           <button
-            className={`nav-button ${currentPage === 'alarm-com' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('alarm-com')}
-          >
-            Alarm.com
-          </button>
-          <button
             className={`nav-button ${currentPage === 'settings' ? 'active' : ''}`}
             onClick={() => setCurrentPage('settings')}
           >
@@ -400,9 +386,6 @@ function App() {
         </nav>
       </header>
       <main className="App-main">
-        {/* Deco Nodes Page */}
-        {currentPage === 'deco' && <DecoNodesPage />}
-
         {/* Network Topology Page */}
         {currentPage === 'topology' && <DecoTopologyPage />}
 
@@ -411,9 +394,6 @@ function App() {
 
         {/* Smart Home Control Page */}
         {currentPage === 'smart-home' && <SmartHomePage />}
-
-        {/* Alarm.com Page */}
-        {currentPage === 'alarm-com' && <AlarmComPage />}
 
         {/* Settings Page */}
         {currentPage === 'settings' && (

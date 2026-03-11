@@ -190,6 +190,9 @@ async def startup_event():
         device_repo = NetworkDeviceRepository(db)
         correlation_service = CorrelationService(deco_service, device_repo)
         deco_routes.set_correlation_service(correlation_service)
+        # 2026-03-10: Now that device_repo exists, wire it into deco_service for status sync
+        if deco_service:
+            deco_service.set_device_repo(device_repo)
         logger.info("Correlation service initialized and routes configured")
     except Exception as e:
         logger.warning(f"Failed to initialize correlation service: {e}")
