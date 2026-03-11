@@ -62,15 +62,19 @@ function getConnectionBadge(connType) {
 }
 
 /**
- * DecoTopologyView — card-based layout grouped by Deco node
+ * DecoTopologyView — NetworkX graph visualization + card-based detail view
+ * 2026-03-11: Uses backend-rendered NetworkX SVG for graph, with card details below.
  */
 function DecoTopologyView({ autoRefreshInterval = 30000 }) {
   const [topology, setTopology] = useState(null);
+  const [graphSvg, setGraphSvg] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [graphLoading, setGraphLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState(new Set());
+  const [viewMode, setViewMode] = useState('graph'); // 'graph' or 'cards'
 
   const fetchTopology = useCallback(async () => {
     setLoading(true);
@@ -84,7 +88,6 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
       const data = await response.json();
       setTopology(data);
       setLastRefresh(new Date());
-      // Auto-expand all nodes on first load
       if (data.nodes) {
         setExpandedNodes(new Set(data.nodes.map(n => n.node_id)));
       }
@@ -96,25 +99,45 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
     }
   }, []);
 
+  // 2026-03-11: Fetch NetworkX SVG graph from backend
+  const fetchGraph = useCallback(async () => {
+    setGraphLoading(true);
+    try {
+      const response = await fetch(buildUrl('/deco/topology-graph'));
+      if (response.ok) {
+        const svgText = await response.text();
+        setGraphSvg(svgText);
+      } else {
+        console.warn('Graph SVG fetch failed:', response.status);
+      }
+    } catch (err) {
+      console.error('Failed to fetch topology graph:', err);
+    } finally {
+      setGraphLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchTopology();
+    fetchGraph();
     if (autoRefreshEnabled) {
-      const interval = setInterval(fetchTopology, autoRefreshInterval);
+      const interval = setInterval(() => {
+        fetchTopology();
+        fetchGraph();
+      }, autoRefreshInterval);
       return () => clearInterval(interval);
     }
-  }, [autoRefreshEnabled, autoRefreshInterval, fetchTopology]);
+  }, [autoRefreshEnabled, autoRefreshInterval, fetchTopology, fetchGraph]);
 
   // Group devices by their connected Deco node
   const nodeGroups = React.useMemo(() => {
     if (!topology) return [];
 
-    // Build relationship lookup: device_id -> relationship info
     const relMap = {};
     for (const rel of (topology.relationships || [])) {
       relMap[rel.device_id] = rel;
     }
 
-    // Group devices under their node
     const groups = {};
     const unconnected = [];
 
@@ -129,13 +152,11 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
       }
     }
 
-    // Build ordered list of node groups
     const result = (topology.nodes || []).map(node => ({
       node,
       devices: groups[node.node_id] || [],
     }));
 
-    // Add unconnected devices if any
     if (unconnected.length > 0) {
       result.push({
         node: { node_id: '_unconnected', node_name: 'Unassigned', status: 'unknown', connected_clients: unconnected.length },
@@ -171,6 +192,11 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
     return lastRefresh.toLocaleTimeString();
   };
 
+  const handleRefresh = () => {
+    fetchTopology();
+    fetchGraph();
+  };
+
   return (
     <div className="deco-topology-view">
       {/* Header */}
@@ -180,8 +206,23 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
           <p>Deco mesh nodes and connected devices</p>
         </div>
         <div className="header-controls">
-          <button onClick={fetchTopology} disabled={loading} className="btn btn-primary">
-            {loading ? (<><span className="spinner"></span>Refreshing...</>) : (<><span className="refresh-icon">&#10227;</span>Refresh</>)}
+          {/* View mode toggle */}
+          <div className="view-mode-toggle">
+            <button
+              className={`view-mode-btn ${viewMode === 'graph' ? 'active' : ''}`}
+              onClick={() => setViewMode('graph')}
+            >
+              Graph
+            </button>
+            <button
+              className={`view-mode-btn ${viewMode === 'cards' ? 'active' : ''}`}
+              onClick={() => setViewMode('cards')}
+            >
+              Cards
+            </button>
+          </div>
+          <button onClick={handleRefresh} disabled={loading || graphLoading} className="btn btn-primary">
+            {(loading || graphLoading) ? (<><span className="spinner"></span>Refreshing...</>) : (<><span className="refresh-icon">&#10227;</span>Refresh</>)}
           </button>
           <div className="auto-refresh-toggle">
             <input type="checkbox" id="autoRefreshTopology" checked={autoRefreshEnabled} onChange={(e) => setAutoRefreshEnabled(e.target.checked)} />
@@ -197,7 +238,7 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
           <div className="error-message">
             <span className="error-icon">&#9888;</span>
             <div className="error-text"><h3>Error</h3><p>{error}</p></div>
-            <button onClick={fetchTopology} className="btn btn-secondary">Retry</button>
+            <button onClick={handleRefresh} className="btn btn-secondary">Retry</button>
           </div>
         </div>
       )}
@@ -213,7 +254,7 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
           <div className="empty-icon">&#127760;</div>
           <h2>No Topology Data</h2>
           <p>No Deco nodes found. Check your Deco credentials in Settings.</p>
-          <button onClick={fetchTopology} className="btn btn-primary">Try Again</button>
+          <button onClick={handleRefresh} className="btn btn-primary">Try Again</button>
         </div>
       )}
 
@@ -225,85 +266,107 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
             <div className="stat-item"><span className="stat-label">Nodes:</span><span className="stat-value">{topology.total_nodes}</span></div>
             <div className="stat-item"><span className="stat-label">Devices:</span><span className="stat-value">{topology.total_devices}</span></div>
             <div className="stat-item"><span className="stat-label">Connections:</span><span className="stat-value">{topology.total_relationships}</span></div>
-            <div className="stat-actions">
-              <button className="btn-text" onClick={expandAll}>Expand All</button>
-              <button className="btn-text" onClick={collapseAll}>Collapse All</button>
-            </div>
+            {viewMode === 'cards' && (
+              <div className="stat-actions">
+                <button className="btn-text" onClick={expandAll}>Expand All</button>
+                <button className="btn-text" onClick={collapseAll}>Collapse All</button>
+              </div>
+            )}
           </div>
 
-          {/* Node groups */}
-          <div className="node-groups">
-            {nodeGroups.map(({ node, devices }) => {
-              const isExpanded = expandedNodes.has(node.node_id);
-              const isOnline = node.status === 'online';
-
-              return (
-                <div key={node.node_id} className={`node-group ${isOnline ? 'online' : 'offline'}`}>
-                  {/* Node header — clickable to expand/collapse */}
-                  <div className="node-group-header" onClick={() => toggleNode(node.node_id)}>
-                    <div className="node-header-left">
-                      <div className={`node-icon ${isOnline ? 'online' : 'offline'}`}>
-                        <FaWifi size={18} />
-                      </div>
-                      <div className="node-header-info">
-                        <h3>{node.node_name}</h3>
-                        <span className="node-meta">
-                          {node.mac_address}
-                          {node.role && <span className="node-role">{node.role}</span>}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="node-header-right">
-                      <span className="device-count">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
-                      <span className={`status-badge ${isOnline ? 'online' : 'offline'}`}>
-                        {isOnline ? 'Online' : 'Offline'}
-                      </span>
-                      <span className={`expand-arrow ${isExpanded ? 'expanded' : ''}`}>&#9660;</span>
-                    </div>
-                  </div>
-
-                  {/* Device cards */}
-                  {isExpanded && (
-                    <div className="node-devices-grid">
-                      {devices.map((device) => {
-                        const { Icon, color } = getDeviceIcon(device);
-                        const connBadge = getConnectionBadge(device.connection_type);
-                        const isDevOnline = device.status === 'online';
-
-                        return (
-                          <div key={device.device_id} className={`topo-device-card ${isDevOnline ? 'online' : 'offline'}`}>
-                            <div className="topo-device-icon" style={{ backgroundColor: isDevOnline ? color : '#BDBDBD' }}>
-                              <Icon size={16} color="white" />
-                            </div>
-                            <div className="topo-device-info">
-                              <div className="topo-device-name">
-                                {device.friendly_name || device.device_name || 'Unknown'}
-                              </div>
-                              {device.current_ip && (
-                                <div className="topo-device-ip">{device.current_ip}</div>
-                              )}
-                              <div className="topo-device-mac">{device.mac_address}</div>
-                            </div>
-                            <div className="topo-device-badges">
-                              {connBadge && (
-                                <span className={`conn-badge ${connBadge.className}`}>{connBadge.label}</span>
-                              )}
-                              {device.vendor_name && (
-                                <span className="vendor-badge">{device.vendor_name}</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {devices.length === 0 && (
-                        <div className="no-devices-msg">No devices connected to this node</div>
-                      )}
-                    </div>
-                  )}
+          {/* NetworkX Graph View */}
+          {viewMode === 'graph' && (
+            <div className="networkx-graph-container">
+              {graphLoading && !graphSvg && (
+                <div className="loading-container"><div className="loading-spinner"></div><p>Generating network graph...</p></div>
+              )}
+              {graphSvg && (
+                <div
+                  className="networkx-svg-wrapper"
+                  dangerouslySetInnerHTML={{ __html: graphSvg }}
+                />
+              )}
+              {!graphLoading && !graphSvg && (
+                <div className="empty-state">
+                  <p>Failed to generate graph. Try refreshing.</p>
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          )}
+
+          {/* Card-based detail view */}
+          {viewMode === 'cards' && (
+            <div className="node-groups">
+              {nodeGroups.map(({ node, devices }) => {
+                const isExpanded = expandedNodes.has(node.node_id);
+                const isOnline = node.status === 'online';
+
+                return (
+                  <div key={node.node_id} className={`node-group ${isOnline ? 'online' : 'offline'}`}>
+                    <div className="node-group-header" onClick={() => toggleNode(node.node_id)}>
+                      <div className="node-header-left">
+                        <div className={`node-icon ${isOnline ? 'online' : 'offline'}`}>
+                          <FaWifi size={18} />
+                        </div>
+                        <div className="node-header-info">
+                          <h3>{node.node_name}</h3>
+                          <span className="node-meta">
+                            {node.mac_address}
+                            {node.role && <span className="node-role">{node.role}</span>}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="node-header-right">
+                        <span className="device-count">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
+                        <span className={`status-badge ${isOnline ? 'online' : 'offline'}`}>
+                          {isOnline ? 'Online' : 'Offline'}
+                        </span>
+                        <span className={`expand-arrow ${isExpanded ? 'expanded' : ''}`}>&#9660;</span>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="node-devices-grid">
+                        {devices.map((device) => {
+                          const { Icon, color } = getDeviceIcon(device);
+                          const connBadge = getConnectionBadge(device.connection_type);
+                          const isDevOnline = device.status === 'online';
+
+                          return (
+                            <div key={device.device_id} className={`topo-device-card ${isDevOnline ? 'online' : 'offline'}`}>
+                              <div className="topo-device-icon" style={{ backgroundColor: isDevOnline ? color : '#BDBDBD' }}>
+                                <Icon size={16} color="white" />
+                              </div>
+                              <div className="topo-device-info">
+                                <div className="topo-device-name">
+                                  {device.friendly_name || device.device_name || 'Unknown'}
+                                </div>
+                                {device.current_ip && (
+                                  <div className="topo-device-ip">{device.current_ip}</div>
+                                )}
+                                <div className="topo-device-mac">{device.mac_address}</div>
+                              </div>
+                              <div className="topo-device-badges">
+                                {connBadge && (
+                                  <span className={`conn-badge ${connBadge.className}`}>{connBadge.label}</span>
+                                )}
+                                {device.vendor_name && (
+                                  <span className="vendor-badge">{device.vendor_name}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {devices.length === 0 && (
+                          <div className="no-devices-msg">No devices connected to this node</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
     </div>

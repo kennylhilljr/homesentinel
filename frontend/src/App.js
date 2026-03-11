@@ -110,15 +110,22 @@ function App() {
     getDeviceGroups();
     getClientNodeMap();
 
-    const interval = setInterval(() => {
+    // 2026-03-11: Fast poll for devices/health (5s), slow poll for Deco map (30s)
+    const fastInterval = setInterval(() => {
       checkHealth();
       getDevices();
       getPollingConfig();
       getDeviceGroups();
-      getClientNodeMap();
     }, 5000);
 
-    return () => clearInterval(interval);
+    const slowInterval = setInterval(() => {
+      getClientNodeMap();
+    }, 30000);
+
+    return () => {
+      clearInterval(fastInterval);
+      clearInterval(slowInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -576,7 +583,7 @@ function App() {
                     </th>
                     <th>
                       <button className="sort-button" onClick={() => requestSort('decoNode')}>
-                        Deco <span className="sort-indicator">{getSortIndicator('decoNode')}</span>
+                        Deco Mesh <span className="sort-indicator">{getSortIndicator('decoNode')}</span>
                       </button>
                     </th>
                     <th>

@@ -39,6 +39,54 @@
   flex-wrap: wrap;
 }
 
+/* 2026-03-11: Graph/Cards view mode toggle */
+.view-mode-toggle {
+  display: flex;
+  border: 1px solid var(--border, #d4dde8);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-mode-btn {
+  padding: 6px 14px;
+  border: none;
+  background: white;
+  color: var(--text-muted, #556277);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-mode-btn.active {
+  background: var(--brand, #0b5cab);
+  color: white;
+}
+
+.view-mode-btn:hover:not(.active) {
+  background: #f0f4f8;
+}
+
+/* 2026-03-11: NetworkX SVG graph container */
+.networkx-graph-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  min-height: 400px;
+}
+
+.networkx-svg-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+.networkx-svg-wrapper svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .btn {
   padding: 8px 16px;
   border: none;

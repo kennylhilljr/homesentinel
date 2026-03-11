@@ -4,6 +4,7 @@ Endpoints for Deco node management and monitoring
 """
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
@@ -596,52 +597,43 @@ async def get_client_node_map() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Deco service not initialized")
 
     try:
-        import base64, json as _json
+        import base64
         client = deco_service.deco_client
 
-        # Ensure we're authenticated for local API
-        if not getattr(client, '_stok', None):
-            client.authenticate()
+        # 2026-03-11: Use get_topology_local() which creates its own local session.
+        # This avoids 'NoneType aes_encrypt' errors from using the cloud client for local API.
+        local_data = None
+        try:
+            local_data = client.get_topology_local()
+        except Exception as e:
+            logger.warning(f"Local topology fetch failed for client-node-map: {e}")
 
-        # Get node list
-        nodes = client._local_encrypted_request(
-            "admin/device?form=device_list",
-            _json.dumps({"operation": "read"})
-        )
-        node_list = nodes.get("device_list", [])
+        node_names = {}
+        mapping = {}
 
-        # Build per-node client mapping
-        mapping = {}  # normalized MAC -> { node_name, node_mac, connection_type }
-        node_names = {}  # node_mac -> node_name (for topology use)
-        for node in node_list:
-            node_mac = node.get("mac", "")
-            nickname = node.get("nickname", "")
-            try:
-                nickname = base64.b64decode(nickname).decode("utf-8")
-            except Exception:
-                pass
-            node_names[node_mac] = nickname or node.get("device_model", node_mac)
+        if local_data and local_data.get("nodes"):
+            for node in local_data["nodes"]:
+                node_mac = node.get("mac", "")
+                nickname = node.get("nickname", "")
+                try:
+                    nickname = base64.b64decode(nickname).decode("utf-8")
+                except Exception:
+                    pass
+                node_names[node_mac] = nickname or node.get("device_model", node_mac)
 
-            # Query clients for this node
-            try:
-                result = client._local_encrypted_request(
-                    "admin/client?form=client_list",
-                    _json.dumps({"operation": "read", "params": {"device_mac": node_mac}})
-                )
-                for c in result.get("client_list", []):
+            for node_mac, clients in local_data.get("node_clients", {}).items():
+                node_name = node_names.get(node_mac, node_mac)
+                for c in clients:
                     raw_mac = c.get("mac", "")
-                    # Normalize to aa:bb:cc:dd:ee:ff
                     mac_clean = raw_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
                     if len(mac_clean) == 12:
                         normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
                         mapping[normalized] = {
-                            "node_name": node_names[node_mac],
+                            "node_name": node_name,
                             "node_mac": node_mac,
                             "connection_type": c.get("connection_type", ""),
                             "client_mesh": c.get("client_mesh", False),
                         }
-            except Exception as e:
-                logger.debug(f"Failed to get clients for node {node_mac}: {e}")
 
         return {
             "client_node_map": mapping,
@@ -733,86 +725,93 @@ async def get_topology() -> Dict[str, Any]:
         merged_devices = merged_result.get("merged_devices", [])
 
         import base64
-        import json as _json
 
-        # 2026-03-10: Use local API per-node client query to build real relationships.
-        # The cloud API's get_client_list() does NOT include nodeID, so the old approach
-        # produced zero relationships. The local API's device_mac param returns clients
-        # per-node accurately.
+        # 2026-03-11: Use get_topology_local() which creates its own local session.
         client = deco_service.deco_client
-
-        # Authenticate for local API if needed
-        if not getattr(client, '_stok', None):
-            try:
-                client.authenticate()
-            except Exception as e:
-                logger.warning(f"Local Deco auth failed for topology: {e}")
-
-        # Get node list from local API for accurate MACs and nicknames
-        local_nodes = []
+        local_data = None
         try:
-            node_result = client._local_encrypted_request(
-                "admin/device?form=device_list",
-                _json.dumps({"operation": "read"})
-            )
-            local_nodes = node_result.get("device_list", [])
+            local_data = client.get_topology_local()
         except Exception as e:
-            logger.warning(f"Failed to get local node list: {e}")
+            logger.warning(f"Local topology fetch failed: {e}")
+
+        local_nodes = local_data.get("nodes", []) if local_data else []
+        local_node_clients = local_data.get("node_clients", {}) if local_data else {}
 
         # Build nodes list for topology
         nodes = []
-        # Map node_mac -> node info for relationship building
         node_mac_to_name = {}
-        for node in local_nodes:
-            node_mac = node.get("mac", "")
-            nickname = node.get("nickname", "")
-            try:
-                nickname = base64.b64decode(nickname).decode("utf-8")
-            except Exception:
-                pass
-            node_name = nickname or node.get("device_model", node_mac)
-            node_mac_to_name[node_mac] = node_name
-            role = node.get("role", "")
-
-            # Also get enriched data from deco_service nodes if available
-            enriched = {}
-            for nd in nodes_data:
-                raw_mac = nd.get("raw_data", {}).get("macAddress", "")
-                if raw_mac and raw_mac.lower().replace("-", ":") == node_mac.lower().replace("-", ":"):
-                    enriched = nd
-                    break
-
-            nodes.append({
-                "node_id": node_mac,  # Use MAC as node_id for consistency
-                "node_name": node_name,
-                "mac_address": node_mac,
-                "status": enriched.get("status", "online" if role else "unknown"),
-                "signal_strength": enriched.get("signal_strength", 0),
-                "connected_clients": enriched.get("connected_clients", 0),
-                "role": role,
-            })
-
-        # Build per-node client mapping and relationships via local API
-        # client_mac -> { node_mac, node_name, connection_type }
         client_to_node = {}
-        for node_mac, node_name in node_mac_to_name.items():
-            try:
-                result = client._local_encrypted_request(
-                    "admin/client?form=client_list",
-                    _json.dumps({"operation": "read", "params": {"device_mac": node_mac}})
-                )
-                for c in result.get("client_list", []):
-                    raw_mac = c.get("mac", "")
-                    mac_clean = raw_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
-                    if len(mac_clean) == 12:
-                        normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
-                        client_to_node[normalized] = {
-                            "node_mac": node_mac,
-                            "node_name": node_name,
-                            "connection_type": c.get("connection_type", ""),
-                        }
-            except Exception as e:
-                logger.debug(f"Failed to get clients for node {node_mac}: {e}")
+        deco_clients = {}
+
+        if local_nodes:
+            for node in local_nodes:
+                node_mac = node.get("mac", "")
+                nickname = node.get("nickname", "")
+                try:
+                    nickname = base64.b64decode(nickname).decode("utf-8")
+                except Exception:
+                    pass
+                node_name = nickname or node.get("device_model", node_mac)
+                node_mac_to_name[node_mac] = node_name
+                role = node.get("role", "")
+
+                # Enrich with cloud data if available
+                enriched = {}
+                for nd in nodes_data:
+                    cloud_mac = nd.get("raw_data", {}).get("deviceMac", "")
+                    if cloud_mac and cloud_mac.lower().replace("-", "") == node_mac.lower().replace("-", ""):
+                        enriched = nd
+                        break
+
+                nodes.append({
+                    "node_id": node_mac,
+                    "node_name": node_name,
+                    "mac_address": node_mac,
+                    "status": enriched.get("status", "online" if role else "unknown"),
+                    "signal_strength": enriched.get("signal_strength", 0),
+                    "connected_clients": enriched.get("connected_clients", 0),
+                    "role": role,
+                })
+        else:
+            # Fallback: build nodes from cloud API data with deviceMac
+            logger.warning("No local nodes, falling back to cloud nodes for topology")
+            for nd in nodes_data:
+                cloud_mac_raw = nd.get("raw_data", {}).get("deviceMac", "")
+                if not cloud_mac_raw:
+                    continue
+                mac_clean = cloud_mac_raw.lower().replace("-", "").replace(":", "")
+                if len(mac_clean) == 12:
+                    node_mac = "-".join(mac_clean[i:i+2].upper() for i in range(0, 12, 2))
+                else:
+                    node_mac = cloud_mac_raw
+                node_name = nd.get("node_name", nd.get("raw_data", {}).get("alias", node_mac))
+                node_mac_to_name[node_mac] = node_name
+
+                nodes.append({
+                    "node_id": node_mac,
+                    "node_name": node_name,
+                    "mac_address": node_mac,
+                    "status": nd.get("status", "online"),
+                    "signal_strength": nd.get("signal_strength", 0),
+                    "connected_clients": nd.get("connected_clients", 0),
+                    "role": "",
+                })
+
+        # Build per-node client mapping from local API data
+        for node_mac, clients in local_node_clients.items():
+            node_name = node_mac_to_name.get(node_mac, node_mac)
+            for c in clients:
+                raw_mac = c.get("mac", "")
+                mac_clean = raw_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
+                if len(mac_clean) == 12:
+                    normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                    client_to_node[normalized] = {
+                        "node_mac": node_mac,
+                        "node_name": node_name,
+                        "connection_type": c.get("connection_type", ""),
+                        "client_mesh": c.get("client_mesh", False),
+                    }
+                    deco_clients[normalized] = c
 
         # Update node connected_clients counts from actual per-node queries
         node_client_counts = {}
@@ -822,31 +821,71 @@ async def get_topology() -> Dict[str, Any]:
         for node in nodes:
             node["connected_clients"] = node_client_counts.get(node["mac_address"], 0)
 
-        # Build devices list (from merged clients)
+        # Build devices list — prefer merged DB data, fall back to raw Deco clients
         devices = []
-        for merged_device in merged_devices:
-            device_mac = merged_device.get("mac_address", "")
-            device_id = merged_device.get("device_id", "")
-
-            devices.append({
-                "device_id": device_id,
-                "mac_address": device_mac,
-                "device_name": merged_device.get("deco_client_name") or merged_device.get("friendly_name") or "Unknown",
-                "status": merged_device.get("status"),
-                "friendly_name": merged_device.get("friendly_name"),
-                "vendor_name": merged_device.get("vendor_name"),
-                "current_ip": merged_device.get("current_ip", ""),
-                "connection_type": client_to_node.get(device_mac.lower(), {}).get("connection_type", ""),
-            })
+        if merged_devices:
+            for merged_device in merged_devices:
+                device_mac = merged_device.get("mac_address", "")
+                device_id = merged_device.get("device_id", "")
+                devices.append({
+                    "device_id": device_id,
+                    "mac_address": device_mac,
+                    "device_name": merged_device.get("deco_client_name") or merged_device.get("friendly_name") or "Unknown",
+                    "status": merged_device.get("status"),
+                    "friendly_name": merged_device.get("friendly_name"),
+                    "vendor_name": merged_device.get("vendor_name"),
+                    "current_ip": merged_device.get("current_ip", ""),
+                    "connection_type": client_to_node.get(device_mac.lower(), {}).get("connection_type", ""),
+                })
+        else:
+            # Fallback: build devices directly from Deco local API client data
+            logger.info(f"No merged devices, building from {len(deco_clients)} Deco clients")
+            for mac, dc in deco_clients.items():
+                dc_name = dc.get("name", "")
+                try:
+                    dc_name = base64.b64decode(dc_name).decode("utf-8")
+                except Exception:
+                    pass
+                devices.append({
+                    "device_id": mac,
+                    "mac_address": mac,
+                    "device_name": dc_name or "Unknown",
+                    "status": "online" if dc.get("online") else "offline",
+                    "friendly_name": dc_name,
+                    "vendor_name": "",
+                    "current_ip": dc.get("ip", ""),
+                    "connection_type": client_to_node.get(mac, {}).get("connection_type", ""),
+                })
 
         # Build relationships from per-node client mapping
         relationships = []
         seen = set()
-        for merged_device in merged_devices:
-            device_mac = merged_device.get("mac_address", "").lower()
-            device_id = merged_device.get("device_id", "")
-            node_info = client_to_node.get(device_mac)
+        all_device_macs = {d["mac_address"].lower() for d in devices}
+        # Also add any Deco clients not in the device list
+        for mac in client_to_node:
+            if mac not in all_device_macs:
+                dc = deco_clients.get(mac, {})
+                dc_name = dc.get("name", "")
+                try:
+                    dc_name = base64.b64decode(dc_name).decode("utf-8")
+                except Exception:
+                    pass
+                devices.append({
+                    "device_id": mac,
+                    "mac_address": mac,
+                    "device_name": dc_name or "Unknown",
+                    "status": "online" if dc.get("online") else "offline",
+                    "friendly_name": dc_name,
+                    "vendor_name": "",
+                    "current_ip": dc.get("ip", ""),
+                    "connection_type": client_to_node[mac].get("connection_type", ""),
+                })
+                all_device_macs.add(mac)
 
+        for device in devices:
+            device_mac = device["mac_address"].lower()
+            device_id = device["device_id"]
+            node_info = client_to_node.get(device_mac)
             if node_info and device_id:
                 rel_key = f"{device_id}_{node_info['node_mac']}"
                 if rel_key not in seen:
@@ -874,3 +913,232 @@ async def get_topology() -> Dict[str, Any]:
         if "401" in str(e) or "Unauthorized" in str(e):
             raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
         raise HTTPException(status_code=500, detail=f"Failed to fetch topology: {str(e)}")
+
+
+# 2026-03-11: NetworkX-based topology graph rendered as SVG.
+@router.get("/topology-graph")
+async def get_topology_graph() -> Response:
+    """Generate an SVG network topology graph using NetworkX."""
+    import io
+    import base64
+    import json as _json
+
+    try:
+        import networkx as nx
+        import matplotlib
+        matplotlib.use("Agg")  # Non-interactive backend
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Missing dependency: {e}")
+
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    try:
+        client = deco_service.deco_client
+
+        # 2026-03-11: Use get_topology_local() for a clean local session
+        local_data = None
+        try:
+            local_data = client.get_topology_local()
+        except Exception as e:
+            logger.warning(f"Local topology fetch failed for graph: {e}")
+
+        local_nodes = local_data.get("nodes", []) if local_data else []
+        node_clients = local_data.get("node_clients", {}) if local_data else {}
+
+        node_mac_to_name = {}
+        if local_nodes:
+            for node in local_nodes:
+                node_mac = node.get("mac", "")
+                nickname = node.get("nickname", "")
+                try:
+                    nickname = base64.b64decode(nickname).decode("utf-8")
+                except Exception:
+                    pass
+                node_mac_to_name[node_mac] = nickname or node.get("device_model", node_mac)
+        else:
+            cloud_nodes = deco_service.get_nodes_with_details()
+            for nd in cloud_nodes:
+                cloud_mac_raw = nd.get("raw_data", {}).get("deviceMac", "")
+                if not cloud_mac_raw:
+                    continue
+                mac_clean = cloud_mac_raw.lower().replace("-", "").replace(":", "")
+                if len(mac_clean) == 12:
+                    node_mac = "-".join(mac_clean[i:i+2].upper() for i in range(0, 12, 2))
+                else:
+                    node_mac = cloud_mac_raw
+                node_mac_to_name[node_mac] = nd.get("node_name", nd.get("raw_data", {}).get("alias", node_mac))
+
+        # Build NetworkX graph
+        G = nx.Graph()
+
+        # Add router (internet) node at center
+        G.add_node("internet", label="Internet", node_type="internet")
+
+        # Add Deco nodes and connect to internet
+        for node_mac, node_name in node_mac_to_name.items():
+            G.add_node(node_mac, label=node_name, node_type="deco")
+            G.add_edge("internet", node_mac)
+
+        # Add client devices
+        conn_colors = {
+            "band5": "#1565C0",
+            "band2_4": "#2E7D32",
+            "band6": "#283593",
+            "wired": "#C62828",
+        }
+        for node_mac, clients in node_clients.items():
+            for c in clients:
+                raw_mac = c.get("mac", "")
+                mac_clean = raw_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
+                if len(mac_clean) != 12:
+                    continue
+                normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+
+                dc_name = c.get("name", "")
+                try:
+                    dc_name = base64.b64decode(dc_name).decode("utf-8")
+                except Exception:
+                    pass
+
+                conn_type = c.get("connection_type", "")
+                is_online = c.get("online", False)
+                ip_addr = c.get("ip", "")
+
+                # Build label: name + IP + MAC
+                label_parts = [dc_name or "Unknown"]
+                if ip_addr:
+                    label_parts.append(ip_addr)
+                label_parts.append(normalized)
+
+                G.add_node(normalized,
+                           label="\n".join(label_parts),
+                           node_type="device",
+                           online=is_online,
+                           connection_type=conn_type)
+                G.add_edge(node_mac, normalized, connection_type=conn_type)
+
+        # Layout: use spring layout with Deco nodes as fixed positions in a circle
+        # Place internet at center, Deco nodes in inner ring, devices in outer ring
+        import math
+        pos = {}
+        deco_macs = list(node_mac_to_name.keys())
+        n_decos = len(deco_macs)
+
+        pos["internet"] = (0, 0)
+        for i, dm in enumerate(deco_macs):
+            angle = 2 * math.pi * i / max(n_decos, 1)
+            pos[dm] = (2.5 * math.cos(angle), 2.5 * math.sin(angle))
+
+        # Use spring layout for devices, seeded with fixed deco/internet positions
+        if len(G.nodes) > len(deco_macs) + 1:
+            fixed_nodes = ["internet"] + deco_macs
+            seed_pos = {n: pos.get(n, (0, 0)) for n in G.nodes}
+            # Give devices initial positions near their deco node
+            for node_mac, clients in node_clients.items():
+                deco_pos = pos.get(node_mac, (0, 0))
+                for idx, c in enumerate(clients):
+                    raw_mac = c.get("mac", "")
+                    mac_clean = raw_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
+                    if len(mac_clean) == 12:
+                        normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                        angle_offset = 2 * math.pi * idx / max(len(clients), 1)
+                        seed_pos[normalized] = (
+                            deco_pos[0] + 1.8 * math.cos(angle_offset),
+                            deco_pos[1] + 1.8 * math.sin(angle_offset),
+                        )
+            pos = nx.spring_layout(G, pos=seed_pos, fixed=fixed_nodes, k=1.5, iterations=50, seed=42)
+
+        # Draw the graph
+        fig, ax = plt.subplots(1, 1, figsize=(18, 14))
+        fig.patch.set_facecolor('#f3f6fa')
+        ax.set_facecolor('#f3f6fa')
+
+        # Categorize nodes
+        internet_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "internet"]
+        deco_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "deco"]
+        online_devices = [n for n, d in G.nodes(data=True) if d.get("node_type") == "device" and d.get("online")]
+        offline_devices = [n for n, d in G.nodes(data=True) if d.get("node_type") == "device" and not d.get("online")]
+
+        # Draw edges with connection type colors
+        for u, v, data in G.edges(data=True):
+            ct = data.get("connection_type", "")
+            color = conn_colors.get(ct, "#B0BEC5")
+            linewidth = 2.0 if ct == "wired" else 1.2
+            linestyle = "-" if ct else "--"
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)],
+                                   edge_color=color, width=linewidth,
+                                   style=linestyle, alpha=0.6, ax=ax)
+
+        # Draw nodes
+        nx.draw_networkx_nodes(G, pos, nodelist=internet_nodes,
+                               node_color="#FF6F00", node_size=800,
+                               node_shape="s", edgecolors="#E65100",
+                               linewidths=2, ax=ax)
+        nx.draw_networkx_nodes(G, pos, nodelist=deco_nodes,
+                               node_color="#1E8B52", node_size=600,
+                               node_shape="h", edgecolors="#145E37",
+                               linewidths=2, ax=ax)
+        nx.draw_networkx_nodes(G, pos, nodelist=online_devices,
+                               node_color="#42A5F5", node_size=200,
+                               node_shape="o", edgecolors="#1565C0",
+                               linewidths=1, ax=ax)
+        nx.draw_networkx_nodes(G, pos, nodelist=offline_devices,
+                               node_color="#BDBDBD", node_size=150,
+                               node_shape="o", edgecolors="#757575",
+                               linewidths=1, alpha=0.5, ax=ax)
+
+        # Draw labels
+        deco_labels = {n: G.nodes[n].get("label", n) for n in deco_nodes}
+        internet_labels = {"internet": "Internet"}
+        device_labels = {}
+        for n in online_devices + offline_devices:
+            device_labels[n] = G.nodes[n].get("label", n)
+
+        nx.draw_networkx_labels(G, pos, labels=internet_labels,
+                                font_size=10, font_weight="bold",
+                                font_color="white", ax=ax)
+        # Deco labels offset above
+        deco_label_pos = {n: (pos[n][0], pos[n][1] + 0.35) for n in deco_nodes}
+        nx.draw_networkx_labels(G, deco_label_pos, labels=deco_labels,
+                                font_size=9, font_weight="bold",
+                                font_color="#0f1a2a", ax=ax)
+        # Device labels offset below
+        device_label_pos = {n: (pos[n][0], pos[n][1] - 0.25) for n in device_labels}
+        nx.draw_networkx_labels(G, device_label_pos, labels=device_labels,
+                                font_size=5.5, font_color="#37474F", ax=ax)
+
+        # Legend
+        legend_items = [
+            mpatches.Patch(color="#FF6F00", label="Internet Gateway"),
+            mpatches.Patch(color="#1E8B52", label="Deco Node"),
+            mpatches.Patch(color="#42A5F5", label="Device (Online)"),
+            mpatches.Patch(color="#BDBDBD", label="Device (Offline)"),
+            mpatches.Patch(color="#1565C0", label="5 GHz"),
+            mpatches.Patch(color="#2E7D32", label="2.4 GHz"),
+            mpatches.Patch(color="#283593", label="6 GHz"),
+            mpatches.Patch(color="#C62828", label="Wired"),
+        ]
+        ax.legend(handles=legend_items, loc="upper left", fontsize=8,
+                  framealpha=0.9, fancybox=True)
+
+        ax.set_title(f"Network Topology — {len(deco_nodes)} Nodes, "
+                     f"{len(online_devices) + len(offline_devices)} Devices",
+                     fontsize=14, fontweight="bold", color="#0f1a2a", pad=15)
+        ax.axis("off")
+        plt.tight_layout()
+
+        # Render to SVG
+        buf = io.BytesIO()
+        fig.savefig(buf, format="svg", bbox_inches="tight", dpi=150)
+        plt.close(fig)
+        buf.seek(0)
+        svg_data = buf.getvalue()
+
+        return Response(content=svg_data, media_type="image/svg+xml")
+
+    except Exception as e:
+        logger.error(f"Failed to generate topology graph: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate topology graph: {str(e)}")

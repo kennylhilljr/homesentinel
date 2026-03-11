@@ -14,6 +14,7 @@ import uuid
 import json
 import base64
 import re
+import threading
 import requests
 from binascii import b2a_hex
 from hashlib import md5
@@ -21,6 +22,16 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+# 2026-03-11: Module-level lock for local API access.
+# The Deco only allows one active session — concurrent local sessions
+# invalidate each other's stok. Serialize all local API calls.
+_local_api_lock = threading.Lock()
+
+# 2026-03-11: Cache for local topology data — avoids re-authenticating every request.
+_topology_cache = None
+_topology_cache_time = None
+TOPOLOGY_CACHE_TTL = 30  # seconds
 
 try:
     from Crypto.Cipher import AES, PKCS1_v1_5
@@ -617,32 +628,103 @@ class DecoClient:
         if not HAS_CRYPTO:
             raise APIConnectionError("pycryptodome required for local API")
 
-        logger.info("Creating temporary local DecoClient for client list fetch")
-        local_client = DecoClient(
-            local_endpoint=self.local_endpoint,
-            use_cloud=False,
-            verify_ssl=False,
-        )
-        # Deco local API always expects 'admin' as username in signature hash
-        local_client.username = "admin"
-        local_client.password = self.password
-
-        try:
-            local_client.authenticate()
-
-            result = local_client._local_encrypted_request(
-                "admin/client?form=client_list",
-                json.dumps({"operation": "read", "params": {"device_mac": "default"}})
+        with _local_api_lock:
+            logger.info("Creating temporary local DecoClient for client list fetch")
+            local_client = DecoClient(
+                local_endpoint=self.local_endpoint,
+                use_cloud=False,
+                verify_ssl=False,
             )
-            clients = result.get("client_list", [])
-            for client in clients:
-                if "name" in client:
-                    client["name"] = self._decode_alias(client["name"])
+            local_client.username = "admin"
+            local_client.password = self.password
 
-            logger.info(f"Fetched {len(clients)} clients from local Deco API")
-            return clients
-        finally:
-            local_client.close()
+            try:
+                local_client.authenticate()
+
+                result = local_client._local_encrypted_request(
+                    "admin/client?form=client_list",
+                    json.dumps({"operation": "read", "params": {"device_mac": "default"}})
+                )
+                clients = result.get("client_list", [])
+                for client_item in clients:
+                    if "name" in client_item:
+                        client_item["name"] = self._decode_alias(client_item["name"])
+
+                logger.info(f"Fetched {len(clients)} clients from local Deco API")
+                return clients
+            finally:
+                local_client.close()
+
+    # 2026-03-11: Get per-node client lists and node list via local API.
+    # Creates a temp local session to avoid conflicts with the main cloud client.
+    def get_topology_local(self) -> Dict[str, Any]:
+        """Get node list and per-node client mappings via local Deco API.
+
+        Returns:
+            Dict with 'nodes' (list of node dicts) and 'node_clients' (node_mac -> list of clients)
+        """
+        if not HAS_CRYPTO:
+            raise APIConnectionError("pycryptodome required for local API")
+
+        # Return cached data if fresh enough
+        global _topology_cache, _topology_cache_time
+        import time
+        now = time.time()
+        if _topology_cache and _topology_cache_time and (now - _topology_cache_time) < TOPOLOGY_CACHE_TTL:
+            logger.debug("Returning cached topology data")
+            return _topology_cache
+
+        with _local_api_lock:
+            # Double-check cache after acquiring lock (another thread may have filled it)
+            now = time.time()
+            if _topology_cache and _topology_cache_time and (now - _topology_cache_time) < TOPOLOGY_CACHE_TTL:
+                return _topology_cache
+
+            logger.info("Creating temporary local DecoClient for topology fetch")
+            local_client = DecoClient(
+                local_endpoint=self.local_endpoint,
+                use_cloud=False,
+                verify_ssl=False,
+            )
+            local_client.username = "admin"
+            local_client.password = self.password
+
+            try:
+                local_client.authenticate()
+
+                # Get all nodes
+                node_result = local_client._local_encrypted_request(
+                    "admin/device?form=device_list",
+                    json.dumps({"operation": "read"})
+                )
+                nodes = node_result.get("device_list", [])
+                logger.info(f"Local API returned {len(nodes)} nodes")
+
+                # Get per-node clients
+                node_clients = {}
+                for node in nodes:
+                    node_mac = node.get("mac", "")
+                    try:
+                        result = local_client._local_encrypted_request(
+                            "admin/client?form=client_list",
+                            json.dumps({"operation": "read", "params": {"device_mac": node_mac}})
+                        )
+                        clients = result.get("client_list", [])
+                        node_clients[node_mac] = clients
+                        logger.debug(f"Node {node_mac}: {len(clients)} clients")
+                    except Exception as e:
+                        logger.warning(f"Failed to get clients for node {node_mac}: {e}")
+                        node_clients[node_mac] = []
+
+                result = {"nodes": nodes, "node_clients": node_clients}
+                _topology_cache = result
+                _topology_cache_time = time.time()
+                return result
+            except Exception as e:
+                logger.error(f"get_topology_local failed: {e}")
+                raise
+            finally:
+                local_client.close()
 
     def rename_client(self, mac_address: str, new_name: str) -> bool:
         """Rename a client device on the Deco router via local API.
