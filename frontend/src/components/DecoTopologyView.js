@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { buildUrl } from '../utils/apiConfig';
 import {
   FaLaptop, FaMobileAlt, FaTv, FaCamera, FaPrint,
@@ -75,6 +75,20 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [viewMode, setViewMode] = useState('graph'); // 'graph' or 'cards'
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const downloadRef = useRef(null);
+
+  // Close download menu when clicking outside
+  useEffect(() => {
+    if (!downloadMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (downloadRef.current && !downloadRef.current.contains(e.target)) {
+        setDownloadMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [downloadMenuOpen]);
 
   const fetchTopology = useCallback(async () => {
     setLoading(true);
@@ -197,6 +211,102 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
     fetchGraph();
   };
 
+  // 2026-03-11: Download topology as SVG
+  const downloadSvg = () => {
+    if (!graphSvg) return;
+    const blob = new Blob([graphSvg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `homesentinel-topology-${new Date().toISOString().slice(0, 10)}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setDownloadMenuOpen(false);
+  };
+
+  // 2026-03-11: Download topology as PNG (render SVG to canvas)
+  const downloadPng = () => {
+    if (!graphSvg) return;
+    const svgBlob = new Blob([graphSvg], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2; // 2x resolution for crisp output
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, img.width, img.height);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(svgUrl);
+      canvas.toBlob((blob) => {
+        const pngUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = pngUrl;
+        a.download = `homesentinel-topology-${new Date().toISOString().slice(0, 10)}.png`;
+        a.click();
+        URL.revokeObjectURL(pngUrl);
+      }, 'image/png');
+    };
+    img.src = svgUrl;
+    setDownloadMenuOpen(false);
+  };
+
+  // 2026-03-11: Generate and download Mermaid diagram from topology data
+  const downloadMermaid = () => {
+    if (!topology) return;
+    const lines = ['graph LR'];
+    const safeId = (s) => s.replace(/[^a-zA-Z0-9_]/g, '_');
+
+    // Add Deco nodes
+    for (const node of (topology.nodes || [])) {
+      const id = safeId(node.node_id);
+      const label = node.node_name || node.node_id;
+      const role = node.role ? ` (${node.role})` : '';
+      lines.push(`    ${id}["${label}${role}"]`);
+    }
+
+    // Build relationship map
+    const relMap = {};
+    for (const rel of (topology.relationships || [])) {
+      relMap[rel.device_id] = rel;
+    }
+
+    // Add devices grouped by node
+    for (const node of (topology.nodes || [])) {
+      const nodeId = safeId(node.node_id);
+      const nodeDevices = (topology.devices || []).filter(d => {
+        const rel = relMap[d.device_id];
+        return rel && rel.node_id === node.node_id;
+      });
+      for (const dev of nodeDevices) {
+        const devId = safeId(dev.device_id);
+        const name = dev.friendly_name || dev.device_name || dev.mac_address || 'Unknown';
+        const rel = relMap[dev.device_id];
+        const conn = rel ? rel.connection_type || '' : '';
+        let connLabel = '';
+        if (conn.includes('band5')) connLabel = '5 GHz';
+        else if (conn.includes('band2')) connLabel = '2.4 GHz';
+        else if (conn.includes('band6')) connLabel = '6 GHz';
+        else if (conn === 'wired') connLabel = 'Wired';
+        const arrow = connLabel ? `-- "${connLabel}" ---` : '---';
+        lines.push(`    ${nodeId} ${arrow} ${devId}("${name}")`);
+      }
+    }
+
+    const mermaidText = lines.join('\n');
+    const blob = new Blob([mermaidText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `homesentinel-topology-${new Date().toISOString().slice(0, 10)}.mmd`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setDownloadMenuOpen(false);
+  };
+
   return (
     <div className="deco-topology-view">
       {/* Header */}
@@ -224,23 +334,44 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
           <button onClick={handleRefresh} disabled={loading || graphLoading} className="btn btn-primary">
             {(loading || graphLoading) ? (<><span className="spinner"></span>Refreshing...</>) : (<><span className="refresh-icon">&#10227;</span>Refresh</>)}
           </button>
-          {/* 2026-03-11: Download topology diagram as SVG */}
+          {/* 2026-03-11: Download topology diagram — SVG, PNG, or Mermaid */}
           {graphSvg && viewMode === 'graph' && (
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                const blob = new Blob([graphSvg], { type: 'image/svg+xml' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `homesentinel-topology-${new Date().toISOString().slice(0, 10)}.svg`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              title="Download topology diagram as SVG"
-            >
-              Download Diagram
-            </button>
+            <div ref={downloadRef} className="download-dropdown" style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setDownloadMenuOpen(prev => !prev)}
+                title="Download topology diagram"
+              >
+                Download Diagram &#9662;
+              </button>
+              {downloadMenuOpen && (
+                <div className="download-menu" style={{
+                  position: 'absolute', top: '100%', left: 0, marginTop: 4,
+                  background: '#fff', border: '1px solid #ccc', borderRadius: 6,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, minWidth: 160,
+                  overflow: 'hidden'
+                }}>
+                  <button className="download-menu-item" onClick={downloadSvg}
+                    style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none',
+                      background: 'none', textAlign: 'left', cursor: 'pointer', fontSize: 14 }}
+                    onMouseEnter={e => e.target.style.background = '#f0f0f0'}
+                    onMouseLeave={e => e.target.style.background = 'none'}
+                  >SVG (Vector)</button>
+                  <button className="download-menu-item" onClick={downloadPng}
+                    style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none',
+                      background: 'none', textAlign: 'left', cursor: 'pointer', fontSize: 14 }}
+                    onMouseEnter={e => e.target.style.background = '#f0f0f0'}
+                    onMouseLeave={e => e.target.style.background = 'none'}
+                  >PNG (Image)</button>
+                  <button className="download-menu-item" onClick={downloadMermaid}
+                    style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none',
+                      background: 'none', textAlign: 'left', cursor: 'pointer', fontSize: 14 }}
+                    onMouseEnter={e => e.target.style.background = '#f0f0f0'}
+                    onMouseLeave={e => e.target.style.background = 'none'}
+                  >Mermaid (.mmd)</button>
+                </div>
+              )}
+            </div>
           )}
           <div className="auto-refresh-toggle">
             <input type="checkbox" id="autoRefreshTopology" checked={autoRefreshEnabled} onChange={(e) => setAutoRefreshEnabled(e.target.checked)} />
