@@ -187,73 +187,45 @@
   font-size: 16px;
 }
 
-/* SVG Container */
-.svg-container {
+/* Graph Container (react-force-graph-2d) */
+.graph-container {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  overflow: auto;
-  padding: 10px;
+  overflow: hidden;
+  position: relative;
 }
 
-.topology-svg {
-  width: 100%;
-  height: auto;
-  min-height: 500px;
-  display: block;
+.graph-container canvas {
+  border-radius: 8px;
 }
 
-.node-circle {
-  transition: filter 0.3s ease;
-}
-
-.node-circle.online {
-  fill: var(--success, #1e8b52);
-}
-
-.node-circle.offline {
-  fill: var(--text-muted, #556277);
-}
-
-.node-circle:hover {
-  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.3));
-  cursor: pointer;
-}
-
-.device-circle {
-  transition: filter 0.3s ease;
-}
-
-.device-circle.online {
-  fill: var(--brand, #0b5cab);
-}
-
-.device-circle.offline {
-  fill: var(--border, #d4dde8);
-}
-
-.device-circle:hover {
-  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.3));
-  cursor: pointer;
-}
-
-.node-label {
+/* Hover tooltip */
+.topology-tooltip {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 26, 42, 0.92);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   pointer-events: none;
-  user-select: none;
 }
 
-.node-status {
-  pointer-events: none;
-  user-select: none;
+.topology-tooltip strong {
+  font-size: 14px;
 }
 
-.device-label {
-  pointer-events: none;
-  user-select: none;
-}
-
-.topology-line {
-  pointer-events: none;
+.topology-tooltip span {
+  opacity: 0.8;
 }
 
 /* Error Container */

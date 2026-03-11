@@ -34,6 +34,8 @@ function App() {
     device_type: '',
     notes: '',
   });
+  // 2026-03-10: Deco node mapping — which Deco each client is connected to
+  const [clientNodeMap, setClientNodeMap] = useState({});
 
   useEffect(() => {
     // Check backend API health
@@ -89,16 +91,31 @@ function App() {
       }
     };
 
+    // 2026-03-10: Fetch Deco client-to-node mapping for dashboard "Deco" column
+    const getClientNodeMap = async () => {
+      try {
+        const response = await fetch(buildUrl('/deco/client-node-map'));
+        if (response.ok) {
+          const data = await response.json();
+          setClientNodeMap(data.client_node_map || {});
+        }
+      } catch (error) {
+        // Silently fail — Deco may not be configured
+      }
+    };
+
     checkHealth();
     getDevices();
     getPollingConfig();
     getDeviceGroups();
+    getClientNodeMap();
 
     const interval = setInterval(() => {
       checkHealth();
       getDevices();
       getPollingConfig();
       getDeviceGroups();
+      getClientNodeMap();
     }, 5000);
 
     return () => clearInterval(interval);
@@ -267,8 +284,11 @@ function App() {
         return (device.friendly_name || device.deco_name || device.mac_address || '').toLowerCase();
       case 'alexaName':
         return (device.alexa_name || '').toLowerCase();
-      case 'alexaType':
-        return (device.alexa_device_type || '').toLowerCase();
+      case 'decoNode': {
+        const mac = (device.mac_address || '').toLowerCase();
+        const nodeInfo = clientNodeMap[mac];
+        return (nodeInfo ? nodeInfo.node_name : '').toLowerCase();
+      }
       case 'status':
         return (device.status || '').toLowerCase();
       case 'ip':
@@ -306,10 +326,12 @@ function App() {
     const q = deviceQuery.trim().toLowerCase();
     if (!q) return true;
 
+    const mac = (device.mac_address || '').toLowerCase();
+    const nodeInfo = clientNodeMap[mac];
     const searchableFields = [
       device.deco_name,
       device.alexa_name,
-      device.alexa_device_type,
+      nodeInfo ? nodeInfo.node_name : '',
       device.friendly_name,
       device.hostname,
       device.mac_address,
@@ -524,8 +546,8 @@ function App() {
                       </button>
                     </th>
                     <th>
-                      <button className="sort-button" onClick={() => requestSort('alexaType')}>
-                        Alexa Type <span className="sort-indicator">{getSortIndicator('alexaType')}</span>
+                      <button className="sort-button" onClick={() => requestSort('decoNode')}>
+                        Deco <span className="sort-indicator">{getSortIndicator('decoNode')}</span>
                       </button>
                     </th>
                     <th>
@@ -639,8 +661,19 @@ function App() {
                           </div>
                         )}
                       </td>
-                      <td className="alexa-device-type">
-                        {device.alexa_device_type || <span className="na-text">N/A</span>}
+                      <td className="deco-node-cell">
+                        {(() => {
+                          const mac = (device.mac_address || '').toLowerCase();
+                          const nodeInfo = clientNodeMap[mac];
+                          if (nodeInfo) {
+                            return (
+                              <span className="deco-node-name" title={`Connected via ${nodeInfo.connection_type || 'unknown'}`}>
+                                {nodeInfo.node_name}
+                              </span>
+                            );
+                          }
+                          return <span className="na-text">—</span>;
+                        })()}
                       </td>
                       <td className="status">
                         <span className={`status-badge ${device.status === 'online' ? 'online' : 'offline'}`}>

@@ -587,6 +587,71 @@ async def get_qos_settings() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to fetch QoS settings: {str(e)}")
 
 
+# 2026-03-10: Lightweight endpoint returning client MAC → connected Deco node name.
+# Used by the dashboard to show which Deco each device is connected to.
+@router.get("/client-node-map")
+async def get_client_node_map() -> Dict[str, Any]:
+    """Return a mapping of client MAC addresses to their connected Deco node names."""
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    try:
+        import base64, json as _json
+        client = deco_service.deco_client
+
+        # Ensure we're authenticated for local API
+        if not getattr(client, '_stok', None):
+            client.authenticate()
+
+        # Get node list
+        nodes = client._local_encrypted_request(
+            "admin/device?form=device_list",
+            _json.dumps({"operation": "read"})
+        )
+        node_list = nodes.get("device_list", [])
+
+        # Build per-node client mapping
+        mapping = {}  # normalized MAC -> { node_name, node_mac, connection_type }
+        node_names = {}  # node_mac -> node_name (for topology use)
+        for node in node_list:
+            node_mac = node.get("mac", "")
+            nickname = node.get("nickname", "")
+            try:
+                nickname = base64.b64decode(nickname).decode("utf-8")
+            except Exception:
+                pass
+            node_names[node_mac] = nickname or node.get("device_model", node_mac)
+
+            # Query clients for this node
+            try:
+                result = client._local_encrypted_request(
+                    "admin/client?form=client_list",
+                    _json.dumps({"operation": "read", "params": {"device_mac": node_mac}})
+                )
+                for c in result.get("client_list", []):
+                    raw_mac = c.get("mac", "")
+                    # Normalize to aa:bb:cc:dd:ee:ff
+                    mac_clean = raw_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
+                    if len(mac_clean) == 12:
+                        normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                        mapping[normalized] = {
+                            "node_name": node_names[node_mac],
+                            "node_mac": node_mac,
+                            "connection_type": c.get("connection_type", ""),
+                        }
+            except Exception as e:
+                logger.debug(f"Failed to get clients for node {node_mac}: {e}")
+
+        return {
+            "client_node_map": mapping,
+            "nodes": node_names,
+            "total_mapped": len(mapping),
+        }
+    except Exception as e:
+        logger.error(f"Failed to build client-node map: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to build client-node map: {str(e)}")
+
+
 @router.get("/topology")
 async def get_topology() -> Dict[str, Any]:
     """
@@ -668,11 +733,20 @@ async def get_topology() -> Dict[str, Any]:
                 "status": merged_device.get("status"),
                 "friendly_name": merged_device.get("friendly_name"),
                 "vendor_name": merged_device.get("vendor_name"),
+                # 2026-03-10: Added IP and connection_type for topology view
+                "current_ip": merged_device.get("current_ip", ""),
+                "connection_type": merged_device.get("connection_type", ""),
             })
 
         # Build relationships (device -> node connections)
         relationships = []
         seen_relationships = set()
+
+        # 2026-03-10: Build a MAC → connection_type lookup from Deco client data
+        deco_conn_types = {}
+        for deco_client in deco_clients:
+            dmac = (deco_client.get("macAddress") or deco_client.get("mac_address") or "").lower().replace("-", ":").replace(" ", "")
+            deco_conn_types[dmac] = deco_client.get("connectionType") or deco_client.get("connection_type") or ""
 
         for deco_client in deco_clients:
             client_mac = deco_client.get("macAddress") or deco_client.get("mac_address") or ""
@@ -701,6 +775,7 @@ async def get_topology() -> Dict[str, Any]:
                         "device_mac": normalized_client_mac,
                         "node_id": node_id,
                         "node_mac": node_mac,
+                        "connection_type": deco_conn_types.get(normalized_client_mac, ""),
                     })
                     seen_relationships.add(rel_key)
 
