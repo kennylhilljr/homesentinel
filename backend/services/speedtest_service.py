@@ -26,11 +26,16 @@ class SpeedTestService:
         self.chester_client = chester_client
 
     def _get_ssh_creds(self) -> Dict[str, str]:
-        """Get Chester SSH credentials from the client or defaults."""
+        """Get Chester SSH credentials for speedtest.
+
+        2026-03-11: Chester HTTP API uses username 'admin', but SSH requires 'root'.
+        Always use 'root' for SSH regardless of chester_client.username.
+        Password is the same for both.
+        """
         if self.chester_client:
             return {
                 "host": self.chester_client.host or "192.168.12.1",
-                "username": self.chester_client.username or "root",
+                "username": "root",  # SSH always uses root, not admin
                 "password": self.chester_client.password or "",
             }
         return {"host": "192.168.12.1", "username": "root", "password": ""}
