@@ -1028,13 +1028,25 @@ async def get_topology_graph() -> Response:
         if cell_id:
             tower_label += f"\nCellID: {cell_id}"
 
-        # Build band labels for the tower-to-waveform link
+        # 2026-03-11: Build clean band labels for the tower-to-waveform link
+        import re as _re
         ca_bands = chester_info.get("ca_band", [])
         conn_type_str = chester_info.get("connection_type", "NR5G-SA")
         band_str = chester_info.get("band", "")
         tower_bands = []
         for cab in ca_bands:
-            tower_bands.append(cab.strip().strip('"'))
+            # Extract just the band name (e.g. "NR5G BAND 41") from raw AT output
+            band_matches = _re.findall(r'((?:NR5G|LTE)\s+BAND\s+\d+)', str(cab), _re.IGNORECASE)
+            if band_matches:
+                for bm in band_matches:
+                    clean = bm.strip()
+                    if clean not in tower_bands:
+                        tower_bands.append(clean)
+            else:
+                # Fallback: use as-is but truncate
+                clean = str(cab).strip().strip('"')[:30]
+                if clean:
+                    tower_bands.append(clean)
         if not tower_bands and band_str:
             tower_bands.append(f"Band {band_str}")
 
@@ -1200,8 +1212,8 @@ async def get_topology_graph() -> Response:
         online_devices = [n for n, d in G.nodes(data=True) if d.get("node_type") == "device" and d.get("online")]
         offline_devices = [n for n, d in G.nodes(data=True) if d.get("node_type") == "device" and not d.get("online")]
 
-        # Draw edges with connection type colors and band labels
-        edge_labels = {}
+        # Draw edges with connection type colors
+        infra_edge_labels = []  # collect for manual placement
         for u, v, edata in G.edges(data=True):
             ct = edata.get("connection_type", "")
             color = conn_colors.get(ct, "#B0BEC5")
@@ -1210,20 +1222,21 @@ async def get_topology_graph() -> Response:
             nx.draw_networkx_edges(G, pos, edgelist=[(u, v)],
                                    edge_color=color, width=linewidth,
                                    style=linestyle, alpha=0.7, ax=ax)
-            # Add band/connection labels on infrastructure edges
             elabel = edata.get("label", "")
             if elabel:
-                edge_labels[(u, v)] = elabel
+                infra_edge_labels.append((u, v, elabel))
 
-        # 2026-03-11: Draw edge labels — horizontal, larger font for readability
-        if edge_labels:
-            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
-                                         font_size=8, font_color="#4A148C",
-                                         rotate=False,
-                                         bbox=dict(boxstyle="round,pad=0.3",
-                                                   facecolor="white", alpha=0.9,
-                                                   edgecolor="#CE93D8"),
-                                         ax=ax)
+        # 2026-03-11: Draw edge labels manually with ax.text for guaranteed horizontal text
+        for u, v, label_text in infra_edge_labels:
+            ux, uy = pos[u]
+            vx, vy = pos[v]
+            mx, my = (ux + vx) / 2, (uy + vy) / 2
+            ax.text(mx, my + 0.35, label_text,
+                    fontsize=7, color="#4A148C", fontweight="bold",
+                    ha="center", va="bottom", rotation=0,
+                    bbox=dict(boxstyle="round,pad=0.3",
+                              facecolor="white", alpha=0.9,
+                              edgecolor="#CE93D8"))
 
         # Draw nodes — infrastructure chain
         nx.draw_networkx_nodes(G, pos, nodelist=tower_nodes,
@@ -1251,25 +1264,32 @@ async def get_topology_graph() -> Response:
                                node_shape="o", edgecolors="#757575",
                                linewidths=1, alpha=0.5, ax=ax)
 
-        # 2026-03-11: Draw labels — dark text above nodes for readability
-        # Infrastructure labels (tower, waveform, chester) offset above with dark colors
-        for node_list, y_off, fsize, fweight, fcolor in [
-            (tower_nodes, 0.55, 10, "bold", "#4A148C"),
-            (waveform_nodes, 0.50, 9, "bold", "#880E4F"),
-            (chester_nodes, 0.50, 9, "bold", "#E65100"),
+        # 2026-03-11: Draw infrastructure labels with ax.text for precise control
+        for node_id, y_off, fsize, fcolor, bg_color in [
+            ("tower", -0.55, 10, "#4A148C", "#F3E5F5"),
+            ("waveform", -0.50, 9, "#880E4F", "#FCE4EC"),
+            ("chester", -0.55, 9, "#E65100", "#FFF3E0"),
         ]:
-            labels = {n: G.nodes[n].get("label", n) for n in node_list}
-            label_pos = {n: (pos[n][0], pos[n][1] + y_off) for n in node_list}
-            nx.draw_networkx_labels(G, label_pos, labels=labels,
-                                    font_size=fsize, font_weight=fweight,
-                                    font_color=fcolor, ax=ax)
+            if node_id in pos:
+                lx, ly = pos[node_id]
+                label = G.nodes[node_id].get("label", node_id)
+                ax.text(lx, ly + y_off, label,
+                        fontsize=fsize, color=fcolor, fontweight="bold",
+                        ha="center", va="top", rotation=0,
+                        bbox=dict(boxstyle="round,pad=0.3",
+                                  facecolor=bg_color, alpha=0.9,
+                                  edgecolor=fcolor, linewidth=0.5))
 
-        # Deco labels offset above
-        deco_labels = {n: G.nodes[n].get("label", n) for n in deco_nodes}
-        deco_label_pos = {n: (pos[n][0], pos[n][1] + 0.45) for n in deco_nodes}
-        nx.draw_networkx_labels(G, deco_label_pos, labels=deco_labels,
-                                font_size=9, font_weight="bold",
-                                font_color="#0f1a2a", ax=ax)
+        # Deco labels below nodes with background
+        for n in deco_nodes:
+            dx, dy = pos[n]
+            label = G.nodes[n].get("label", n)
+            ax.text(dx, dy - 0.45, label,
+                    fontsize=9, color="#0f1a2a", fontweight="bold",
+                    ha="center", va="top", rotation=0,
+                    bbox=dict(boxstyle="round,pad=0.2",
+                              facecolor="#E8F5E9", alpha=0.9,
+                              edgecolor="#1E8B52", linewidth=0.5))
 
         # Device labels offset below
         device_labels = {}
