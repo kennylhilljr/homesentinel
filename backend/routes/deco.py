@@ -1122,6 +1122,19 @@ async def get_topology_graph() -> Response:
                 is_online = c.get("online", False)
                 ip_addr = c.get("ip", "")
 
+                # 2026-03-11: Fall back to DB current_ip if Deco doesn't provide IP
+                if not ip_addr:
+                    try:
+                        db_conn = deco_service._device_repo.db.get_connection()
+                        row = db_conn.execute(
+                            "SELECT current_ip FROM network_devices WHERE mac_address = ?",
+                            (normalized,)
+                        ).fetchone()
+                        if row and row[0]:
+                            ip_addr = row[0]
+                    except Exception:
+                        pass
+
                 # Build label: name + IP + MAC
                 display_name = db_dev_name or dc_name or "Unknown"
                 label_parts = [display_name]
@@ -1136,42 +1149,46 @@ async def get_topology_graph() -> Response:
                            connection_type=conn_type)
                 G.add_edge(node_mac, normalized, connection_type=conn_type)
 
-        # Layout: tower at top, waveform below, chester center, decos in ring, devices outer
+        # 2026-03-11: Horizontal layout — tower on left, devices on right
         import math
         pos = {}
         n_decos = len(deco_macs)
 
-        # Vertical chain: tower → waveform → chester
-        pos["tower"] = (0, 5.5)
-        pos["waveform"] = (0, 3.8)
-        pos["chester"] = (0, 2.0)
+        # Horizontal chain: tower → waveform → chester → decos → devices
+        pos["tower"] = (0, 0)
+        pos["waveform"] = (3.5, 0)
+        pos["chester"] = (7.0, 0)
 
-        # Deco nodes in a semicircle below Chester
-        for i, dm in enumerate(deco_macs):
-            angle = math.pi + math.pi * (i + 0.5) / max(n_decos, 1)
-            pos[dm] = (3.0 * math.cos(angle), 2.0 + 2.5 * math.sin(angle))
+        # Deco nodes fanned out vertically to the right of Chester
+        deco_x = 11.0
+        if n_decos == 1:
+            pos[deco_macs[0]] = (deco_x, 0)
+        else:
+            for i, dm in enumerate(deco_macs):
+                y_offset = (i - (n_decos - 1) / 2) * 2.5
+                pos[dm] = (deco_x, y_offset)
 
         # Use spring layout for devices, seeded with fixed infrastructure positions
         infra_nodes = ["tower", "waveform", "chester"] + deco_macs
         if len(G.nodes) > len(infra_nodes):
             seed_pos = {n: pos.get(n, (0, 0)) for n in G.nodes}
-            # Give devices initial positions near their deco node
+            # Give devices initial positions to the right of their deco node
             for node_mac, clients in node_clients.items():
-                deco_pos = pos.get(node_mac, (0, 0))
+                deco_pos = pos.get(node_mac, (deco_x, 0))
                 for idx, c in enumerate(clients):
                     raw_mac = c.get("mac", "")
                     mac_clean = raw_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
                     if len(mac_clean) == 12:
                         normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
-                        angle_offset = 2 * math.pi * idx / max(len(clients), 1)
+                        angle_offset = -math.pi / 3 + (2 * math.pi / 3) * idx / max(len(clients) - 1, 1)
                         seed_pos[normalized] = (
-                            deco_pos[0] + 1.8 * math.cos(angle_offset),
-                            deco_pos[1] + 1.8 * math.sin(angle_offset),
+                            deco_pos[0] + 3.0,
+                            deco_pos[1] + 2.0 * math.sin(angle_offset),
                         )
             pos = nx.spring_layout(G, pos=seed_pos, fixed=infra_nodes, k=1.5, iterations=50, seed=42)
 
-        # Draw the graph
-        fig, ax = plt.subplots(1, 1, figsize=(20, 16))
+        # Draw the graph — wide for horizontal layout
+        fig, ax = plt.subplots(1, 1, figsize=(28, 14))
         fig.patch.set_facecolor('#f3f6fa')
         ax.set_facecolor('#f3f6fa')
 
@@ -1198,12 +1215,13 @@ async def get_topology_graph() -> Response:
             if elabel:
                 edge_labels[(u, v)] = elabel
 
-        # Draw edge labels (band info on tower/waveform/chester links)
+        # 2026-03-11: Draw edge labels — horizontal, larger font for readability
         if edge_labels:
             nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
-                                         font_size=6, font_color="#4A148C",
-                                         bbox=dict(boxstyle="round,pad=0.2",
-                                                   facecolor="white", alpha=0.8,
+                                         font_size=8, font_color="#4A148C",
+                                         rotate=False,
+                                         bbox=dict(boxstyle="round,pad=0.3",
+                                                   facecolor="white", alpha=0.9,
                                                    edgecolor="#CE93D8"),
                                          ax=ax)
 
@@ -1233,12 +1251,12 @@ async def get_topology_graph() -> Response:
                                node_shape="o", edgecolors="#757575",
                                linewidths=1, alpha=0.5, ax=ax)
 
-        # Draw labels
-        # Infrastructure labels (tower, waveform, chester) offset above
+        # 2026-03-11: Draw labels — dark text above nodes for readability
+        # Infrastructure labels (tower, waveform, chester) offset above with dark colors
         for node_list, y_off, fsize, fweight, fcolor in [
-            (tower_nodes, 0.45, 9, "bold", "white"),
-            (waveform_nodes, 0.40, 8, "bold", "white"),
-            (chester_nodes, 0.40, 8, "bold", "white"),
+            (tower_nodes, 0.55, 10, "bold", "#4A148C"),
+            (waveform_nodes, 0.50, 9, "bold", "#880E4F"),
+            (chester_nodes, 0.50, 9, "bold", "#E65100"),
         ]:
             labels = {n: G.nodes[n].get("label", n) for n in node_list}
             label_pos = {n: (pos[n][0], pos[n][1] + y_off) for n in node_list}
@@ -1248,7 +1266,7 @@ async def get_topology_graph() -> Response:
 
         # Deco labels offset above
         deco_labels = {n: G.nodes[n].get("label", n) for n in deco_nodes}
-        deco_label_pos = {n: (pos[n][0], pos[n][1] + 0.35) for n in deco_nodes}
+        deco_label_pos = {n: (pos[n][0], pos[n][1] + 0.45) for n in deco_nodes}
         nx.draw_networkx_labels(G, deco_label_pos, labels=deco_labels,
                                 font_size=9, font_weight="bold",
                                 font_color="#0f1a2a", ax=ax)
@@ -1257,7 +1275,7 @@ async def get_topology_graph() -> Response:
         device_labels = {}
         for n in online_devices + offline_devices:
             device_labels[n] = G.nodes[n].get("label", n)
-        device_label_pos = {n: (pos[n][0], pos[n][1] - 0.25) for n in device_labels}
+        device_label_pos = {n: (pos[n][0], pos[n][1] - 0.30) for n in device_labels}
         nx.draw_networkx_labels(G, device_label_pos, labels=device_labels,
                                 font_size=5.5, font_color="#37474F", ax=ax)
 
