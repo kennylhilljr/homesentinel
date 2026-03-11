@@ -1,30 +1,39 @@
 /**
  * API Configuration Utility
- * Provides a centralized way to manage API endpoints for both development and production
+ * Provides a centralized way to manage API endpoints for both development and production.
+ *
+ * 2026-03-11: Updated to auto-detect API base URL from the browser's current origin.
+ * When served from FastAPI (production/ZeroTier), the frontend and API share the same
+ * origin, so /api relative paths work automatically — no rebuild needed for different IPs.
  */
 
 /**
- * Get the base API URL from environment or window config
- * Supports:
- * - process.env.REACT_APP_API_URL environment variable
- * - window.__API_URL__ global variable (can be set by index.html or config script)
- * - Default fallback to /api (relative path for same-origin requests)
+ * Get the base API URL.
+ *
+ * Priority:
+ * 1. REACT_APP_API_URL env var (build-time override)
+ * 2. window.__API_URL__ global (runtime override via index.html)
+ * 3. /api relative path — works for both:
+ *    - CRA dev server (proxy in package.json → https://localhost:8443)
+ *    - FastAPI production build (same origin, /api/* routes handled by FastAPI)
  *
  * @returns {string} Base API URL without trailing slash
  */
 export function getApiUrl() {
-  // 1. Check environment variable (set during build)
+  // 1. Build-time override
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL;
   }
 
-  // 2. Check window global (for runtime configuration)
+  // 2. Runtime override (e.g. set in index.html before app loads)
   if (typeof window !== 'undefined' && window.__API_URL__) {
     return window.__API_URL__;
   }
 
-  // 3. Default: use relative path so CRA proxy handles the request
-  // The proxy in package.json forwards to https://localhost:8443
+  // 3. Relative /api — works everywhere:
+  //    Dev: CRA proxy forwards /api → https://localhost:8443/api
+  //    Prod: FastAPI serves both React build AND /api on the same port
+  //    ZeroTier: Same as prod — https://<zerotier-ip>:8443/api
   return '/api';
 }
 
@@ -35,12 +44,9 @@ export function getApiUrl() {
  */
 export function buildUrl(endpoint) {
   const baseUrl = getApiUrl();
-  // Ensure endpoint starts with /
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   return `${baseUrl}${normalizedEndpoint}`;
 }
-
-// Override: set REACT_APP_API_URL=https://localhost:8443/api in .env
 
 export default {
   getApiUrl,

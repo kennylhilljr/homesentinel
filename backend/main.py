@@ -4,14 +4,17 @@ HomeSentinel Backend - FastAPI Application
 Main entry point for the backend server
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import uvicorn
 import os
 import logging
 from datetime import datetime
 from typing import Optional
 import asyncio
+from pathlib import Path
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -48,14 +51,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS
+# 2026-03-11: CORS — allow localhost + any private network (ZeroTier, LAN)
+# ZeroTier is already encrypted at the network layer, safe to allow all origins.
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 2026-03-11: Serve React production build from FastAPI
+# After running: cd frontend && npm run build
+# The build/ folder is served as static files, so the entire app
+# runs on a single port (8443) — works identically via LAN or ZeroTier.
+_BACKEND_DIR = Path(__file__).resolve().parent
+_FRONTEND_BUILD = _BACKEND_DIR.parent / "frontend" / "build"
+
+if _FRONTEND_BUILD.is_dir():
+    # Serve static assets (JS, CSS, media) under /static
+    app.mount("/static", StaticFiles(directory=str(_FRONTEND_BUILD / "static")), name="static")
+    logger.info(f"Serving React build from {_FRONTEND_BUILD}")
 
 # Include routes
 app.include_router(deco_routes.router)
@@ -319,7 +336,9 @@ async def shutdown_event():
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Serve React app or health check JSON."""
+    if _FRONTEND_BUILD.is_dir():
+        return FileResponse(str(_FRONTEND_BUILD / "index.html"))
     return {
         "status": "ok",
         "message": "HomeSentinel API is running",
@@ -763,6 +782,24 @@ async def get_event_stats():
     except Exception as e:
         logger.error(f"Failed to get event stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# 2026-03-11: SPA catch-all — serve index.html for any non-API route
+# This lets React Router handle client-side routing (e.g. /speed-insights)
+@app.get("/{path:path}")
+async def spa_catch_all(request: Request, path: str):
+    """Catch-all: serve React index.html for non-API, non-static paths."""
+    # Don't intercept API routes or static files
+    if path.startswith("api/") or path.startswith("static/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    # Try to serve the exact file (e.g. favicon.ico, manifest.json)
+    exact = _FRONTEND_BUILD / path
+    if _FRONTEND_BUILD.is_dir() and exact.is_file():
+        return FileResponse(str(exact))
+    # Otherwise serve index.html for client-side routing
+    if _FRONTEND_BUILD.is_dir():
+        return FileResponse(str(_FRONTEND_BUILD / "index.html"))
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 if __name__ == "__main__":
