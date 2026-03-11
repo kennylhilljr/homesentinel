@@ -36,6 +36,8 @@ function App() {
   });
   // 2026-03-10: Deco node mapping — which Deco each client is connected to
   const [clientNodeMap, setClientNodeMap] = useState({});
+  // 2026-03-11: Set of normalized Deco node MACs (for hiding mesh toggle on nodes)
+  const [decoNodeMacs, setDecoNodeMacs] = useState(new Set());
 
   useEffect(() => {
     // Check backend API health
@@ -98,6 +100,13 @@ function App() {
         if (response.ok) {
           const data = await response.json();
           setClientNodeMap(data.client_node_map || {});
+          // 2026-03-11: Store normalized Deco node MACs for mesh toggle exclusion
+          if (data.nodes) {
+            const nodeMacs = new Set(
+              Object.keys(data.nodes).map(m => m.toLowerCase().replace(/-/g, ':'))
+            );
+            setDecoNodeMacs(nodeMacs);
+          }
         }
       } catch (error) {
         // Silently fail — Deco may not be configured
@@ -701,28 +710,35 @@ function App() {
                         {(() => {
                           const mac = (device.mac_address || '').toLowerCase();
                           const nodeInfo = clientNodeMap[mac];
-                          if (nodeInfo) {
-                            return (
-                              <div className="deco-node-info">
+                          // 2026-03-11: Check if this device is a Deco node itself (skip toggle for nodes)
+                          const isDecoNode = decoNodeMacs.has(mac);
+                          // 2026-03-11: Show mesh toggle for all devices except Deco nodes
+                          const meshValue = nodeInfo ? !!nodeInfo.client_mesh : false;
+                          return (
+                            <div className="deco-node-info">
+                              {nodeInfo ? (
                                 <span className="deco-node-name" title={`Connected via ${nodeInfo.connection_type || 'unknown'}`}>
                                   {nodeInfo.node_name}
                                 </span>
+                              ) : (
+                                <span className="na-text">—</span>
+                              )}
+                              {!isDecoNode && (
                                 <label
                                   className="mesh-toggle"
-                                  title={nodeInfo.client_mesh ? 'Mesh: ON — click to disable' : 'Mesh: OFF — click to enable'}
+                                  title={meshValue ? 'Mesh: ON — click to disable' : 'Mesh: OFF — click to enable'}
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <input
                                     type="checkbox"
-                                    checked={!!nodeInfo.client_mesh}
-                                    onChange={() => toggleClientMesh(device.mac_address, nodeInfo.client_mesh)}
+                                    checked={meshValue}
+                                    onChange={() => toggleClientMesh(device.mac_address, meshValue)}
                                   />
                                   <span className="mesh-slider"></span>
                                 </label>
-                              </div>
-                            );
-                          }
-                          return <span className="na-text">—</span>;
+                              )}
+                            </div>
+                          );
                         })()}
                       </td>
                       <td className="status">
