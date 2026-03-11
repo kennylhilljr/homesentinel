@@ -534,16 +534,30 @@
   color: var(--text);
 }
 
-/* 2026-03-11: Deco connection preference dropdown */
+/* 2026-03-11: Deco connection preference dropdown — transparent to match row */
 .deco-pref-select {
   font-size: 12px;
   padding: 2px 4px;
-  border: 1px solid var(--border, #d4dde8);
+  border: 1px solid transparent;
   border-radius: 4px;
-  background: var(--surface, #fff);
-  color: var(--text);
+  background: transparent;
+  color: inherit;
   cursor: pointer;
-  max-width: 130px;
+  max-width: 150px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23666'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  padding-right: 16px;
+}
+
+.deco-pref-select.row-online {
+  border-color: rgba(30, 139, 82, 0.3);
+}
+
+.deco-pref-select.row-offline {
+  border-color: rgba(220, 53, 69, 0.3);
 }
 
 .deco-pref-select:focus {
@@ -551,7 +565,7 @@
   border-color: var(--brand, #2363eb);
 }
 
-/* 2026-03-11: Auto/Pinned badge */
+/* 2026-03-11: Auto/Pinned badge — purple for auto, orange for pinned */
 .pref-badge {
   display: inline-block;
   padding: 1px 8px;
@@ -563,15 +577,16 @@
 }
 
 .pref-badge.auto {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #a5d6a7;
+  background: #f3e5f5;
+  color: #7b1fa2;
+  border: 1px solid #ce93d8;
 }
 
 .pref-badge.pinned {
   background: #fff3e0;
   color: #e65100;
   border: 1px solid #ffcc80;
+  cursor: pointer;
 }
 
 .mesh-toggle {

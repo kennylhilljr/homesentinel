@@ -772,37 +772,22 @@ function App() {
                             ? (decoNodesMap[device.preferred_deco_node] || device.preferred_deco_node)
                             : null;
                           const currentNodeName = nodeInfo ? nodeInfo.node_name : null;
+                          const isOnline = device.status === 'online';
                           return (
                             <div className="deco-node-info">
-                              {/* 2026-03-11: Show node name or preference dropdown */}
-                              {isPinned ? (
+                              {/* 2026-03-11: Dropdown with Auto + all Deco nodes */}
+                              {(nodeInfo || isPinned) ? (
                                 <select
-                                  className="deco-pref-select"
-                                  value={device.preferred_deco_node}
-                                  title={`Pinned to ${pinnedNodeName}`}
+                                  className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
+                                  value={isPinned ? device.preferred_deco_node : ''}
+                                  title={isPinned ? `Pinned to ${pinnedNodeName}` : `Connected to ${currentNodeName} (auto)`}
                                   onClick={(e) => e.stopPropagation()}
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setPreferredDecoNode(device.device_id, val === '' ? null : val);
                                   }}
                                 >
-                                  <option value="">Auto</option>
-                                  {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
-                                    <option key={nodeMac} value={nodeMac}>{name}</option>
-                                  ))}
-                                </select>
-                              ) : currentNodeName ? (
-                                <select
-                                  className="deco-pref-select"
-                                  value=""
-                                  title={`Connected to ${currentNodeName} (auto)`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (val) setPreferredDecoNode(device.device_id, val);
-                                  }}
-                                >
-                                  <option value="">{currentNodeName}</option>
+                                  <option value="">{currentNodeName ? `${currentNodeName} (Auto)` : 'Auto'}</option>
                                   {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
                                     <option key={nodeMac} value={nodeMac}>{name}</option>
                                   ))}
@@ -810,11 +795,11 @@ function App() {
                               ) : (
                                 <span className="na-text">—</span>
                               )}
-                              {/* 2026-03-11: Auto/Pinned badge */}
+                              {/* 2026-03-11: Auto/Pinned badge — purple for auto, orange for pinned */}
                               {!isDecoNode && (nodeInfo || isPinned) && (
                                 <span
                                   className={`pref-badge ${isPinned ? 'pinned' : 'auto'}`}
-                                  title={isPinned ? `Pinned to ${pinnedNodeName}` : 'Auto — connects to nearest node'}
+                                  title={isPinned ? `Pinned to ${pinnedNodeName} — click to revert to Auto` : 'Auto — connects to nearest node'}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (isPinned) {
