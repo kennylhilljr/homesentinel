@@ -1137,13 +1137,13 @@ async def get_topology_graph() -> Response:
                 # 2026-03-11: Fall back to DB current_ip if Deco doesn't provide IP
                 if not ip_addr:
                     try:
-                        db_conn = deco_service._device_repo.db.get_connection()
-                        row = db_conn.execute(
-                            "SELECT current_ip FROM network_devices WHERE mac_address = ?",
-                            (normalized,)
-                        ).fetchone()
-                        if row and row[0]:
-                            ip_addr = row[0]
+                        with deco_service._device_repo.db.get_connection() as db_conn:
+                            row = db_conn.execute(
+                                "SELECT current_ip FROM network_devices WHERE LOWER(mac_address) = ?",
+                                (normalized,)
+                            ).fetchone()
+                            if row and row[0]:
+                                ip_addr = row[0]
                     except Exception:
                         pass
 
