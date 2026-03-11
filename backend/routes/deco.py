@@ -638,6 +638,7 @@ async def get_client_node_map() -> Dict[str, Any]:
                             "node_name": node_names[node_mac],
                             "node_mac": node_mac,
                             "connection_type": c.get("connection_type", ""),
+                            "client_mesh": c.get("client_mesh", False),
                         }
             except Exception as e:
                 logger.debug(f"Failed to get clients for node {node_mac}: {e}")
@@ -650,6 +651,39 @@ async def get_client_node_map() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to build client-node map: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to build client-node map: {str(e)}")
+
+
+# 2026-03-10: Toggle mesh steering per client device.
+@router.post("/client-mesh")
+async def set_client_mesh(request: Request) -> Dict[str, Any]:
+    """Toggle mesh steering for a specific client device."""
+    if deco_service is None:
+        raise HTTPException(status_code=500, detail="Deco service not initialized")
+
+    try:
+        body = await request.json()
+        mac_address = body.get("mac_address")
+        mesh_enabled = body.get("mesh_enabled")
+
+        if not mac_address or mesh_enabled is None:
+            raise HTTPException(status_code=400, detail="mac_address and mesh_enabled are required")
+
+        client = deco_service.deco_client
+        result = client.set_client_mesh(mac_address, bool(mesh_enabled))
+        error_code = result.get("error_code", -1)
+
+        return {
+            "success": error_code == 0,
+            "mac_address": mac_address,
+            "mesh_enabled": mesh_enabled,
+            "error_code": error_code,
+            "raw_response": result,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to set client mesh: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to set client mesh: {str(e)}")
 
 
 @router.get("/topology")
@@ -698,33 +732,101 @@ async def get_topology() -> Dict[str, Any]:
         merged_result = correlation_service.get_merged_clients()
         merged_devices = merged_result.get("merged_devices", [])
 
-        # Get raw Deco clients to extract node associations
-        deco_clients = deco_service.deco_client.get_client_list()
+        import base64
+        import json as _json
 
-        # Build nodes list for topology (include MAC for relationships)
+        # 2026-03-10: Use local API per-node client query to build real relationships.
+        # The cloud API's get_client_list() does NOT include nodeID, so the old approach
+        # produced zero relationships. The local API's device_mac param returns clients
+        # per-node accurately.
+        client = deco_service.deco_client
+
+        # Authenticate for local API if needed
+        if not getattr(client, '_stok', None):
+            try:
+                client.authenticate()
+            except Exception as e:
+                logger.warning(f"Local Deco auth failed for topology: {e}")
+
+        # Get node list from local API for accurate MACs and nicknames
+        local_nodes = []
+        try:
+            node_result = client._local_encrypted_request(
+                "admin/device?form=device_list",
+                _json.dumps({"operation": "read"})
+            )
+            local_nodes = node_result.get("device_list", [])
+        except Exception as e:
+            logger.warning(f"Failed to get local node list: {e}")
+
+        # Build nodes list for topology
         nodes = []
-        node_id_to_mac = {}
-        for node in nodes_data:
-            # Extract MAC from raw data if available, otherwise use node_id
-            node_mac = node.get("raw_data", {}).get("macAddress") or node.get("raw_data", {}).get("mac_address") or node.get("node_id")
-            node_id_to_mac[node.get("node_id")] = node_mac
+        # Map node_mac -> node info for relationship building
+        node_mac_to_name = {}
+        for node in local_nodes:
+            node_mac = node.get("mac", "")
+            nickname = node.get("nickname", "")
+            try:
+                nickname = base64.b64decode(nickname).decode("utf-8")
+            except Exception:
+                pass
+            node_name = nickname or node.get("device_model", node_mac)
+            node_mac_to_name[node_mac] = node_name
+            role = node.get("role", "")
+
+            # Also get enriched data from deco_service nodes if available
+            enriched = {}
+            for nd in nodes_data:
+                raw_mac = nd.get("raw_data", {}).get("macAddress", "")
+                if raw_mac and raw_mac.lower().replace("-", ":") == node_mac.lower().replace("-", ":"):
+                    enriched = nd
+                    break
 
             nodes.append({
-                "node_id": node.get("node_id"),
-                "node_name": node.get("node_name"),
+                "node_id": node_mac,  # Use MAC as node_id for consistency
+                "node_name": node_name,
                 "mac_address": node_mac,
-                "status": node.get("status"),
-                "signal_strength": node.get("signal_strength"),
-                "connected_clients": node.get("connected_clients"),
+                "status": enriched.get("status", "online" if role else "unknown"),
+                "signal_strength": enriched.get("signal_strength", 0),
+                "connected_clients": enriched.get("connected_clients", 0),
+                "role": role,
             })
+
+        # Build per-node client mapping and relationships via local API
+        # client_mac -> { node_mac, node_name, connection_type }
+        client_to_node = {}
+        for node_mac, node_name in node_mac_to_name.items():
+            try:
+                result = client._local_encrypted_request(
+                    "admin/client?form=client_list",
+                    _json.dumps({"operation": "read", "params": {"device_mac": node_mac}})
+                )
+                for c in result.get("client_list", []):
+                    raw_mac = c.get("mac", "")
+                    mac_clean = raw_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
+                    if len(mac_clean) == 12:
+                        normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                        client_to_node[normalized] = {
+                            "node_mac": node_mac,
+                            "node_name": node_name,
+                            "connection_type": c.get("connection_type", ""),
+                        }
+            except Exception as e:
+                logger.debug(f"Failed to get clients for node {node_mac}: {e}")
+
+        # Update node connected_clients counts from actual per-node queries
+        node_client_counts = {}
+        for info in client_to_node.values():
+            nm = info["node_mac"]
+            node_client_counts[nm] = node_client_counts.get(nm, 0) + 1
+        for node in nodes:
+            node["connected_clients"] = node_client_counts.get(node["mac_address"], 0)
 
         # Build devices list (from merged clients)
         devices = []
-        device_mac_to_id = {}
         for merged_device in merged_devices:
             device_mac = merged_device.get("mac_address", "")
             device_id = merged_device.get("device_id", "")
-            device_mac_to_id[device_mac] = device_id
 
             devices.append({
                 "device_id": device_id,
@@ -733,51 +835,29 @@ async def get_topology() -> Dict[str, Any]:
                 "status": merged_device.get("status"),
                 "friendly_name": merged_device.get("friendly_name"),
                 "vendor_name": merged_device.get("vendor_name"),
-                # 2026-03-10: Added IP and connection_type for topology view
                 "current_ip": merged_device.get("current_ip", ""),
-                "connection_type": merged_device.get("connection_type", ""),
+                "connection_type": client_to_node.get(device_mac.lower(), {}).get("connection_type", ""),
             })
 
-        # Build relationships (device -> node connections)
+        # Build relationships from per-node client mapping
         relationships = []
-        seen_relationships = set()
+        seen = set()
+        for merged_device in merged_devices:
+            device_mac = merged_device.get("mac_address", "").lower()
+            device_id = merged_device.get("device_id", "")
+            node_info = client_to_node.get(device_mac)
 
-        # 2026-03-10: Build a MAC → connection_type lookup from Deco client data
-        deco_conn_types = {}
-        for deco_client in deco_clients:
-            dmac = (deco_client.get("macAddress") or deco_client.get("mac_address") or "").lower().replace("-", ":").replace(" ", "")
-            deco_conn_types[dmac] = deco_client.get("connectionType") or deco_client.get("connection_type") or ""
-
-        for deco_client in deco_clients:
-            client_mac = deco_client.get("macAddress") or deco_client.get("mac_address") or ""
-            node_id = deco_client.get("nodeID") or deco_client.get("node_id")
-
-            if client_mac and node_id:
-                # Normalize MAC for comparison
-                normalized_client_mac = client_mac.lower().replace("-", ":").replace(" ", "")
-
-                # Find device_id for this client
-                device_id = None
-                for merged_device in merged_devices:
-                    merged_mac = merged_device.get("mac_address", "").lower().replace("-", ":").replace(" ", "")
-                    if normalized_client_mac == merged_mac:
-                        device_id = merged_device.get("device_id")
-                        break
-
-                # Get node MAC
-                node_mac = node_id_to_mac.get(node_id, node_id)
-
-                # Create relationship (avoid duplicates)
-                rel_key = f"{device_id}_{node_id}"
-                if rel_key not in seen_relationships and device_id:
+            if node_info and device_id:
+                rel_key = f"{device_id}_{node_info['node_mac']}"
+                if rel_key not in seen:
                     relationships.append({
                         "device_id": device_id,
-                        "device_mac": normalized_client_mac,
-                        "node_id": node_id,
-                        "node_mac": node_mac,
-                        "connection_type": deco_conn_types.get(normalized_client_mac, ""),
+                        "device_mac": device_mac,
+                        "node_id": node_info["node_mac"],
+                        "node_mac": node_info["node_mac"],
+                        "connection_type": node_info["connection_type"],
                     })
-                    seen_relationships.add(rel_key)
+                    seen.add(rel_key)
 
         return {
             "nodes": nodes,

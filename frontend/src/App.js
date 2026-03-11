@@ -138,6 +138,35 @@ function App() {
     localStorage.setItem('hs_theme', theme);
   }, [theme]);
 
+  // 2026-03-10: Toggle mesh steering per client device
+  const toggleClientMesh = async (macAddress, currentMeshValue) => {
+    const newValue = !currentMeshValue;
+    try {
+      const response = await fetch(buildUrl('/deco/client-mesh'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac_address: macAddress, mesh_enabled: newValue }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Optimistically update local state
+          setClientNodeMap(prev => {
+            const mac = macAddress.toLowerCase();
+            if (prev[mac]) {
+              return { ...prev, [mac]: { ...prev[mac], client_mesh: newValue } };
+            }
+            return prev;
+          });
+        } else {
+          console.warn('Mesh toggle returned error_code:', data.error_code);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to toggle client mesh:', error);
+    }
+  };
+
   const triggerManualScan = async () => {
     setLoading(true);
     try {
@@ -667,9 +696,23 @@ function App() {
                           const nodeInfo = clientNodeMap[mac];
                           if (nodeInfo) {
                             return (
-                              <span className="deco-node-name" title={`Connected via ${nodeInfo.connection_type || 'unknown'}`}>
-                                {nodeInfo.node_name}
-                              </span>
+                              <div className="deco-node-info">
+                                <span className="deco-node-name" title={`Connected via ${nodeInfo.connection_type || 'unknown'}`}>
+                                  {nodeInfo.node_name}
+                                </span>
+                                <label
+                                  className="mesh-toggle"
+                                  title={nodeInfo.client_mesh ? 'Mesh: ON — click to disable' : 'Mesh: OFF — click to enable'}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={!!nodeInfo.client_mesh}
+                                    onChange={() => toggleClientMesh(device.mac_address, nodeInfo.client_mesh)}
+                                  />
+                                  <span className="mesh-slider"></span>
+                                </label>
+                              </div>
                             );
                           }
                           return <span className="na-text">—</span>;

@@ -701,6 +701,56 @@ class DecoClient:
         finally:
             local_client.close()
 
+    # 2026-03-10: Toggle client_mesh (mesh steering) for a specific client device.
+    def set_client_mesh(self, mac_address: str, mesh_enabled: bool) -> Dict[str, Any]:
+        """Toggle mesh steering for a client device via local Deco API.
+
+        Args:
+            mac_address: Client MAC in any format (will be normalized to AA-BB-CC-DD-EE-FF)
+            mesh_enabled: True to enable mesh, False to disable
+        Returns:
+            API response dict
+        """
+        if not HAS_CRYPTO:
+            raise APIConnectionError("pycryptodome required for local API")
+
+        mac_clean = mac_address.lower().replace(":", "").replace("-", "").replace(" ", "")
+        if len(mac_clean) != 12:
+            raise ValueError(f"Invalid MAC address: {mac_address}")
+        deco_mac = "-".join(mac_clean[i:i+2].upper() for i in range(0, 12, 2))
+
+        logger.info(f"Setting client_mesh={mesh_enabled} for {deco_mac}")
+        local_client = DecoClient(
+            local_endpoint=self.local_endpoint,
+            use_cloud=False,
+            verify_ssl=False,
+        )
+        local_client.username = "admin"
+        local_client.password = self.password
+
+        try:
+            local_client.authenticate()
+            result = local_client._local_encrypted_request(
+                "admin/client?form=client_list",
+                json.dumps({
+                    "operation": "write",
+                    "params": {
+                        "device_mac": "default",
+                        "client_list": [{
+                            "mac": deco_mac,
+                            "client_mesh": mesh_enabled,
+                        }]
+                    }
+                })
+            )
+            logger.info(f"set_client_mesh result for {deco_mac}: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Failed to set client_mesh for {deco_mac}: {e}")
+            raise
+        finally:
+            local_client.close()
+
     def get_wifi_settings(self) -> Dict[str, Any]:
         """Fetch WiFi configuration settings."""
         if self.use_cloud:

@@ -522,6 +522,62 @@
   font-size: inherit;
 }
 
+/* 2026-03-10: Deco node info + mesh toggle in dashboard */
+.deco-node-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deco-node-name {
+  font-size: inherit;
+  color: var(--text);
+}
+
+.mesh-toggle {
+  position: relative;
+  display: inline-block;
+  width: 28px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.mesh-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.mesh-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border, #d4dde8);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.mesh-slider::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.mesh-toggle input:checked + .mesh-slider {
+  background: var(--success, #1e8b52);
+}
+
+.mesh-toggle input:checked + .mesh-slider::before {
+  transform: translateX(12px);
+}
+
 .name-action-wrapper {
   position: relative;
   display: inline-block;

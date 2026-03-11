@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
+import React, { useState, useEffect, useCallback } from 'react';
 import { buildUrl } from '../utils/apiConfig';
 import {
   FaLaptop, FaMobileAlt, FaTv, FaCamera, FaPrint,
   FaGamepad, FaDesktop, FaServer, FaQuestion,
   FaNetworkWired, FaMicrophone, FaLightbulb, FaLock, FaPlug,
-  FaHome, FaThermometerHalf, FaAmazon, FaGoogle, FaApple
+  FaHome, FaThermometerHalf, FaAmazon, FaGoogle, FaApple, FaWifi
 } from 'react-icons/fa';
 import { SiSamsung, SiSonos, SiRoku } from 'react-icons/si';
 import './DecoTopologyView.css';
 
 // 2026-03-10: Vendor-to-icon mapping for topology node rendering.
-// Maps lowercase vendor name fragments to react-icon components.
 const VENDOR_ICON_MAP = [
   { match: ['amazon', 'echo', 'fire', 'kindle', 'ring', 'blink'], Icon: FaAmazon, color: '#FF9900' },
   { match: ['google', 'nest', 'chromecast'], Icon: FaGoogle, color: '#4285F4' },
@@ -33,9 +31,6 @@ const VENDOR_ICON_MAP = [
   { match: ['server', 'synology', 'qnap', 'nas'], Icon: FaServer, color: '#9E9E9E' },
 ];
 
-/**
- * Get the best icon for a device based on vendor name, device name, and type.
- */
 function getDeviceIcon(device) {
   const searchStr = [
     device.vendor_name || '',
@@ -49,7 +44,6 @@ function getDeviceIcon(device) {
     }
   }
 
-  // Fallback by connection type
   const conn = (device.connection_type || '').toLowerCase();
   if (conn === 'wired') return { Icon: FaDesktop, color: '#78909C' };
   if (conn.includes('band5') || conn.includes('band6')) return { Icon: FaLaptop, color: '#42A5F5' };
@@ -58,8 +52,17 @@ function getDeviceIcon(device) {
   return { Icon: FaQuestion, color: '#9E9E9E' };
 }
 
+function getConnectionBadge(connType) {
+  const ct = (connType || '').toLowerCase();
+  if (ct.includes('band6')) return { label: '6 GHz', className: 'conn-6ghz' };
+  if (ct.includes('band5')) return { label: '5 GHz', className: 'conn-5ghz' };
+  if (ct.includes('band2')) return { label: '2.4 GHz', className: 'conn-24ghz' };
+  if (ct === 'wired') return { label: 'Wired', className: 'conn-wired' };
+  return null;
+}
+
 /**
- * DecoTopologyView — force-directed graph visualization of Deco mesh network
+ * DecoTopologyView — card-based layout grouped by Deco node
  */
 function DecoTopologyView({ autoRefreshInterval = 30000 }) {
   const [topology, setTopology] = useState(null);
@@ -67,23 +70,7 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  const [hoveredNode, setHoveredNode] = useState(null);
-  const graphRef = useRef();
-  const containerRef = useRef();
-  const [dimensions, setDimensions] = useState({ width: 1200, height: 700 });
-
-  // Track container size
-  useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({ width: rect.width - 20, height: 700 });
-      }
-    };
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
-  }, []);
+  const [expandedNodes, setExpandedNodes] = useState(new Set());
 
   const fetchTopology = useCallback(async () => {
     setLoading(true);
@@ -97,6 +84,10 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
       const data = await response.json();
       setTopology(data);
       setLastRefresh(new Date());
+      // Auto-expand all nodes on first load
+      if (data.nodes) {
+        setExpandedNodes(new Set(data.nodes.map(n => n.node_id)));
+      }
     } catch (err) {
       console.error('Failed to fetch topology:', err);
       setError(err.message);
@@ -113,191 +104,64 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
     }
   }, [autoRefreshEnabled, autoRefreshInterval, fetchTopology]);
 
-  // Build force-graph data from topology
-  const graphData = React.useMemo(() => {
-    if (!topology) return { nodes: [], links: [] };
+  // Group devices by their connected Deco node
+  const nodeGroups = React.useMemo(() => {
+    if (!topology) return [];
 
-    const nodes = [];
-    const links = [];
-
-    // Build relationship lookup: device_id -> { node_id, connection_type }
+    // Build relationship lookup: device_id -> relationship info
     const relMap = {};
     for (const rel of (topology.relationships || [])) {
-      relMap[rel.device_id] = { node_id: rel.node_id, connection_type: rel.connection_type || '' };
+      relMap[rel.device_id] = rel;
     }
 
-    // Add Deco nodes
-    for (const node of (topology.nodes || [])) {
-      nodes.push({
-        id: `node_${node.node_id}`,
-        label: node.node_name || node.node_id,
-        type: 'deco',
-        status: node.status,
-        mac: node.mac_address,
-        clients: node.connected_clients || 0,
-        signal: node.signal_strength || 0,
-      });
-    }
+    // Group devices under their node
+    const groups = {};
+    const unconnected = [];
 
-    // Add devices and links
     for (const device of (topology.devices || [])) {
       const rel = relMap[device.device_id];
-      const iconInfo = getDeviceIcon(device);
-
-      nodes.push({
-        id: `device_${device.device_id}`,
-        label: device.friendly_name || device.device_name || 'Unknown',
-        type: 'device',
-        status: device.status,
-        mac: device.mac_address,
-        ip: device.current_ip || '',
-        vendor: device.vendor_name || '',
-        connection_type: rel ? rel.connection_type : (device.connection_type || ''),
-        iconColor: iconInfo.color,
-        IconComponent: iconInfo.Icon,
-      });
-
       if (rel) {
-        links.push({
-          source: `node_${rel.node_id}`,
-          target: `device_${device.device_id}`,
-          connection_type: rel.connection_type || '',
-        });
+        const nodeId = rel.node_id;
+        if (!groups[nodeId]) groups[nodeId] = [];
+        groups[nodeId].push({ ...device, connection_type: rel.connection_type || device.connection_type || '' });
+      } else {
+        unconnected.push(device);
       }
     }
 
-    return { nodes, links };
+    // Build ordered list of node groups
+    const result = (topology.nodes || []).map(node => ({
+      node,
+      devices: groups[node.node_id] || [],
+    }));
+
+    // Add unconnected devices if any
+    if (unconnected.length > 0) {
+      result.push({
+        node: { node_id: '_unconnected', node_name: 'Unassigned', status: 'unknown', connected_clients: unconnected.length },
+        devices: unconnected,
+      });
+    }
+
+    return result;
   }, [topology]);
 
-  // Custom node renderer on canvas
-  const drawNode = useCallback((node, ctx, globalScale) => {
-    const isHovered = hoveredNode === node.id;
-    const size = node.type === 'deco' ? 24 : 14;
-    const fontSize = Math.max(10 / globalScale, 3);
+  const toggleNode = (nodeId) => {
+    setExpandedNodes(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  };
 
-    if (node.type === 'deco') {
-      // Deco node — rounded rectangle with router icon
-      const w = size * 2.5;
-      const h = size * 1.6;
-      const r = 6;
-      const x = node.x - w / 2;
-      const y = node.y - h / 2;
-
-      // Shadow
-      if (isHovered) {
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
-        ctx.shadowBlur = 12;
-      }
-
-      // Background
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
-      ctx.closePath();
-      ctx.fillStyle = node.status === 'online' ? '#1e8b52' : '#78909C';
-      ctx.fill();
-      ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.3)';
-      ctx.lineWidth = isHovered ? 2 : 1;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // WiFi icon (simple arcs)
-      const cx = node.x;
-      const cy = node.y - 4;
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 1.5;
-      for (let i = 1; i <= 3; i++) {
-        ctx.beginPath();
-        ctx.arc(cx, cy + 4, i * 4, -Math.PI * 0.75, -Math.PI * 0.25);
-        ctx.stroke();
-      }
-      // Dot
-      ctx.beginPath();
-      ctx.arc(cx, cy + 4, 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = 'white';
-      ctx.fill();
-
-      // Label below
-      ctx.font = `bold ${fontSize * 1.2}px -apple-system, BlinkMacSystemFont, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = node.status === 'online' ? '#1e8b52' : '#78909C';
-      ctx.fillText(node.label, node.x, node.y + h / 2 + 4);
-
-      // Client count
-      ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-      ctx.fillStyle = '#888';
-      ctx.fillText(`${node.clients} clients`, node.x, node.y + h / 2 + 4 + fontSize * 1.4);
-
-    } else {
-      // Device node — circle with brand color
-      const radius = isHovered ? size * 1.3 : size;
-
-      if (isHovered) {
-        ctx.shadowColor = 'rgba(0,0,0,0.25)';
-        ctx.shadowBlur = 10;
-      }
-
-      // Circle background
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = node.status === 'online'
-        ? (node.iconColor || '#42A5F5')
-        : '#BDBDBD';
-      ctx.fill();
-      ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.2)';
-      ctx.lineWidth = isHovered ? 2 : 0.5;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // Icon letter (first letter of vendor or name as fallback)
-      const iconLetter = (node.vendor || node.label || '?').charAt(0).toUpperCase();
-      ctx.font = `bold ${radius * 0.9}px -apple-system, BlinkMacSystemFont, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'white';
-      ctx.fillText(iconLetter, node.x, node.y);
-
-      // Labels below: Name, IP, MAC (no titles, just values)
-      if (globalScale > 0.6 || isHovered) {
-        const lineHeight = fontSize * 1.2;
-        let yOffset = node.y + radius + 4;
-
-        // Name
-        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-        ctx.fillStyle = '#333';
-        const displayName = node.label.length > 20 ? node.label.substring(0, 19) + '...' : node.label;
-        ctx.fillText(displayName, node.x, yOffset);
-        yOffset += lineHeight;
-
-        // IP
-        if (node.ip) {
-          ctx.font = `${fontSize * 0.9}px -apple-system, BlinkMacSystemFont, sans-serif`;
-          ctx.fillStyle = '#666';
-          ctx.fillText(node.ip, node.x, yOffset);
-          yOffset += lineHeight;
-        }
-
-        // MAC
-        ctx.font = `${fontSize * 0.85}px monospace`;
-        ctx.fillStyle = '#999';
-        ctx.fillText(node.mac || '', node.x, yOffset);
-      }
+  const expandAll = () => {
+    if (topology && topology.nodes) {
+      setExpandedNodes(new Set(topology.nodes.map(n => n.node_id).concat(['_unconnected'])));
     }
-  }, [hoveredNode]);
+  };
 
-  // Link color based on connection type
-  const getLinkColor = useCallback((link) => {
-    const ct = (link.connection_type || '').toLowerCase();
-    if (ct.includes('band6')) return 'rgba(156, 39, 176, 0.25)';   // purple for 6GHz
-    if (ct.includes('band5')) return 'rgba(33, 150, 243, 0.25)';    // blue for 5GHz
-    if (ct.includes('band2')) return 'rgba(76, 175, 80, 0.25)';     // green for 2.4GHz
-    if (ct === 'wired') return 'rgba(255, 152, 0, 0.35)';           // orange for wired
-    return 'rgba(200, 200, 200, 0.2)';
-  }, []);
+  const collapseAll = () => setExpandedNodes(new Set());
 
   const formatLastRefresh = () => {
     if (!lastRefresh) return 'Never';
@@ -327,15 +191,6 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="topology-legend">
-        <div className="legend-item"><div className="legend-color" style={{background:'#1e8b52'}}></div><span>Deco Node</span></div>
-        <div className="legend-item"><div className="legend-line" style={{background:'rgba(76,175,80,0.5)', height:3}}></div><span>2.4 GHz</span></div>
-        <div className="legend-item"><div className="legend-line" style={{background:'rgba(33,150,243,0.5)', height:3}}></div><span>5 GHz</span></div>
-        <div className="legend-item"><div className="legend-line" style={{background:'rgba(156,39,176,0.5)', height:3}}></div><span>6 GHz</span></div>
-        <div className="legend-item"><div className="legend-line" style={{background:'rgba(255,152,0,0.5)', height:3}}></div><span>Wired</span></div>
-      </div>
-
       {/* Error State */}
       {error && (
         <div className="error-container">
@@ -362,68 +217,93 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
         </div>
       )}
 
-      {/* Graph */}
+      {/* Topology Content */}
       {topology && (topology.nodes || []).length > 0 && (
         <>
+          {/* Stats bar */}
           <div className="topology-stats">
             <div className="stat-item"><span className="stat-label">Nodes:</span><span className="stat-value">{topology.total_nodes}</span></div>
             <div className="stat-item"><span className="stat-label">Devices:</span><span className="stat-value">{topology.total_devices}</span></div>
             <div className="stat-item"><span className="stat-label">Connections:</span><span className="stat-value">{topology.total_relationships}</span></div>
+            <div className="stat-actions">
+              <button className="btn-text" onClick={expandAll}>Expand All</button>
+              <button className="btn-text" onClick={collapseAll}>Collapse All</button>
+            </div>
           </div>
 
-          <div className="graph-container" ref={containerRef}>
-            <ForceGraph2D
-              ref={graphRef}
-              graphData={graphData}
-              width={dimensions.width}
-              height={dimensions.height}
-              nodeCanvasObject={drawNode}
-              nodePointerAreaPaint={(node, color, ctx) => {
-                const r = node.type === 'deco' ? 30 : 16;
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-                ctx.fillStyle = color;
-                ctx.fill();
-              }}
-              linkColor={getLinkColor}
-              linkWidth={(link) => link.connection_type === 'wired' ? 2.5 : 1.5}
-              linkLineDash={(link) => link.connection_type === 'wired' ? [] : [4, 2]}
-              onNodeHover={(node) => setHoveredNode(node ? node.id : null)}
-              d3AlphaDecay={0.03}
-              d3VelocityDecay={0.3}
-              cooldownTicks={100}
-              backgroundColor="rgba(0,0,0,0)"
-              // Deco nodes are heavier (more links pull toward them)
-              d3Force="charge"
-              d3ForceStrength={-200}
-            />
-          </div>
+          {/* Node groups */}
+          <div className="node-groups">
+            {nodeGroups.map(({ node, devices }) => {
+              const isExpanded = expandedNodes.has(node.node_id);
+              const isOnline = node.status === 'online';
 
-          {/* Hover tooltip */}
-          {hoveredNode && (() => {
-            const node = graphData.nodes.find(n => n.id === hoveredNode);
-            if (!node) return null;
-            return (
-              <div className="topology-tooltip">
-                {node.type === 'deco' ? (
-                  <>
-                    <strong>{node.label}</strong>
-                    <span>{node.mac}</span>
-                    <span>{node.clients} clients connected</span>
-                    <span>Signal: {node.signal}%</span>
-                  </>
-                ) : (
-                  <>
-                    <strong>{node.label}</strong>
-                    {node.ip && <span>{node.ip}</span>}
-                    <span>{node.mac}</span>
-                    {node.vendor && <span>{node.vendor}</span>}
-                    {node.connection_type && <span>{node.connection_type}</span>}
-                  </>
-                )}
-              </div>
-            );
-          })()}
+              return (
+                <div key={node.node_id} className={`node-group ${isOnline ? 'online' : 'offline'}`}>
+                  {/* Node header — clickable to expand/collapse */}
+                  <div className="node-group-header" onClick={() => toggleNode(node.node_id)}>
+                    <div className="node-header-left">
+                      <div className={`node-icon ${isOnline ? 'online' : 'offline'}`}>
+                        <FaWifi size={18} />
+                      </div>
+                      <div className="node-header-info">
+                        <h3>{node.node_name}</h3>
+                        <span className="node-meta">
+                          {node.mac_address}
+                          {node.role && <span className="node-role">{node.role}</span>}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="node-header-right">
+                      <span className="device-count">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
+                      <span className={`status-badge ${isOnline ? 'online' : 'offline'}`}>
+                        {isOnline ? 'Online' : 'Offline'}
+                      </span>
+                      <span className={`expand-arrow ${isExpanded ? 'expanded' : ''}`}>&#9660;</span>
+                    </div>
+                  </div>
+
+                  {/* Device cards */}
+                  {isExpanded && (
+                    <div className="node-devices-grid">
+                      {devices.map((device) => {
+                        const { Icon, color } = getDeviceIcon(device);
+                        const connBadge = getConnectionBadge(device.connection_type);
+                        const isDevOnline = device.status === 'online';
+
+                        return (
+                          <div key={device.device_id} className={`topo-device-card ${isDevOnline ? 'online' : 'offline'}`}>
+                            <div className="topo-device-icon" style={{ backgroundColor: isDevOnline ? color : '#BDBDBD' }}>
+                              <Icon size={16} color="white" />
+                            </div>
+                            <div className="topo-device-info">
+                              <div className="topo-device-name">
+                                {device.friendly_name || device.device_name || 'Unknown'}
+                              </div>
+                              {device.current_ip && (
+                                <div className="topo-device-ip">{device.current_ip}</div>
+                              )}
+                              <div className="topo-device-mac">{device.mac_address}</div>
+                            </div>
+                            <div className="topo-device-badges">
+                              {connBadge && (
+                                <span className={`conn-badge ${connBadge.className}`}>{connBadge.label}</span>
+                              )}
+                              {device.vendor_name && (
+                                <span className="vendor-badge">{device.vendor_name}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {devices.length === 0 && (
+                        <div className="no-devices-msg">No devices connected to this node</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </>
       )}
     </div>
