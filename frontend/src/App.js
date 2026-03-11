@@ -6,6 +6,7 @@ import DecoTopologyPage from './pages/DecoTopologyPage';
 import SettingsPage from './pages/SettingsPage';
 import AlexaDevicesPage from './pages/AlexaDevicesPage';
 import SmartHomePage from './pages/SmartHomePage';
+import SpeedInsightsPage from './pages/SpeedInsightsPage';
 import { buildUrl } from './utils/apiConfig';
 import ViewModeToggle from './components/ViewModeToggle';
 
@@ -44,6 +45,9 @@ function App() {
   const [decoNodeDetails, setDecoNodeDetails] = useState({});
   // 2026-03-11: Optimize network state
   const [optimizeLoading, setOptimizeLoading] = useState(false);
+  // 2026-03-11: Speed test state
+  const [speedTestData, setSpeedTestData] = useState(null);
+  const [speedTestRunning, setSpeedTestRunning] = useState(false);
 
   useEffect(() => {
     // Check backend API health
@@ -130,11 +134,25 @@ function App() {
       }
     };
 
+    // 2026-03-11: Fetch latest speed test result with % change
+    const getSpeedTestLatest = async () => {
+      try {
+        const response = await fetch(buildUrl('/speedtest/latest'));
+        if (response.ok) {
+          const data = await response.json();
+          setSpeedTestData(data);
+        }
+      } catch (error) {
+        // Silently fail — speed test may not have run yet
+      }
+    };
+
     checkHealth();
     getDevices();
     getPollingConfig();
     getDeviceGroups();
     getClientNodeMap();
+    getSpeedTestLatest();
 
     // 2026-03-11: Fast poll for devices/health (5s), slow poll for Deco map (30s)
     const fastInterval = setInterval(() => {
@@ -148,9 +166,15 @@ function App() {
       getClientNodeMap();
     }, 30000);
 
+    // 2026-03-11: Speed test poll (60s) — updates after scheduled 30-min tests
+    const speedInterval = setInterval(() => {
+      getSpeedTestLatest();
+    }, 60000);
+
     return () => {
       clearInterval(fastInterval);
       clearInterval(slowInterval);
+      clearInterval(speedInterval);
     };
   }, []);
 
@@ -243,6 +267,33 @@ function App() {
       alert('Failed to optimize network. Check Deco connectivity.');
     } finally {
       setOptimizeLoading(false);
+    }
+  };
+
+  // 2026-03-11: Manual speed test trigger
+  const runSpeedTest = async () => {
+    setSpeedTestRunning(true);
+    try {
+      const response = await fetch(buildUrl('/speedtest/run'), { method: 'POST' });
+      if (response.ok) {
+        const result = await response.json();
+        if (result.error) {
+          alert(`Speed test error: ${result.error}`);
+        } else {
+          // Refresh latest data
+          const latestResp = await fetch(buildUrl('/speedtest/latest'));
+          if (latestResp.ok) {
+            setSpeedTestData(await latestResp.json());
+          }
+        }
+      } else {
+        alert('Speed test failed. Check Chester connectivity.');
+      }
+    } catch (error) {
+      console.error('Speed test failed:', error);
+      alert('Speed test failed. Check Chester connectivity.');
+    } finally {
+      setSpeedTestRunning(false);
     }
   };
 
@@ -507,6 +558,12 @@ function App() {
             Smart Home
           </button>
           <button
+            className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('speed-insights')}
+          >
+            Speed Insights
+          </button>
+          <button
             className={`nav-button ${currentPage === 'settings' ? 'active' : ''}`}
             onClick={() => setCurrentPage('settings')}
           >
@@ -523,6 +580,9 @@ function App() {
 
         {/* Smart Home Control Page */}
         {currentPage === 'smart-home' && <SmartHomePage />}
+
+        {/* Speed Insights Page */}
+        {currentPage === 'speed-insights' && <SpeedInsightsPage />}
 
         {/* Settings Page */}
         {currentPage === 'settings' && (
@@ -556,16 +616,85 @@ function App() {
             </div>
           </div>
         </div>
-        <div className="status-card">
-          <h2>System Status</h2>
-          <p>API Connection: <strong className={apiStatus === 'connected' ? 'status-ok' : 'status-error'}>{apiStatus}</strong></p>
-          {pollingConfig && (
-            <>
-              <p>Polling Interval: <strong>{pollingConfig.interval}s</strong></p>
-              <p>Last Scanned: <strong>{formatDate(pollingConfig.last_scan)}</strong></p>
-            </>
-          )}
-          <p>Devices with Vendor Info: <strong>{vendorNamesPresent}/{devices.length}</strong></p>
+        {/* 2026-03-11: Split System Status into two cards — System + Speed Test */}
+        <div className="status-split">
+          <div className="status-card">
+            <h2>System Status</h2>
+            <p>API Connection: <strong className={apiStatus === 'connected' ? 'status-ok' : 'status-error'}>{apiStatus}</strong></p>
+            {pollingConfig && (
+              <>
+                <p>Polling Interval: <strong>{pollingConfig.interval}s</strong></p>
+                <p>Last Scanned: <strong>{formatDate(pollingConfig.last_scan)}</strong></p>
+              </>
+            )}
+            <p>Devices with Vendor Info: <strong>{vendorNamesPresent}/{devices.length}</strong></p>
+          </div>
+
+          <div className="status-card speedtest-card">
+            <h2>Speed Test
+              <button
+                className="btn-speedtest-run"
+                onClick={runSpeedTest}
+                disabled={speedTestRunning}
+                title="Run speed test on Chester router via SSH"
+              >
+                {speedTestRunning ? 'Testing...' : 'Run Now'}
+              </button>
+            </h2>
+            {speedTestData && speedTestData.latest ? (() => {
+              const st = speedTestData.latest;
+              const ch = speedTestData.change;
+              const renderChange = (pct, invertColor) => {
+                if (pct == null) return null;
+                // For ping, negative = good (invertColor=true)
+                const isGood = invertColor ? pct < 0 : pct > 0;
+                const arrow = pct > 0 ? '\u25B2' : pct < 0 ? '\u25BC' : '';
+                const cls = isGood ? 'change-good' : 'change-bad';
+                return <span className={`speed-change ${cls}`}>{arrow} {Math.abs(pct)}%</span>;
+              };
+              return (
+                <div className="speedtest-results">
+                  <div className="speedtest-metrics">
+                    <div className="speed-metric download">
+                      <span className="speed-label">Download</span>
+                      <span className="speed-value">{st.download_mbps.toFixed(1)}</span>
+                      <span className="speed-unit">Mbps</span>
+                      {ch && renderChange(ch.download_pct, false)}
+                    </div>
+                    <div className="speed-metric upload">
+                      <span className="speed-label">Upload</span>
+                      <span className="speed-value">{st.upload_mbps.toFixed(1)}</span>
+                      <span className="speed-unit">Mbps</span>
+                      {ch && renderChange(ch.upload_pct, false)}
+                    </div>
+                    <div className="speed-metric ping">
+                      <span className="speed-label">Ping</span>
+                      <span className="speed-value">{st.ping_ms.toFixed(0)}</span>
+                      <span className="speed-unit">ms</span>
+                      {ch && renderChange(ch.ping_pct, true)}
+                    </div>
+                    {st.jitter_ms != null && (
+                      <div className="speed-metric jitter">
+                        <span className="speed-label">Jitter</span>
+                        <span className="speed-value">{st.jitter_ms.toFixed(1)}</span>
+                        <span className="speed-unit">ms</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="speedtest-meta">
+                    <span>via {st.server_name || 'Unknown'}</span>
+                    <span>{st.isp || ''}</span>
+                    <span>{formatDate(st.timestamp)}</span>
+                  </div>
+                </div>
+              );
+            })() : (
+              <div className="speedtest-empty">
+                <p>No speed test results yet</p>
+                <p className="text-muted">Tests run every 30 minutes on the Chester router</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {deviceGroups.length > 0 && (

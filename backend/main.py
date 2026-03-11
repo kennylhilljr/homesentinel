@@ -31,7 +31,10 @@ from routes import alexa as alexa_routes
 from routes import chester as chester_routes
 from routes import oauth as oauth_routes
 from routes import alarm_com as alarm_com_routes
+from routes import speedtest as speedtest_routes
 from services.alarm_com_client import AlarmComClient
+from services.speedtest_service import SpeedTestService
+from services.speedtest_scheduler import SpeedTestScheduler
 from services.alexa_client import AlexaClient
 from services.alexa_service import AlexaService
 from services.chester_client import ChesterClient
@@ -61,6 +64,7 @@ app.include_router(alexa_routes.router)
 app.include_router(chester_routes.router)
 app.include_router(oauth_routes.router)
 app.include_router(alarm_com_routes.router)
+app.include_router(speedtest_routes.router)
 
 # Pydantic models
 class DeviceUpdate(BaseModel):
@@ -117,12 +121,14 @@ alexa_service_instance = None
 chester_client = None
 chester_service = None
 alarm_com_client_instance = None
+speedtest_service = None
+speedtest_scheduler = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service, alarm_com_client_instance
+    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service, alarm_com_client_instance, speedtest_service, speedtest_scheduler
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -230,6 +236,21 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to initialize Alarm.com client: {e}")
 
+    # 2026-03-11: Initialize speed test service and 30-min scheduler
+    try:
+        speedtest_service = SpeedTestService(
+            db=db,
+            chester_service=chester_service,
+            chester_client=chester_client,
+        )
+        speedtest_interval = int(os.getenv("SPEEDTEST_INTERVAL_SECONDS", "1800"))
+        speedtest_scheduler = SpeedTestScheduler(speedtest_service, speedtest_interval)
+        speedtest_routes.set_speedtest_service(speedtest_service)
+        speedtest_routes.set_speedtest_scheduler(speedtest_scheduler)
+        logger.info(f"Speed test service initialized (interval: {speedtest_interval}s)")
+    except Exception as e:
+        logger.warning(f"Failed to initialize speed test service: {e}")
+
     # Initialize polling service
     polling_manager = PollingServiceManager()
     polling_interval = int(os.getenv("POLLING_INTERVAL_SECONDS", "60"))
@@ -244,13 +265,26 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to start polling: {e}")
 
+    # 2026-03-11: Start background speed test scheduler (30-min interval)
+    if speedtest_scheduler:
+        try:
+            await speedtest_scheduler.start()
+            logger.info("Speed test scheduler started")
+        except Exception as e:
+            logger.error(f"Failed to start speed test scheduler: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global db, polling_manager, deco_client, chester_client, alarm_com_client_instance
+    global db, polling_manager, deco_client, chester_client, alarm_com_client_instance, speedtest_scheduler
 
     logger.info("Shutting down HomeSentinel Backend...")
+
+    # Stop speed test scheduler
+    if speedtest_scheduler:
+        await speedtest_scheduler.stop()
+        logger.info("Speed test scheduler stopped")
 
     # Stop polling
     if polling_manager:
