@@ -1098,12 +1098,34 @@ async def get_topology_graph() -> Response:
             G.add_edge("chester", master_mac, connection_type="wired",
                        label="Ethernet")
 
-        # Connect non-master Decos to master (mesh backhaul)
+        # 2026-03-11: Connect non-master Decos — check if wired or mesh backhaul
+        # Build lookup of node connection info from local API data
+        node_conn_types = {}
+        for node in local_nodes:
+            nmac = node.get("mac", "")
+            # connection_type can be a list like ["band2_4","band5"] or include "wired"
+            ct = node.get("connection_type", [])
+            if isinstance(ct, str):
+                ct = [ct]
+            node_conn_types[nmac] = ct
+
         for node_mac in deco_macs:
             if node_mac != master_mac:
-                # Connect slave nodes to master (simplified — actual mesh may vary)
-                G.add_edge(master_mac, node_mac, connection_type="mesh_backhaul",
-                           label="Mesh")
+                ct_list = node_conn_types.get(node_mac, [])
+                node_name_lower = node_mac_to_name.get(node_mac, "").lower()
+                # Check if wired: API says "wired", or no wifi bands listed,
+                # or known hardwired node (Dining Room is hardwired to Office)
+                is_wired = (
+                    "wired" in ct_list
+                    or (ct_list and all(c not in ("band2_4", "band5", "band6") for c in ct_list))
+                    or "dining" in node_name_lower
+                )
+                if is_wired:
+                    G.add_edge(master_mac, node_mac, connection_type="wired",
+                               label="Ethernet")
+                else:
+                    G.add_edge(master_mac, node_mac, connection_type="mesh_backhaul",
+                               label="Mesh")
 
         # Add client devices
         conn_colors = {
