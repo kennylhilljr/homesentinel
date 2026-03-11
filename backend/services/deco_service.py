@@ -72,11 +72,46 @@ class DecoService:
 
             clients_by_node = self._build_node_client_index(raw_nodes, raw_clients)
 
+            # 2026-03-10: Cloud API often shows satellite nodes as offline (status=0)
+            # even when they're running fine on the mesh. Supplement with local API
+            # client list — if clients are connected through a node, it's online.
+            local_clients = []
+            try:
+                local_clients = self.deco_client.get_client_list_local()
+            except Exception as e:
+                logger.debug(f"Local client list unavailable for node status fix: {e}")
+
+            # Build set of node MACs that have clients connected via local API
+            nodes_with_clients = set()
+            for c in local_clients:
+                if c.get("online"):
+                    owner_mac = (c.get("owner_mac") or c.get("connection", {}).get("node_mac") or "").upper().replace("-", ":")
+                    if owner_mac:
+                        nodes_with_clients.add(owner_mac)
+
             # Enrich nodes with additional data
             enriched_nodes = []
             for node in raw_nodes:
                 enriched_node = self._enrich_node_data(node, clients_by_node)
                 enriched_nodes.append(enriched_node)
+
+            # Fix offline nodes that actually have clients (cloud API lied)
+            for node in enriched_nodes:
+                if node["status"] == "offline":
+                    node_mac = (node.get("raw_data", {}).get("deviceMac", "")
+                                or node.get("raw_data", {}).get("mac", "")).upper().replace("-", ":")
+                    if node_mac in nodes_with_clients:
+                        node["status"] = "online"
+                        logger.info(f"Node {node['node_name']} marked online (has clients via local API)")
+
+            # If local API returned clients but we still have all-offline satellites,
+            # and there are enough clients to span multiple nodes, mark all as online.
+            # Rationale: a mesh with 59 clients can't have only 1 node working.
+            offline_satellites = [n for n in enriched_nodes if n["status"] == "offline"]
+            if local_clients and len(local_clients) > 10 and len(offline_satellites) == len(enriched_nodes) - 1:
+                for node in offline_satellites:
+                    node["status"] = "online"
+                logger.info(f"Marked {len(offline_satellites)} satellite nodes online (mesh has {len(local_clients)} clients)")
 
             # Update cache
             self._nodes_cache = enriched_nodes

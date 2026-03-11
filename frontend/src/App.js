@@ -266,7 +266,7 @@ function App() {
   const getSortableValue = (device, key) => {
     switch (key) {
       case 'decoName':
-        return (device.deco_name || device.friendly_name || device.mac_address || '').toLowerCase();
+        return (device.friendly_name || device.deco_name || device.mac_address || '').toLowerCase();
       case 'alexaName':
         return (device.alexa_name || '').toLowerCase();
       case 'alexaType':
@@ -338,7 +338,7 @@ function App() {
   });
 
   const getDeviceDisplayName = (device) => {
-    return device.friendly_name || device.mac_address;
+    return device.friendly_name || device.deco_name || device.mac_address;
   };
 
   const vendorNamesPresent = devices.filter(d => d.vendor_name).length;
@@ -535,7 +535,7 @@ function App() {
                   <tr>
                     <th>
                       <button className="sort-button" onClick={() => requestSort('decoName')}>
-                        Deco Name <span className="sort-indicator">{getSortIndicator('decoName')}</span>
+                        Name <span className="sort-indicator">{getSortIndicator('decoName')}</span>
                       </button>
                     </th>
                     <th>
@@ -596,11 +596,12 @@ function App() {
                       }}
                     >
                       <td className="device-name">
-                        {decoName || device.friendly_name || device.mac_address}
+                        {device.friendly_name || decoName || device.mac_address}
                       </td>
                       <td className="alexa-name-cell">
                         {alexaName || <span className="na-text">N/A</span>}
-                        {(hasMismatch || alexaName || decoName) && (
+                        {/* 2026-03-10: Always show rename dropdown, not just when alexa/deco names exist */}
+                        {(
                           <div className="name-action-wrapper">
                             <button
                               className="name-action-btn"
