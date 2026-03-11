@@ -547,6 +547,27 @@ class NetworkDeviceService:
                 except Exception as e:
                     logger.debug(f"Failed to fetch Deco node MACs for online set: {e}")
 
+            # 2026-03-11: Also check Chester 5G router reachability — it's the gateway
+            # (upstream of Deco) so it never appears in the Deco client list.
+            try:
+                from routes.chester import chester_service as _chester_svc
+                if _chester_svc:
+                    chester_status = _chester_svc.get_router_status()
+                    if chester_status and chester_status.get("board"):
+                        # Chester is responding — find its MAC from DB or known value
+                        chester_mac_raw = chester_status["board"].get("mac", "")
+                        if chester_mac_raw:
+                            mac_clean = chester_mac_raw.lower().replace("-", "").replace(":", "").replace(" ", "")
+                            if len(mac_clean) == 12:
+                                chester_mac = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                                online_macs.add(chester_mac)
+                                # Also update IP and last_seen
+                                chester_ip = chester_status.get("ipv4_addr") or "192.168.12.1"
+                                self.create_or_update_device(chester_mac, chester_ip)
+                                logger.info(f"Chester 5G router confirmed online: {chester_mac}")
+            except Exception as e:
+                logger.debug(f"Chester reachability check failed: {e}")
+
             scan_results['devices_found'] = len(online_macs)
 
             # Mark devices as offline if not in scan results AND not in Deco
