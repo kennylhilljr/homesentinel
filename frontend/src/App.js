@@ -38,6 +38,8 @@ function App() {
   const [clientNodeMap, setClientNodeMap] = useState({});
   // 2026-03-11: Set of normalized Deco node MACs (for hiding mesh toggle on nodes)
   const [decoNodeMacs, setDecoNodeMacs] = useState(new Set());
+  // 2026-03-11: Map of Deco node MAC → node name (for connection preference dropdown)
+  const [decoNodesMap, setDecoNodesMap] = useState({});
 
   useEffect(() => {
     // Check backend API health
@@ -106,6 +108,7 @@ function App() {
               Object.keys(data.nodes).map(m => m.toLowerCase().replace(/-/g, ':'))
             );
             setDecoNodeMacs(nodeMacs);
+            setDecoNodesMap(data.nodes);
           }
         }
       } catch (error) {
@@ -314,6 +317,25 @@ function App() {
       setNameActionLoading(false);
       setNameDropdownDevice(null);
       setCustomNameInput('');
+    }
+  };
+
+  // 2026-03-11: Set preferred Deco node for a device (null = auto, MAC = pinned)
+  const setPreferredDecoNode = async (deviceId, nodeMAC) => {
+    try {
+      const res = await fetch(buildUrl(`/devices/${deviceId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferred_deco_node: nodeMAC }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setDevices(prev => prev.map(d =>
+          d.device_id === updated.device_id ? updated : d
+        ));
+      }
+    } catch (e) {
+      console.error('Failed to set preferred Deco node:', e);
     }
   };
 
@@ -546,7 +568,7 @@ function App() {
             </div>
             <div className="devices-actions">
               <ViewModeToggle
-                label="Devices"
+                label=""
                 value={deviceViewMode}
                 onChange={setDeviceViewMode}
               />
@@ -742,18 +764,67 @@ function App() {
                         {(() => {
                           const mac = (device.mac_address || '').toLowerCase();
                           const nodeInfo = clientNodeMap[mac];
-                          // 2026-03-11: Check if this device is a Deco node itself (skip toggle for nodes)
                           const isDecoNode = decoNodeMacs.has(mac);
-                          // 2026-03-11: Show mesh toggle for all devices except Deco nodes
                           const meshValue = nodeInfo ? !!nodeInfo.client_mesh : false;
+                          // 2026-03-11: Connection preference — auto vs pinned
+                          const isPinned = !!device.preferred_deco_node;
+                          const pinnedNodeName = isPinned
+                            ? (decoNodesMap[device.preferred_deco_node] || device.preferred_deco_node)
+                            : null;
+                          const currentNodeName = nodeInfo ? nodeInfo.node_name : null;
                           return (
                             <div className="deco-node-info">
-                              {nodeInfo ? (
-                                <span className="deco-node-name" title={`Connected via ${nodeInfo.connection_type || 'unknown'}`}>
-                                  {nodeInfo.node_name}
-                                </span>
+                              {/* 2026-03-11: Show node name or preference dropdown */}
+                              {isPinned ? (
+                                <select
+                                  className="deco-pref-select"
+                                  value={device.preferred_deco_node}
+                                  title={`Pinned to ${pinnedNodeName}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setPreferredDecoNode(device.device_id, val === '' ? null : val);
+                                  }}
+                                >
+                                  <option value="">Auto</option>
+                                  {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
+                                    <option key={nodeMac} value={nodeMac}>{name}</option>
+                                  ))}
+                                </select>
+                              ) : currentNodeName ? (
+                                <select
+                                  className="deco-pref-select"
+                                  value=""
+                                  title={`Connected to ${currentNodeName} (auto)`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val) setPreferredDecoNode(device.device_id, val);
+                                  }}
+                                >
+                                  <option value="">{currentNodeName}</option>
+                                  {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
+                                    <option key={nodeMac} value={nodeMac}>{name}</option>
+                                  ))}
+                                </select>
                               ) : (
                                 <span className="na-text">—</span>
+                              )}
+                              {/* 2026-03-11: Auto/Pinned badge */}
+                              {!isDecoNode && (nodeInfo || isPinned) && (
+                                <span
+                                  className={`pref-badge ${isPinned ? 'pinned' : 'auto'}`}
+                                  title={isPinned ? `Pinned to ${pinnedNodeName}` : 'Auto — connects to nearest node'}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isPinned) {
+                                      setPreferredDecoNode(device.device_id, null);
+                                    }
+                                  }}
+                                  style={{ cursor: isPinned ? 'pointer' : 'default' }}
+                                >
+                                  {isPinned ? 'Pinned' : 'Auto'}
+                                </span>
                               )}
                               {!isDecoNode && (
                                 <label

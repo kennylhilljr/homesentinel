@@ -211,8 +211,12 @@ class NetworkDeviceRepository:
 
     def update_device_metadata(self, device_id: str, friendly_name: Optional[str] = None,
                                device_type: Optional[str] = None, vendor_name: Optional[str] = None,
-                               notes: Optional[str] = None) -> Optional[dict]:
-        """Update device metadata"""
+                               notes: Optional[str] = None,
+                               preferred_deco_node: Optional[str] = "UNSET") -> Optional[dict]:
+        """Update device metadata.
+        # 2026-03-11: preferred_deco_node uses sentinel "UNSET" to distinguish
+        # between "not provided" and "explicitly set to None (auto mode)".
+        """
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -231,6 +235,10 @@ class NetworkDeviceRepository:
                 if notes is not None:
                     updates.append("notes = ?")
                     params.append(notes)
+                # 2026-03-11: preferred_deco_node — None means auto, a MAC means pinned
+                if preferred_deco_node != "UNSET":
+                    updates.append("preferred_deco_node = ?")
+                    params.append(preferred_deco_node)
 
                 if not updates:
                     return self.get_by_id(device_id)

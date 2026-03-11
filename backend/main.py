@@ -67,6 +67,7 @@ class DeviceUpdate(BaseModel):
     friendly_name: str = None
     device_type: str = None
     notes: str = None
+    preferred_deco_node: Optional[str] = "UNSET"  # 2026-03-11: None=auto, MAC=pinned, "UNSET"=not provided
 
 
 class DeviceGroupCreate(BaseModel):
@@ -481,6 +482,12 @@ async def update_device(device_id: str, updates: DeviceUpdate):
             device_service.update_device_type(device_id, updates.device_type)
         if updates.notes:
             device_service.set_device_notes(device_id, updates.notes)
+        # 2026-03-11: Handle preferred_deco_node — "UNSET" means not provided
+        if updates.preferred_deco_node != "UNSET":
+            device_service.device_repo.update_device_metadata(
+                device_id,
+                preferred_deco_node=updates.preferred_deco_node
+            )
 
         updated_device = device_service.get_device(device_id)
         return updated_device

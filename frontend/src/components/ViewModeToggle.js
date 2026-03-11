@@ -12,7 +12,7 @@ function ViewModeToggle({
 }) {
   return (
     <div className="view-mode-toggle" aria-label={label}>
-      <span className="view-mode-label">{label}</span>
+      {label && <span className="view-mode-label">{label}</span>}
       <div className="view-mode-segment" role="tablist">
         {options.map((option) => (
           <button
