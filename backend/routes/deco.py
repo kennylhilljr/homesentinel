@@ -1007,16 +1007,91 @@ async def get_topology_graph() -> Response:
                     node_mac = cloud_mac_raw
                 node_mac_to_name[node_mac] = nd.get("node_name", nd.get("raw_data", {}).get("alias", node_mac))
 
+        # 2026-03-11: Fetch Chester 5G signal data for tower/band info
+        chester_info = {}
+        try:
+            from routes.chester import chester_service as _chester_svc
+            if _chester_svc:
+                chester_info = _chester_svc.get_system_info()
+        except Exception as e:
+            logger.warning(f"Chester info fetch failed for topology: {e}")
+
         # Build NetworkX graph
         G = nx.Graph()
 
-        # Add router (internet) node at center
-        G.add_node("internet", label="Internet", node_type="internet")
+        # 2026-03-11: Physical topology chain:
+        # T-Mobile Tower → Waveform MIMO → Chester 5G → Deco Office → other Decos → devices
+        #
+        # Build tower label with cell info from Chester
+        tower_label = "T-Mobile\nCell Tower"
+        cell_id = chester_info.get("cell_id", "")
+        if cell_id:
+            tower_label += f"\nCellID: {cell_id}"
 
-        # Add Deco nodes and connect to internet
+        # Build band labels for the tower-to-waveform link
+        ca_bands = chester_info.get("ca_band", [])
+        conn_type_str = chester_info.get("connection_type", "NR5G-SA")
+        band_str = chester_info.get("band", "")
+        tower_bands = []
+        for cab in ca_bands:
+            tower_bands.append(cab.strip().strip('"'))
+        if not tower_bands and band_str:
+            tower_bands.append(f"Band {band_str}")
+
+        # Build Chester label
+        chester_label = "5G Chester AX3000 - SDX75"
+        chester_ip = chester_info.get("ipv4_addr", "")
+        if chester_ip:
+            chester_label += f"\n{chester_ip}"
+
+        # Signal info for Chester
+        rsrp = chester_info.get("rsrp", "")
+        sinr = chester_info.get("sinr", "")
+        signal_label = ""
+        if rsrp:
+            signal_label += f"RSRP: {rsrp} dBm"
+        if sinr:
+            signal_label += f"  SINR: {sinr} dBm"
+
+        G.add_node("tower", label=tower_label, node_type="tower")
+        G.add_node("waveform", label="Waveform\nQualcomm MIMO", node_type="waveform")
+        G.add_node("chester", label=chester_label, node_type="chester")
+
+        # Tower ↔ Waveform (wireless 5G bands)
+        band_edge_label = conn_type_str
+        if tower_bands:
+            band_edge_label = "\n".join(tower_bands)
+        G.add_edge("tower", "waveform", connection_type="5g_tower",
+                   label=band_edge_label)
+        # Waveform ↔ Chester (coax/cable)
+        G.add_edge("waveform", "chester", connection_type="wired",
+                   label="Coax" if not signal_label else signal_label)
+        # Chester ↔ Deco Office (wired ethernet)
+        # Add Deco nodes
+        deco_macs = list(node_mac_to_name.keys())
+
+        # Find the master Deco node (wired to Chester)
+        master_mac = None
+        for node in local_nodes:
+            if node.get("role") == "master":
+                master_mac = node.get("mac", "")
+                break
+        if not master_mac and deco_macs:
+            master_mac = deco_macs[0]
         for node_mac, node_name in node_mac_to_name.items():
             G.add_node(node_mac, label=node_name, node_type="deco")
-            G.add_edge("internet", node_mac)
+
+        # Chester → master Deco (wired)
+        if master_mac:
+            G.add_edge("chester", master_mac, connection_type="wired",
+                       label="Ethernet")
+
+        # Connect non-master Decos to master (mesh backhaul)
+        for node_mac in deco_macs:
+            if node_mac != master_mac:
+                # Connect slave nodes to master (simplified — actual mesh may vary)
+                G.add_edge(master_mac, node_mac, connection_type="mesh_backhaul",
+                           label="Mesh")
 
         # Add client devices
         conn_colors = {
@@ -1024,6 +1099,8 @@ async def get_topology_graph() -> Response:
             "band2_4": "#2E7D32",
             "band6": "#283593",
             "wired": "#C62828",
+            "5g_tower": "#9C27B0",
+            "mesh_backhaul": "#FF9800",
         }
         for node_mac, clients in node_clients.items():
             for c in clients:
@@ -1038,13 +1115,16 @@ async def get_topology_graph() -> Response:
                     dc_name = base64.b64decode(dc_name).decode("utf-8")
                 except Exception:
                     pass
+                # 2026-03-11: Prefer DB friendly_name for device labels too
+                db_dev_name = _get_node_friendly_name(raw_mac)
 
                 conn_type = c.get("connection_type", "")
                 is_online = c.get("online", False)
                 ip_addr = c.get("ip", "")
 
                 # Build label: name + IP + MAC
-                label_parts = [dc_name or "Unknown"]
+                display_name = db_dev_name or dc_name or "Unknown"
+                label_parts = [display_name]
                 if ip_addr:
                     label_parts.append(ip_addr)
                 label_parts.append(normalized)
@@ -1056,21 +1136,24 @@ async def get_topology_graph() -> Response:
                            connection_type=conn_type)
                 G.add_edge(node_mac, normalized, connection_type=conn_type)
 
-        # Layout: use spring layout with Deco nodes as fixed positions in a circle
-        # Place internet at center, Deco nodes in inner ring, devices in outer ring
+        # Layout: tower at top, waveform below, chester center, decos in ring, devices outer
         import math
         pos = {}
-        deco_macs = list(node_mac_to_name.keys())
         n_decos = len(deco_macs)
 
-        pos["internet"] = (0, 0)
-        for i, dm in enumerate(deco_macs):
-            angle = 2 * math.pi * i / max(n_decos, 1)
-            pos[dm] = (2.5 * math.cos(angle), 2.5 * math.sin(angle))
+        # Vertical chain: tower → waveform → chester
+        pos["tower"] = (0, 5.5)
+        pos["waveform"] = (0, 3.8)
+        pos["chester"] = (0, 2.0)
 
-        # Use spring layout for devices, seeded with fixed deco/internet positions
-        if len(G.nodes) > len(deco_macs) + 1:
-            fixed_nodes = ["internet"] + deco_macs
+        # Deco nodes in a semicircle below Chester
+        for i, dm in enumerate(deco_macs):
+            angle = math.pi + math.pi * (i + 0.5) / max(n_decos, 1)
+            pos[dm] = (3.0 * math.cos(angle), 2.0 + 2.5 * math.sin(angle))
+
+        # Use spring layout for devices, seeded with fixed infrastructure positions
+        infra_nodes = ["tower", "waveform", "chester"] + deco_macs
+        if len(G.nodes) > len(infra_nodes):
             seed_pos = {n: pos.get(n, (0, 0)) for n in G.nodes}
             # Give devices initial positions near their deco node
             for node_mac, clients in node_clients.items():
@@ -1085,32 +1168,56 @@ async def get_topology_graph() -> Response:
                             deco_pos[0] + 1.8 * math.cos(angle_offset),
                             deco_pos[1] + 1.8 * math.sin(angle_offset),
                         )
-            pos = nx.spring_layout(G, pos=seed_pos, fixed=fixed_nodes, k=1.5, iterations=50, seed=42)
+            pos = nx.spring_layout(G, pos=seed_pos, fixed=infra_nodes, k=1.5, iterations=50, seed=42)
 
         # Draw the graph
-        fig, ax = plt.subplots(1, 1, figsize=(18, 14))
+        fig, ax = plt.subplots(1, 1, figsize=(20, 16))
         fig.patch.set_facecolor('#f3f6fa')
         ax.set_facecolor('#f3f6fa')
 
         # Categorize nodes
-        internet_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "internet"]
+        tower_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "tower"]
+        waveform_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "waveform"]
+        chester_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "chester"]
         deco_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "deco"]
         online_devices = [n for n, d in G.nodes(data=True) if d.get("node_type") == "device" and d.get("online")]
         offline_devices = [n for n, d in G.nodes(data=True) if d.get("node_type") == "device" and not d.get("online")]
 
-        # Draw edges with connection type colors
-        for u, v, data in G.edges(data=True):
-            ct = data.get("connection_type", "")
+        # Draw edges with connection type colors and band labels
+        edge_labels = {}
+        for u, v, edata in G.edges(data=True):
+            ct = edata.get("connection_type", "")
             color = conn_colors.get(ct, "#B0BEC5")
-            linewidth = 2.0 if ct == "wired" else 1.2
+            linewidth = 2.5 if ct in ("wired", "5g_tower") else 1.8 if ct == "mesh_backhaul" else 1.2
             linestyle = "-" if ct else "--"
             nx.draw_networkx_edges(G, pos, edgelist=[(u, v)],
                                    edge_color=color, width=linewidth,
-                                   style=linestyle, alpha=0.6, ax=ax)
+                                   style=linestyle, alpha=0.7, ax=ax)
+            # Add band/connection labels on infrastructure edges
+            elabel = edata.get("label", "")
+            if elabel:
+                edge_labels[(u, v)] = elabel
 
-        # Draw nodes
-        nx.draw_networkx_nodes(G, pos, nodelist=internet_nodes,
-                               node_color="#FF6F00", node_size=800,
+        # Draw edge labels (band info on tower/waveform/chester links)
+        if edge_labels:
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
+                                         font_size=6, font_color="#4A148C",
+                                         bbox=dict(boxstyle="round,pad=0.2",
+                                                   facecolor="white", alpha=0.8,
+                                                   edgecolor="#CE93D8"),
+                                         ax=ax)
+
+        # Draw nodes — infrastructure chain
+        nx.draw_networkx_nodes(G, pos, nodelist=tower_nodes,
+                               node_color="#9C27B0", node_size=1000,
+                               node_shape="^", edgecolors="#6A1B9A",
+                               linewidths=2, ax=ax)
+        nx.draw_networkx_nodes(G, pos, nodelist=waveform_nodes,
+                               node_color="#E91E63", node_size=700,
+                               node_shape="d", edgecolors="#AD1457",
+                               linewidths=2, ax=ax)
+        nx.draw_networkx_nodes(G, pos, nodelist=chester_nodes,
+                               node_color="#FF6F00", node_size=900,
                                node_shape="s", edgecolors="#E65100",
                                linewidths=2, ax=ax)
         nx.draw_networkx_nodes(G, pos, nodelist=deco_nodes,
@@ -1127,40 +1234,53 @@ async def get_topology_graph() -> Response:
                                linewidths=1, alpha=0.5, ax=ax)
 
         # Draw labels
-        deco_labels = {n: G.nodes[n].get("label", n) for n in deco_nodes}
-        internet_labels = {"internet": "Internet"}
-        device_labels = {}
-        for n in online_devices + offline_devices:
-            device_labels[n] = G.nodes[n].get("label", n)
+        # Infrastructure labels (tower, waveform, chester) offset above
+        for node_list, y_off, fsize, fweight, fcolor in [
+            (tower_nodes, 0.45, 9, "bold", "white"),
+            (waveform_nodes, 0.40, 8, "bold", "white"),
+            (chester_nodes, 0.40, 8, "bold", "white"),
+        ]:
+            labels = {n: G.nodes[n].get("label", n) for n in node_list}
+            label_pos = {n: (pos[n][0], pos[n][1] + y_off) for n in node_list}
+            nx.draw_networkx_labels(G, label_pos, labels=labels,
+                                    font_size=fsize, font_weight=fweight,
+                                    font_color=fcolor, ax=ax)
 
-        nx.draw_networkx_labels(G, pos, labels=internet_labels,
-                                font_size=10, font_weight="bold",
-                                font_color="white", ax=ax)
         # Deco labels offset above
+        deco_labels = {n: G.nodes[n].get("label", n) for n in deco_nodes}
         deco_label_pos = {n: (pos[n][0], pos[n][1] + 0.35) for n in deco_nodes}
         nx.draw_networkx_labels(G, deco_label_pos, labels=deco_labels,
                                 font_size=9, font_weight="bold",
                                 font_color="#0f1a2a", ax=ax)
+
         # Device labels offset below
+        device_labels = {}
+        for n in online_devices + offline_devices:
+            device_labels[n] = G.nodes[n].get("label", n)
         device_label_pos = {n: (pos[n][0], pos[n][1] - 0.25) for n in device_labels}
         nx.draw_networkx_labels(G, device_label_pos, labels=device_labels,
                                 font_size=5.5, font_color="#37474F", ax=ax)
 
         # Legend
         legend_items = [
-            mpatches.Patch(color="#FF6F00", label="Internet Gateway"),
-            mpatches.Patch(color="#1E8B52", label="Deco Node"),
+            mpatches.Patch(color="#9C27B0", label="T-Mobile Cell Tower"),
+            mpatches.Patch(color="#E91E63", label="Waveform MIMO Antenna"),
+            mpatches.Patch(color="#FF6F00", label="5G Chester Router"),
+            mpatches.Patch(color="#1E8B52", label="Deco Mesh Node"),
             mpatches.Patch(color="#42A5F5", label="Device (Online)"),
             mpatches.Patch(color="#BDBDBD", label="Device (Offline)"),
-            mpatches.Patch(color="#1565C0", label="5 GHz"),
-            mpatches.Patch(color="#2E7D32", label="2.4 GHz"),
-            mpatches.Patch(color="#283593", label="6 GHz"),
+            mpatches.Patch(color="#9C27B0", label="5G NR (Tower)"),
+            mpatches.Patch(color="#FF9800", label="Mesh Backhaul"),
+            mpatches.Patch(color="#1565C0", label="5 GHz WiFi"),
+            mpatches.Patch(color="#2E7D32", label="2.4 GHz WiFi"),
+            mpatches.Patch(color="#283593", label="6 GHz WiFi"),
             mpatches.Patch(color="#C62828", label="Wired"),
         ]
-        ax.legend(handles=legend_items, loc="upper left", fontsize=8,
-                  framealpha=0.9, fancybox=True)
+        ax.legend(handles=legend_items, loc="upper left", fontsize=7,
+                  framealpha=0.9, fancybox=True, ncol=2)
 
-        ax.set_title(f"Network Topology — {len(deco_nodes)} Nodes, "
+        ax.set_title(f"Network Topology — {conn_type_str} | "
+                     f"{len(deco_nodes)} Deco Nodes, "
                      f"{len(online_devices) + len(offline_devices)} Devices",
                      fontsize=14, fontweight="bold", color="#0f1a2a", pad=15)
         ax.axis("off")
