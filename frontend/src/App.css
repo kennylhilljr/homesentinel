@@ -337,27 +337,32 @@
   margin-left: auto;
 }
 
-.scan-button {
-  background: linear-gradient(120deg, var(--brand), #4e83f5);
-  color: #fff;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 10px;
+/* 2026-03-11: Unified action buttons — outline style matching table background */
+.scan-button,
+.btn-optimize {
+  background: var(--surface, #ffffff);
+  color: var(--brand, #2363eb);
+  border: 1.5px solid var(--brand, #2363eb);
+  padding: 8px 18px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 700;
-  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
 }
 
-.scan-button:hover {
-  background: linear-gradient(120deg, var(--brand-strong), #3f72e6);
-  transform: translateY(-1px);
+.scan-button:hover,
+.btn-optimize:hover {
+  background: color-mix(in srgb, var(--brand, #2363eb) 8%, var(--surface, #ffffff));
 }
 
-.scan-button:disabled {
-  background: #b6c3df;
+.scan-button:disabled,
+.btn-optimize:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
 }
 
 .device-info {
@@ -508,6 +513,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  justify-content: space-between;
 }
 
 .na-text {
@@ -526,7 +532,17 @@
 .deco-node-info {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  width: 100%;
+}
+
+/* 2026-03-11: Push badge + slider to the right */
+.deco-node-info .pref-badge {
+  margin-left: auto;
+}
+
+.deco-node-info .na-text:only-child {
+  /* Center the dash when there's no Deco data */
 }
 
 .deco-node-name {

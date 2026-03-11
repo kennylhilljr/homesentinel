@@ -709,6 +709,33 @@ async def set_client_mesh(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to set client mesh: {str(e)}")
 
 
+# 2026-03-11: Trigger Deco mesh network optimization
+@router.post("/optimize-network")
+async def optimize_network() -> Dict[str, Any]:
+    """Trigger Deco mesh network optimization.
+    Re-evaluates channel assignments, band steering, and client-node associations.
+    """
+    if deco_service is None or deco_service.deco_client is None:
+        raise HTTPException(status_code=503, detail="Deco service not available")
+    try:
+        result = deco_service.deco_client.optimize_network()
+        error_code = result.get("error_code", -1)
+        perf = result.get("performance", {})
+        client_count = result.get("client_count", 0)
+        cpu = perf.get("cpu_usage", "?")
+        mem = perf.get("mem_usage", "?")
+        return {
+            "success": error_code == 0,
+            "error_code": error_code,
+            "message": f"Network refreshed — {client_count} clients, CPU: {cpu}%, Mem: {mem}%",
+            "performance": perf,
+            "client_count": client_count,
+        }
+    except Exception as e:
+        logger.error(f"Failed to optimize network: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to optimize network: {str(e)}")
+
+
 @router.get("/topology")
 async def get_topology() -> Dict[str, Any]:
     """

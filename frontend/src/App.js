@@ -40,6 +40,8 @@ function App() {
   const [decoNodeMacs, setDecoNodeMacs] = useState(new Set());
   // 2026-03-11: Map of Deco node MAC → node name (for connection preference dropdown)
   const [decoNodesMap, setDecoNodesMap] = useState({});
+  // 2026-03-11: Optimize network state
+  const [optimizeLoading, setOptimizeLoading] = useState(false);
 
   useEffect(() => {
     // Check backend API health
@@ -207,6 +209,31 @@ function App() {
     }
   };
 
+  // 2026-03-11: Trigger Deco mesh network optimization
+  const optimizeNetwork = async () => {
+    setOptimizeLoading(true);
+    try {
+      const response = await fetch(buildUrl('/deco/optimize-network'), {
+        method: 'POST',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          alert(data.message);
+        } else {
+          alert(`Optimization failed: ${data.message}`);
+        }
+      } else {
+        alert('Failed to start optimization. Deco may not be reachable.');
+      }
+    } catch (error) {
+      console.error('Failed to optimize network:', error);
+      alert('Failed to optimize network. Check Deco connectivity.');
+    } finally {
+      setOptimizeLoading(false);
+    }
+  };
+
   const handleDeviceClick = (device) => {
     setSelectedDevice(device);
     setShowDetailCard(true);
@@ -339,10 +366,11 @@ function App() {
     }
   };
 
+  // 2026-03-11: All dates displayed in Eastern Time
   const formatDate = (dateString) => {
     if (!dateString) return 'Never';
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    const date = new Date(dateString + (dateString.endsWith('Z') || dateString.includes('+') ? '' : 'Z'));
+    return date.toLocaleString('en-US', { timeZone: 'America/New_York' });
   };
 
   const getSortableValue = (device, key) => {
@@ -512,7 +540,7 @@ function App() {
           <div className="summary-card">
             <div className="summary-label">Last Refreshed</div>
             <div className="summary-value timestamp-small">
-              {lastScanTime ? new Date(lastScanTime).toLocaleTimeString() : 'Never'}
+              {lastScanTime ? new Date(lastScanTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York' }) : 'Never'}
             </div>
           </div>
         </div>
@@ -611,11 +639,14 @@ function App() {
               >
                 Download CSV
               </button>
-              {lastScanTime && (
-                <span className="device-info">
-                  Updated: {new Date(lastScanTime).toLocaleTimeString()}
-                </span>
-              )}
+              <button
+                className="btn-optimize"
+                onClick={optimizeNetwork}
+                disabled={optimizeLoading}
+                title="Optimize Deco mesh — re-evaluate channels, band steering, and client connections"
+              >
+                {optimizeLoading ? 'Optimizing...' : 'Optimize Network'}
+              </button>
             </div>
           </div>
           {displayedDevices.length > 0 ? (

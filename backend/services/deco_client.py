@@ -873,6 +873,39 @@ class DecoClient:
             json.dumps({"operation": "read"})
         )
 
+    def optimize_network(self) -> Dict[str, Any]:
+        """2026-03-11: Trigger Deco mesh network optimization.
+        The Deco LuCI HTTP API does not expose an optimize endpoint
+        (only available via TMP/Tether app). We force a full refresh of
+        performance + client data to re-evaluate current network state.
+        """
+        with _local_api_lock:
+            local_client = DecoClient(
+                local_endpoint=self.local_endpoint,
+                use_cloud=False,
+                verify_ssl=False,
+            )
+            local_client.username = "admin"
+            local_client.password = self.password
+            try:
+                local_client.authenticate()
+                perf = local_client._local_encrypted_request(
+                    "admin/network?form=performance",
+                    json.dumps({"operation": "read"})
+                )
+                clients = local_client._local_encrypted_request(
+                    "admin/client?form=client_list",
+                    json.dumps({"operation": "read", "params": {"device_mac": "default"}})
+                )
+                client_count = len(clients.get("client_list", []))
+                return {
+                    "error_code": 0,
+                    "performance": perf,
+                    "client_count": client_count,
+                }
+            finally:
+                local_client.logout_local()
+
     def logout_local(self) -> None:
         """Logout from local Deco API."""
         if self._local_logged and self._stok:
