@@ -54,6 +54,34 @@ def set_correlation_service(service):
     correlation_service = service
 
 
+def _get_node_friendly_name(node_mac: str) -> Optional[str]:
+    """Look up the friendly_name from network_devices for a Deco node MAC.
+
+    2026-03-11: The Deco local API nickname field can get corrupted with client
+    device names (e.g. 'Kenny's Echo show' instead of 'Office'). We prefer
+    the HomeSentinel-stored friendly_name which the user sets manually.
+    """
+    if not deco_service or not deco_service._device_repo:
+        return None
+    try:
+        mac_clean = node_mac.lower().replace("-", "").replace(":", "").replace(" ", "")
+        if len(mac_clean) != 12:
+            return None
+        normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+        with deco_service._device_repo.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT friendly_name FROM network_devices WHERE LOWER(mac_address) = ?",
+                (normalized,)
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+    except Exception:
+        pass
+    return None
+
+
 @router.get("/nodes")
 async def get_deco_nodes() -> Dict[str, Any]:
     """
@@ -619,7 +647,10 @@ async def get_client_node_map() -> Dict[str, Any]:
                     nickname = base64.b64decode(nickname).decode("utf-8")
                 except Exception:
                     pass
-                node_names[node_mac] = nickname or node.get("device_model", node_mac)
+                # 2026-03-11: Prefer HomeSentinel friendly_name over Deco nickname
+                # (Deco nickname can get corrupted with client device names)
+                db_name = _get_node_friendly_name(node_mac)
+                node_names[node_mac] = db_name or nickname or node.get("device_model", node_mac)
 
             for node_mac, clients in local_data.get("node_clients", {}).items():
                 node_name = node_names.get(node_mac, node_mac)
@@ -751,7 +782,10 @@ async def get_topology() -> Dict[str, Any]:
                     nickname = base64.b64decode(nickname).decode("utf-8")
                 except Exception:
                     pass
-                node_name = nickname or node.get("device_model", node_mac)
+                # 2026-03-11: Prefer HomeSentinel friendly_name over Deco nickname
+                # (Deco nickname can get corrupted with client device names)
+                db_name = _get_node_friendly_name(node_mac)
+                node_name = db_name or nickname or node.get("device_model", node_mac)
                 node_mac_to_name[node_mac] = node_name
                 role = node.get("role", "")
 
@@ -957,7 +991,9 @@ async def get_topology_graph() -> Response:
                     nickname = base64.b64decode(nickname).decode("utf-8")
                 except Exception:
                     pass
-                node_mac_to_name[node_mac] = nickname or node.get("device_model", node_mac)
+                # 2026-03-11: Prefer HomeSentinel friendly_name over Deco nickname
+                db_name = _get_node_friendly_name(node_mac)
+                node_mac_to_name[node_mac] = db_name or nickname or node.get("device_model", node_mac)
         else:
             cloud_nodes = deco_service.get_nodes_with_details()
             for nd in cloud_nodes:
