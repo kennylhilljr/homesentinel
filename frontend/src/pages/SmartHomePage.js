@@ -21,6 +21,12 @@ function SmartHomePage() {
   const [identifyResults, setIdentifyResults] = useState({}); // entity_id -> result
   const [candidates, setCandidates] = useState({});
   const [showCandidates, setShowCandidates] = useState({});
+  // 2026-03-11: Inline banner notification (replaces alert() popups)
+  const [banner, setBanner] = useState(null);
+  const showBanner = (message, type = 'info') => {
+    setBanner({ message, type });
+    setTimeout(() => setBanner(null), type === 'error' ? 6000 : 4000);
+  };
 
   const fetchDevices = useCallback(async () => {
     setLoading(true);
@@ -73,10 +79,10 @@ function SmartHomePage() {
       const data = await resp.json();
       if (!data.success) {
         const errMsg = data.errors?.map(e => e.message || e.code).join(', ') || 'Command failed';
-        alert(`Failed: ${errMsg}`);
+        showBanner(`Failed: ${errMsg}`, 'error');
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showBanner(`Error: ${err.message}`, 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [entityId]: false }));
     }
@@ -94,11 +100,11 @@ function SmartHomePage() {
       if (resp.ok) {
         setIdentifyState(prev => ({ ...prev, [entityId]: 'waiting' }));
       } else {
-        alert(`Snapshot failed: ${data.detail || 'Unknown error'}`);
+        showBanner(`Snapshot failed: ${data.detail || 'Unknown error'}`, 'error');
         setIdentifyState(prev => ({ ...prev, [entityId]: null }));
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showBanner(`Error: ${err.message}`, 'error');
       setIdentifyState(prev => ({ ...prev, [entityId]: null }));
     }
   };
@@ -115,11 +121,11 @@ function SmartHomePage() {
         setIdentifyResults(prev => ({ ...prev, [entityId]: data }));
         setIdentifyState(prev => ({ ...prev, [entityId]: 'done' }));
       } else {
-        alert(`Scan failed: ${data.detail || 'Unknown error'}`);
+        showBanner(`Scan failed: ${data.detail || 'Unknown error'}`, 'error');
         setIdentifyState(prev => ({ ...prev, [entityId]: null }));
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showBanner(`Error: ${err.message}`, 'error');
       setIdentifyState(prev => ({ ...prev, [entityId]: null }));
     }
   };
@@ -134,15 +140,15 @@ function SmartHomePage() {
       });
       const data = await resp.json();
       if (data.success) {
-        alert(`Associated ${macAddress} with "${deviceName}"`);
+        showBanner(`Associated ${macAddress} with "${deviceName}"`, 'success');
         // Clear identify state
         setIdentifyState(prev => ({ ...prev, [entityId]: null }));
         setIdentifyResults(prev => ({ ...prev, [entityId]: null }));
       } else {
-        alert(`Association failed: ${data.detail || 'Unknown error'}`);
+        showBanner(`Association failed: ${data.detail || 'Unknown error'}`, 'error');
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showBanner(`Error: ${err.message}`, 'error');
     }
   };
 
@@ -171,6 +177,12 @@ function SmartHomePage() {
 
   return (
     <div className="smart-home-page">
+      {banner && (
+        <div className={`app-banner app-banner-${banner.type}`}>
+          {banner.message}
+          <button className="banner-close" onClick={() => setBanner(null)}>&times;</button>
+        </div>
+      )}
       <div className="page-header">
         <h2>Smart Home Control</h2>
         <p className="subtitle">

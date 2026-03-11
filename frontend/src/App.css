@@ -1,5 +1,60 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
+/* 2026-03-11: Inline banner notifications (replaces alert() popups) */
+.app-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  padding: 12px 48px 12px 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: center;
+  animation: bannerSlideDown 0.25s ease-out;
+}
+
+.app-banner-success {
+  background: #d1f5dd;
+  color: #1a6b3a;
+  border-bottom: 2px solid #a3e4c1;
+}
+
+.app-banner-error {
+  background: #fde2e2;
+  color: #b91c1c;
+  border-bottom: 2px solid #f5a3a3;
+}
+
+.app-banner-info {
+  background: #dce6fd;
+  color: #1e40af;
+  border-bottom: 2px solid #b3c6f7;
+}
+
+.banner-close {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  padding: 4px 8px;
+}
+
+.banner-close:hover {
+  opacity: 1;
+}
+
+@keyframes bannerSlideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 :root {
   --bg: #eef2f6;
   --bg-accent: #f7f9fc;

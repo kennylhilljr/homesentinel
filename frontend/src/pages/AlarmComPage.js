@@ -15,6 +15,12 @@ function AlarmComPage() {
   const [creds, setCreds] = useState({ username: '', password: '', two_factor_cookie: '' });
   const [showCredForm, setShowCredForm] = useState(false);
   const [activeTab, setActiveTab] = useState('partitions');
+  // 2026-03-11: Inline banner notification (replaces alert() popups)
+  const [banner, setBanner] = useState(null);
+  const showBanner = (message, type = 'info') => {
+    setBanner({ message, type });
+    setTimeout(() => setBanner(null), type === 'error' ? 6000 : 4000);
+  };
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -138,11 +144,11 @@ function AlarmComPage() {
       });
       const data = await resp.json();
       if (!data.success) {
-        alert(`${label} failed: ${data.detail || 'Unknown error'}`);
+        showBanner(`${label} failed: ${data.detail || 'Unknown error'}`, 'error');
       }
       await fetchDevices();
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showBanner(`Error: ${err.message}`, 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [partitionId]: false }));
     }
@@ -160,11 +166,11 @@ function AlarmComPage() {
       });
       const data = await resp.json();
       if (!data.success) {
-        alert(`${command} failed: ${data.detail || 'Unknown error'}`);
+        showBanner(`${command} failed: ${data.detail || 'Unknown error'}`, 'error');
       }
       await fetchDevices();
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showBanner(`Error: ${err.message}`, 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [lockId]: false }));
     }
@@ -287,6 +293,12 @@ function AlarmComPage() {
 
   return (
     <div className="alarm-com-page">
+      {banner && (
+        <div className={`app-banner app-banner-${banner.type}`}>
+          {banner.message}
+          <button className="banner-close" onClick={() => setBanner(null)}>&times;</button>
+        </div>
+      )}
       <div className="page-header">
         <h2>Alarm.com</h2>
         <p className="subtitle">

@@ -48,6 +48,13 @@ function App() {
   // 2026-03-11: Speed test state
   const [speedTestData, setSpeedTestData] = useState(null);
   const [speedTestRunning, setSpeedTestRunning] = useState(false);
+  // 2026-03-11: Banner notification state (replaces all alert() popups)
+  const [banner, setBanner] = useState(null); // { message, type: 'success'|'error'|'info' }
+
+  const showBanner = (message, type = 'info') => {
+    setBanner({ message, type });
+    setTimeout(() => setBanner(null), type === 'error' ? 6000 : 4000);
+  };
 
   useEffect(() => {
     // Check backend API health
@@ -255,16 +262,16 @@ function App() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          alert(data.message);
+          showBanner(data.message, 'success');
         } else {
-          alert(`Optimization failed: ${data.message}`);
+          showBanner(`Optimization failed: ${data.message}`, 'error');
         }
       } else {
-        alert('Failed to start optimization. Deco may not be reachable.');
+        showBanner('Failed to start optimization. Deco may not be reachable.', 'error');
       }
     } catch (error) {
       console.error('Failed to optimize network:', error);
-      alert('Failed to optimize network. Check Deco connectivity.');
+      showBanner('Failed to optimize network. Check Deco connectivity.', 'error');
     } finally {
       setOptimizeLoading(false);
     }
@@ -278,20 +285,21 @@ function App() {
       if (response.ok) {
         const result = await response.json();
         if (result.error) {
-          alert(`Speed test error: ${result.error}`);
+          showBanner(`Speed test error: ${result.error}`, 'error');
         } else {
           // Refresh latest data
           const latestResp = await fetch(buildUrl('/speedtest/latest'));
           if (latestResp.ok) {
             setSpeedTestData(await latestResp.json());
           }
+          showBanner('Speed test completed', 'success');
         }
       } else {
-        alert('Speed test failed. Check Chester connectivity.');
+        showBanner('Speed test failed. Check Chester connectivity.', 'error');
       }
     } catch (error) {
       console.error('Speed test failed:', error);
-      alert('Speed test failed. Check Chester connectivity.');
+      showBanner('Speed test failed. Check Chester connectivity.', 'error');
     } finally {
       setSpeedTestRunning(false);
     }
@@ -373,13 +381,13 @@ function App() {
         const updatedDevice = await response.json();
         setDevices(devices.map(d => d.device_id === updatedDevice.device_id ? updatedDevice : d));
         closeEditModal();
-        alert('Device updated successfully');
+        showBanner('Device updated successfully', 'success');
       } else {
-        alert('Failed to update device');
+        showBanner('Failed to update device', 'error');
       }
     } catch (error) {
       console.error('Failed to save device:', error);
-      alert('Error saving device');
+      showBanner('Error saving device', 'error');
     }
   };
 
@@ -527,6 +535,12 @@ function App() {
 
   return (
     <div className={`App theme-${theme}`}>
+      {banner && (
+        <div className={`app-banner app-banner-${banner.type}`}>
+          {banner.message}
+          <button className="banner-close" onClick={() => setBanner(null)}>&times;</button>
+        </div>
+      )}
       <header className="App-header">
         <div className="header-content">
           <h1>HomeSentinel</h1>

@@ -19,6 +19,12 @@ function SpeedInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [testRunning, setTestRunning] = useState(false);
   const [historyHours, setHistoryHours] = useState(24);
+  // 2026-03-11: Inline banner notification (replaces alert() popups)
+  const [banner, setBanner] = useState(null);
+  const showBanner = (message, type = 'info') => {
+    setBanner({ message, type });
+    setTimeout(() => setBanner(null), type === 'error' ? 6000 : 4000);
+  };
 
   const fetchAll = useCallback(async () => {
     try {
@@ -71,12 +77,14 @@ function SpeedInsightsPage() {
       if (res.ok) {
         const result = await res.json();
         if (result.error) {
-          alert(`Speed test error: ${result.error}`);
+          showBanner(`Speed test error: ${result.error}`, 'error');
+        } else {
+          showBanner('Speed test completed', 'success');
         }
         await fetchAll();
       }
     } catch (err) {
-      alert('Speed test failed');
+      showBanner('Speed test failed. Check Chester connectivity.', 'error');
     } finally {
       setTestRunning(false);
     }
@@ -147,6 +155,12 @@ function SpeedInsightsPage() {
 
   return (
     <div className="si-page">
+      {banner && (
+        <div className={`app-banner app-banner-${banner.type}`}>
+          {banner.message}
+          <button className="banner-close" onClick={() => setBanner(null)}>&times;</button>
+        </div>
+      )}
       <div className="si-header">
         <h2>Speed Insights</h2>
         <div className="si-header-actions">
