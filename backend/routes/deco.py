@@ -1239,7 +1239,7 @@ async def get_topology_graph() -> Response:
         for u, v, edata in G.edges(data=True):
             ct = edata.get("connection_type", "")
             color = conn_colors.get(ct, "#B0BEC5")
-            linewidth = 2.5 if ct in ("wired", "5g_tower") else 1.8 if ct == "mesh_backhaul" else 1.2
+            linewidth = 1.2
             linestyle = "-" if ct else "--"
             nx.draw_networkx_edges(G, pos, edgelist=[(u, v)],
                                    edge_color=color, width=linewidth,
