@@ -328,7 +328,7 @@
   opacity: 0.7;
 }
 
-/* 2026-03-12: Live Carrier Aggregation table */
+/* 2026-03-12: Carrier Aggregation history table */
 .si-ca-table {
   width: 100%;
   border-collapse: separate;
@@ -360,20 +360,30 @@
   background: rgba(59, 130, 246, 0.04);
 }
 
-.si-ca-pcc {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.06), transparent);
+.si-ca-live {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.05), transparent);
 }
 
-.si-ca-pcc td {
-  font-weight: 600;
+.si-ca-inactive {
+  opacity: 0.7;
+}
+
+.si-ca-inactive:hover {
+  opacity: 1;
+}
+
+.si-ca-band {
+  font-weight: 700;
+  font-family: 'Space Grotesk', 'Manrope', monospace;
 }
 
 .si-ca-role {
   display: inline-block;
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 6px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  margin-right: 2px;
 }
 
 .si-ca-role.pcc {
@@ -384,6 +394,93 @@
 .si-ca-role.scc {
   color: #3b82f6;
   background: rgba(59, 130, 246, 0.12);
+}
+
+.si-ca-status {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.si-ca-status-on {
+  color: #fff;
+  background: #22c55e;
+}
+
+.si-ca-status-off {
+  color: var(--text-muted);
+  background: var(--border);
+}
+
+.si-ca-new {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 1px 6px;
+  border-radius: 5px;
+  margin-left: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.si-ca-live-dot {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #22c55e;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.si-ca-live-dot::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: si-ca-pulse 2s infinite;
+}
+
+@keyframes si-ca-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.si-ca-pct-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 80px;
+}
+
+.si-ca-pct-bar > div {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--brand, #3b82f6);
+  flex-shrink: 0;
+  max-width: 50px;
+}
+
+.si-ca-pct-bar > span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.si-ca-cellids {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 0.72rem;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Empty state */

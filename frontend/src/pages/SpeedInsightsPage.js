@@ -444,92 +444,128 @@ function SpeedInsightsPage() {
         ) : null;
       })()}
 
-      {/* 2026-03-12: Live Carrier Aggregation table from Chester */}
-      {chesterInfo && chesterInfo.ca_band && chesterInfo.ca_band.length > 0 && (() => {
-        // Parse raw AT+QCAINFO entries and serving cell
-        const raw = chesterInfo.raw_lte_cell || '';
-        // Parse serving cell: ...,"NR5G-SA","TDD",MCC,MNC,CellID,PCID,TAC,ARFCN,Band,BW,RSRP,RSRQ,SINR,...
-        const servMatch = raw.match(/servingcell.*?,(\d+),(\d+),([A-F0-9]+),(\d+),([A-F0-9]+),(\d+),(\d+),(\d+),([-\d]+),([-\d]+),([-\d]+)/);
-        const servingCell = servMatch ? {
-          mcc: servMatch[1], mnc: servMatch[2], cellId: servMatch[3], pcid: servMatch[4],
-          arfcn: servMatch[6], band: servMatch[7], rsrp: servMatch[9], rsrq: servMatch[10], sinr: servMatch[11],
-        } : null;
+      {/* 2026-03-12: Carrier Aggregation history + live status */}
+      {chartData.some(t => t.cellular_ca_bands) && (() => {
+        // Build historical inventory of all bands/ARFCNs ever seen
+        const bandInventory = {}; // key: "arfcn-band" → { band, arfcn, role counts, first/last seen, timestamps }
+        const totalTests = chartData.filter(t => t.cellular_ca_bands).length;
 
-        // Parse CA entries
-        // PCC: type,ARFCN,BW,Band,PCID
-        // SCC: type,ARFCN,BW,Band,SCS,PCID,DL_active,UL_active,UL_ARFCN
-        const carriers = chesterInfo.ca_band.map(entry => {
-          const parts = entry.replace(/"/g, '').split(',').map(s => s.trim());
-          const role = parts[0]; // PCC or SCC
-          const arfcn = parts[1];
-          const bw = parts[2];
-          const band = parts[3];
-          if (role === 'PCC') {
-            const pcid = parts[4] || '';
-            return { role, arfcn, bw, band, pcid, scs: '-', dlActive: '1', ulActive: '1', ulArfcn: arfcn,
-              rsrp: servingCell ? servingCell.rsrp : '-', cellId: chesterInfo.cell_id || '-',
-              type: chesterInfo.raw_lte_cell?.includes('NR5G') ? 'NR5G' : 'LTE' };
-          } else {
-            return { role, arfcn, bw, band, scs: parts[4] || '-', pcid: parts[5] || '-',
-              dlActive: parts[6] || '-', ulActive: parts[7] || '-', ulArfcn: parts[8] || '-',
-              rsrp: '-', cellId: '-', type: band.includes('NR5G') ? 'NR5G' : 'LTE' };
-          }
-        });
-
-        // Count frequency from historical data — how often each cell+band combo appears
-        const freqMap = {};
         chartData.forEach(t => {
           if (!t.cellular_ca_bands) return;
           try {
             const bands = typeof t.cellular_ca_bands === 'string' ? JSON.parse(t.cellular_ca_bands) : t.cellular_ca_bands;
+            const ts = t.timestamp;
             bands.forEach(b => {
               const key = `${b.arfcn}-${b.band}`;
-              freqMap[key] = (freqMap[key] || 0) + 1;
+              if (!bandInventory[key]) {
+                bandInventory[key] = {
+                  band: b.band, arfcn: b.arfcn, bandwidth: b.bandwidth || '-',
+                  pccCount: 0, sccCount: 0, totalCount: 0,
+                  firstSeen: ts, lastSeen: ts,
+                  avgDownload: [], cellIds: new Set(),
+                };
+              }
+              const entry = bandInventory[key];
+              entry.totalCount++;
+              if (b.role === 'PCC') entry.pccCount++;
+              else entry.sccCount++;
+              if (ts < entry.firstSeen) entry.firstSeen = ts;
+              if (ts > entry.lastSeen) entry.lastSeen = ts;
+              if (t.download_mbps) entry.avgDownload.push(t.download_mbps);
+              if (t.cellular_cell_id) entry.cellIds.add(t.cellular_cell_id);
             });
           } catch (e) {}
         });
 
-        // Sort by frequency (most seen first), PCC always on top
-        const sorted = [...carriers].sort((a, b) => {
-          if (a.role === 'PCC') return -1;
-          if (b.role === 'PCC') return 1;
-          const freqA = freqMap[`${a.arfcn}-${a.band}`] || 0;
-          const freqB = freqMap[`${b.arfcn}-${b.band}`] || 0;
-          return freqB - freqA;
-        });
+        // Parse live CA entries from Chester
+        const liveArfcns = new Set();
+        let liveRole = {};
+        if (chesterInfo && chesterInfo.ca_band) {
+          chesterInfo.ca_band.forEach(entry => {
+            const parts = entry.replace(/"/g, '').split(',').map(s => s.trim());
+            const role = parts[0];
+            const arfcn = parts[1];
+            const band = parts[3];
+            const key = `${arfcn}-${band}`;
+            liveArfcns.add(key);
+            liveRole[key] = role;
+            // Add to inventory if brand new (never seen in history)
+            if (!bandInventory[key]) {
+              bandInventory[key] = {
+                band, arfcn, bandwidth: parts[2] || '-',
+                pccCount: 0, sccCount: 0, totalCount: 0,
+                firstSeen: null, lastSeen: null,
+                avgDownload: [], cellIds: new Set(),
+              };
+            }
+          });
+        }
+
+        // Convert to array and sort by frequency
+        const sorted = Object.entries(bandInventory).map(([key, v]) => ({
+          key,
+          ...v,
+          avgDl: v.avgDownload.length > 0
+            ? (v.avgDownload.reduce((a, b) => a + b, 0) / v.avgDownload.length).toFixed(1)
+            : '-',
+          pct: totalTests > 0 ? Math.round((v.totalCount / totalTests) * 100) : 0,
+          isLive: liveArfcns.has(key),
+          liveRole: liveRole[key] || null,
+          isNew: v.totalCount <= 2 && v.firstSeen === v.lastSeen,
+          cellIdList: [...v.cellIds].join(', '),
+        })).sort((a, b) => b.totalCount - a.totalCount);
 
         return (
           <div className="si-card">
-            <h3>Live Carrier Aggregation — Cell {chesterInfo.cell_id || '?'}</h3>
+            <div className="si-card-header">
+              <h3>Carrier Aggregation History <span className="si-subtitle">All bands ever connected — sorted by frequency</span></h3>
+              {chesterInfo && <span className="si-ca-live-dot">LIVE</span>}
+            </div>
             <div style={{ overflowX: 'auto' }}>
               <table className="si-ca-table">
                 <thead>
                   <tr>
-                    <th>Cell ID</th>
-                    <th>Type</th>
-                    <th>DL ARFCN</th>
-                    <th>SCS</th>
+                    <th>Status</th>
                     <th>Band</th>
-                    <th>PCI</th>
-                    <th>RSRP</th>
-                    <th>DL Active</th>
-                    <th>UL Active</th>
-                    <th>UL ARFCN</th>
+                    <th>DL ARFCN</th>
+                    <th>BW</th>
+                    <th>Role</th>
+                    <th>Seen</th>
+                    <th>% of Tests</th>
+                    <th>Avg DL (Mbps)</th>
+                    <th>Cell IDs</th>
+                    <th>First Seen</th>
+                    <th>Last Seen</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((c, i) => (
-                    <tr key={i} className={c.role === 'PCC' ? 'si-ca-pcc' : ''}>
-                      <td>{c.role === 'PCC' ? chesterInfo.cell_id || '-' : '-'}</td>
-                      <td><span className={`si-ca-role ${c.role.toLowerCase()}`}>{c.role}</span></td>
+                  {sorted.map((c) => (
+                    <tr key={c.key} className={c.isLive ? 'si-ca-live' : 'si-ca-inactive'}>
+                      <td>
+                        {c.isLive
+                          ? <span className="si-ca-status si-ca-status-on">{c.liveRole || 'ON'}</span>
+                          : <span className="si-ca-status si-ca-status-off">OFF</span>}
+                        {c.isNew && <span className="si-ca-new">NEW</span>}
+                      </td>
+                      <td className="si-ca-band">{c.band.replace('NR5G BAND ', 'n')}</td>
                       <td>{c.arfcn}</td>
-                      <td>{c.scs}</td>
-                      <td>{c.band.replace('NR5G BAND ', 'n')}</td>
-                      <td>{c.pcid}</td>
-                      <td>{c.rsrp !== '-' ? `${c.rsrp} dBm` : '-'}</td>
-                      <td>{c.dlActive === '1' ? 'Yes' : c.dlActive === '0' ? 'No' : c.dlActive}</td>
-                      <td>{c.ulActive === '1' ? 'Yes' : c.ulActive === '0' ? 'No' : c.ulActive}</td>
-                      <td>{c.ulArfcn !== '-' ? c.ulArfcn : '-'}</td>
+                      <td>{c.bandwidth}</td>
+                      <td>
+                        {c.pccCount > 0 && <span className="si-ca-role pcc">PCC ×{c.pccCount}</span>}
+                        {c.pccCount > 0 && c.sccCount > 0 && ' '}
+                        {c.sccCount > 0 && <span className="si-ca-role scc">SCC ×{c.sccCount}</span>}
+                      </td>
+                      <td>{c.totalCount}</td>
+                      <td>
+                        <div className="si-ca-pct-bar">
+                          <div className="si-ca-pct-fill" style={{ width: `${c.pct}%` }} />
+                          <span>{c.pct}%</span>
+                        </div>
+                      </td>
+                      <td>{c.avgDl}</td>
+                      <td className="si-ca-cellids">{c.cellIdList || '-'}</td>
+                      <td>{c.firstSeen ? formatTime(c.firstSeen) : 'Now'}</td>
+                      <td>{c.lastSeen ? formatTime(c.lastSeen) : 'Now'}</td>
                     </tr>
                   ))}
                 </tbody>
