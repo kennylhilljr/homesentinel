@@ -163,11 +163,32 @@
   color: rgba(248, 250, 255, 0.88);
 }
 
+/* 2026-03-12: Nav grouped into Network | Smart Home | Performance */
 .main-nav {
   display: flex;
-  gap: 10px;
+  gap: 14px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-group-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(248, 250, 255, 0.45);
+}
+
+.nav-group-buttons {
+  display: flex;
+  gap: 4px;
 }
 
 .nav-button {
@@ -175,9 +196,9 @@
   color: #f8faff;
   border: 1px solid rgba(255, 255, 255, 0.28);
   backdrop-filter: blur(8px);
-  padding: 10px 16px;
+  padding: 8px 14px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -192,6 +213,16 @@
   background: #ffffff;
   color: var(--brand-strong);
   border-color: #ffffff;
+}
+
+.nav-settings {
+  align-self: center;
+  opacity: 0.7;
+}
+
+.nav-settings:hover,
+.nav-settings.active {
+  opacity: 1;
 }
 
 .App-main {
@@ -907,6 +938,27 @@
   color: var(--text);
 }
 
+/* 2026-03-12: "New" badge for recently discovered devices (first seen <24h) */
+.device-new-badge {
+  display: inline-block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.14);
+  padding: 1px 6px;
+  border-radius: 5px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+  animation: newBadgePulse 2.5s ease-in-out infinite;
+}
+
+@keyframes newBadgePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .device-type {
   text-transform: capitalize;
   color: var(--text);
@@ -1074,6 +1126,26 @@
 
 .mesh-toggle input:checked + .mesh-slider::before {
   transform: translateX(12px);
+}
+
+/* 2026-03-12: Inline rename input — double-click to edit device name */
+.inline-rename-input {
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  border: 2px solid var(--brand);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+  max-width: 240px;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(11, 92, 171, 0.15);
+}
+
+.device-name-text {
+  cursor: text;
 }
 
 .name-action-wrapper {

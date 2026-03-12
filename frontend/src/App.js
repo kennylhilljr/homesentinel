@@ -30,6 +30,9 @@ function App() {
   const [nameDropdownDevice, setNameDropdownDevice] = useState(null); // device_id of open dropdown
   const [customNameInput, setCustomNameInput] = useState('');
   const [nameActionLoading, setNameActionLoading] = useState(false);
+  // 2026-03-12: Inline rename on double-click
+  const [inlineEditId, setInlineEditId] = useState(null);
+  const [inlineEditValue, setInlineEditValue] = useState('');
   const [formData, setFormData] = useState({
     friendly_name: '',
     device_type: '',
@@ -570,54 +573,43 @@ function App() {
 
   return (
     <div className={`App theme-${theme}`}>
-      {banner && (
-        <div className={`app-banner app-banner-${banner.type}`}>
-          {banner.message}
-          <button className="banner-close" onClick={() => setBanner(null)}>&times;</button>
-        </div>
-      )}
+      {/* 2026-03-12: aria-live for screen reader accessibility */}
+      <div aria-live="polite" aria-atomic="true" role="status">
+        {banner && (
+          <div className={`app-banner app-banner-${banner.type}`}>
+            {banner.message}
+            <button className="banner-close" onClick={() => setBanner(null)} aria-label="Dismiss notification">&times;</button>
+          </div>
+        )}
+      </div>
       <header className="App-header">
         <div className="header-content">
           <h1>HomeSentinel</h1>
           <p>Home Network Monitor & Device Management Platform</p>
         </div>
+        {/* 2026-03-12: Nav consolidated into 3 groups — Network | Smart Home | Performance */}
         <nav className="main-nav">
-          <button
-            className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('dashboard')}
-          >
-            Dashboard
-          </button>
-          <button
-            className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('topology')}
-          >
-            Network Topology
-          </button>
-          <button
-            className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('alexa')}
-          >
-            Alexa
-          </button>
-          <button
-            className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('smart-home')}
-          >
-            Smart Home
-          </button>
-          <button
-            className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('speed-insights')}
-          >
-            Speed Insights
-          </button>
-          <button
-            className={`nav-button ${currentPage === 'settings' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('settings')}
-          >
-            Settings
-          </button>
+          <div className="nav-group">
+            <span className="nav-group-label">Network</span>
+            <div className="nav-group-buttons">
+              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>Dashboard</button>
+              <button className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`} onClick={() => setCurrentPage('topology')}>Topology</button>
+            </div>
+          </div>
+          <div className="nav-group">
+            <span className="nav-group-label">Smart Home</span>
+            <div className="nav-group-buttons">
+              <button className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`} onClick={() => setCurrentPage('alexa')}>Alexa</button>
+              <button className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`} onClick={() => setCurrentPage('smart-home')}>Controls</button>
+            </div>
+          </div>
+          <div className="nav-group">
+            <span className="nav-group-label">Performance</span>
+            <div className="nav-group-buttons">
+              <button className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`} onClick={() => setCurrentPage('speed-insights')}>Speed</button>
+            </div>
+          </div>
+          <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => setCurrentPage('settings')}>Settings</button>
         </nav>
       </header>
       <main className="App-main">
@@ -997,9 +989,51 @@ function App() {
                         }
                       }}
                     >
-                      {/* 2026-03-11: Merged rename dropdown into Name column, removed Alexa Name column */}
+                      {/* 2026-03-11: Name column — inline edit on double-click, dropdown for suggestions */}
                       <td className="device-name alexa-name-cell">
-                        {device.friendly_name || decoName || device.mac_address}
+                        {inlineEditId === device.device_id ? (
+                          <input
+                            className="inline-rename-input"
+                            type="text"
+                            value={inlineEditValue}
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setInlineEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              if (e.key === 'Enter' && inlineEditValue.trim()) {
+                                setCustomName(device, inlineEditValue.trim());
+                                setInlineEditId(null);
+                              } else if (e.key === 'Escape') {
+                                setInlineEditId(null);
+                              }
+                            }}
+                            onBlur={() => {
+                              if (inlineEditValue.trim() && inlineEditValue.trim() !== (device.friendly_name || decoName || device.mac_address)) {
+                                setCustomName(device, inlineEditValue.trim());
+                              }
+                              setInlineEditId(null);
+                            }}
+                          />
+                        ) : (
+                          <span
+                            className="device-name-text"
+                            title="Double-click to rename"
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              setInlineEditId(device.device_id);
+                              setInlineEditValue(device.friendly_name || decoName || '');
+                              setNameDropdownDevice(null);
+                            }}
+                          >
+                            {device.friendly_name || decoName || device.mac_address}
+                          </span>
+                        )}
+                        {/* 2026-03-12: "New" badge for devices first seen in last 24h */}
+                        {device.first_seen && (Date.now() - new Date(device.first_seen + (device.first_seen.includes('Z') ? '' : 'Z')).getTime()) < 86400000 && (
+                          <span className="device-new-badge">NEW</span>
+                        )}
+                        {inlineEditId !== device.device_id && (
                         <div className="name-action-wrapper">
                           <button
                             className="name-action-btn"
@@ -1055,6 +1089,7 @@ function App() {
                             </div>
                           )}
                         </div>
+                        )}
                       </td>
                       {/* 2026-03-11: Status + type badge column */}
                       {(() => {
