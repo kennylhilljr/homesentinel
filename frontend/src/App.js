@@ -573,6 +573,8 @@ function App() {
 
   return (
     <div className={`App theme-${theme}`}>
+      {/* 2026-03-12: skip-to-content for keyboard users */}
+      <a href="#main-content" className="skip-to-content">Skip to main content</a>
       {/* 2026-03-12: aria-live for screen reader accessibility */}
       <div aria-live="polite" aria-atomic="true" role="status">
         {banner && (
@@ -612,7 +614,7 @@ function App() {
           <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => setCurrentPage('settings')}>Settings</button>
         </nav>
       </header>
-      <main className="App-main">
+      <main className="App-main" id="main-content">
         {/* Network Topology Page */}
         {currentPage === 'topology' && <DecoTopologyPage />}
 
@@ -827,14 +829,18 @@ function App() {
               <h2>Network Devices ({displayedDevices.length})</h2>
             </div>
             <div className="devices-filter-row">
+              <label htmlFor="device-search" className="sr-only">Search devices</label>
               <input
+                id="device-search"
                 type="text"
                 className="devices-search-input"
                 placeholder="Search devices..."
                 value={deviceQuery}
                 onChange={(e) => setDeviceQuery(e.target.value)}
               />
+              <label htmlFor="device-status-filter" className="sr-only">Filter by status</label>
               <select
+                id="device-status-filter"
                 className="devices-status-filter"
                 value={deviceStatusFilter}
                 onChange={(e) => setDeviceStatusFilter(e.target.value)}
@@ -1333,7 +1339,7 @@ function App() {
 
         {/* Legacy Edit Modal - Keeping for backwards compatibility */}
         {showEditModal && editingDevice && (
-          <div className="modal-overlay">
+          <div className="modal-overlay" role="dialog" aria-modal="true" aria-label={`Edit device ${editingDevice.mac_address}`}>
             <div className="modal-content">
               <h2>Edit Device: {editingDevice.mac_address}</h2>
               <form>

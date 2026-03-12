@@ -275,7 +275,7 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
 
         {decoStatus && (
           <div className={`status-banner ${decoStatus.authenticated ? 'connected' : decoStatus.configured ? 'disconnected' : 'disconnected'}`}>
-            <span className={`status-dot ${decoStatus.authenticated ? 'green' : decoStatus.configured ? 'yellow' : 'red'}`}></span>
+            <span className={`status-dot ${decoStatus.authenticated ? 'green' : decoStatus.configured ? 'yellow' : 'red'}`} aria-hidden="true"></span>
             {decoStatus.authenticated
               ? `Connected (${decoStatus.mode} API)`
               : decoStatus.configured
@@ -363,7 +363,7 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
 
         {alexaStatus && (
           <div className={`status-banner ${alexaStatus.authenticated ? 'connected' : 'disconnected'}`}>
-            <span className={`status-dot ${alexaStatus.authenticated ? 'green' : 'red'}`}></span>
+            <span className={`status-dot ${alexaStatus.authenticated ? 'green' : 'red'}`} aria-hidden="true"></span>
             {alexaStatus.authenticated
               ? 'Connected to Alexa'
               : alexaStatus.configured
@@ -443,14 +443,14 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
 
         {alexaStatus?.cookies_set && (
           <div className="status-banner connected" style={{ marginBottom: '1rem' }}>
-            <span className="status-dot green"></span>
+            <span className="status-dot green" aria-hidden="true"></span>
             Alexa cookies configured
           </div>
         )}
 
         {cookieResult && (
           <div className={`status-banner ${cookieResult.success ? 'connected' : 'disconnected'}`} style={{ marginBottom: '1rem' }}>
-            <span className={`status-dot ${cookieResult.success ? 'green' : 'red'}`}></span>
+            <span className={`status-dot ${cookieResult.success ? 'green' : 'red'}`} aria-hidden="true"></span>
             {cookieResult.message || (cookieResult.success ? 'Cookies saved successfully' : 'Cookie auth failed')}
             {cookieResult.test_result?.customer_name && ` — ${cookieResult.test_result.customer_name}`}
           </div>
@@ -468,8 +468,8 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
           />
         </div>
 
-        <details style={{ marginBottom: '1rem', color: '#aaa', fontSize: '0.85rem' }}>
-          <summary style={{ cursor: 'pointer', color: '#ccc' }}>How to get your cookies</summary>
+        <details style={{ marginBottom: '1rem', color: 'var(--text-muted, #556277)', fontSize: '0.85rem' }}>
+          <summary style={{ cursor: 'pointer', color: 'var(--text-muted, #556277)' }}>How to get your cookies</summary>
           <ol style={{ paddingLeft: '1.2rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
             <li>Open <strong>alexa.amazon.com</strong> in your browser and log in</li>
             <li>Open DevTools (<strong>F12</strong> or <strong>Cmd+Option+I</strong>)</li>
@@ -501,7 +501,7 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
 
         {chesterStatus && (
           <div className={`status-banner ${chesterStatus.authenticated ? 'connected' : 'disconnected'}`}>
-            <span className={`status-dot ${chesterStatus.authenticated ? 'green' : 'red'}`}></span>
+            <span className={`status-dot ${chesterStatus.authenticated ? 'green' : 'red'}`} aria-hidden="true"></span>
             {chesterStatus.authenticated
               ? `Connected (${chesterStatus.endpoint})`
               : chesterStatus.configured

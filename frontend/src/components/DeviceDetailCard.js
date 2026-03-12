@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './DeviceDetailCard.css';
 import { buildUrl } from '../utils/apiConfig';
 
@@ -100,13 +100,37 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
     setError(null);
   };
 
+  // 2026-03-12: Focus trap — keep Tab inside the modal
+  const containerRef = useRef(null);
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key !== 'Tab') return;
+    const focusable = containerRef.current?.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }, [onClose]);
+
+  useEffect(() => {
+    // Focus the close button on mount
+    const closeBtn = containerRef.current?.querySelector('.detail-card-close');
+    if (closeBtn) closeBtn.focus();
+  }, []);
+
   if (!device) {
     return null;
   }
 
   return (
-    <div className="detail-card-overlay" onClick={onClose}>
-      <div className="detail-card-container" onClick={(e) => e.stopPropagation()}>
+    <div className="detail-card-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={`Device details: ${device.friendly_name || device.mac_address}`} onKeyDown={handleKeyDown}>
+      <div className="detail-card-container" ref={containerRef} onClick={(e) => e.stopPropagation()}>
         {/* Close Button */}
         <button
           className="detail-card-close"
@@ -134,7 +158,7 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
               {showAdvanced ? 'Hide Advanced' : 'Show Advanced'}
             </button>
             <div className={`detail-card-status status-${device.status}`}>
-              <span className={`status-indicator status-${device.status}`}></span>
+              <span className={`status-indicator status-${device.status}`} aria-hidden="true"></span>
               <span className="status-text">
                 {device.status === 'online' ? 'Online' : 'Offline'}
               </span>

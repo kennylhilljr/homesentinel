@@ -227,17 +227,20 @@ function AlarmComPage() {
           <h3>Setup Required</h3>
           <p>Enter your Alarm.com credentials to connect your security system.</p>
           <div className="cred-form">
-            <input
+            <label htmlFor="adc-user" className="sr-only">Email / Username</label>
+            <input id="adc-user"
               type="text" placeholder="Email / Username"
               value={creds.username}
               onChange={e => setCreds({ ...creds, username: e.target.value })}
             />
-            <input
+            <label htmlFor="adc-pass" className="sr-only">Password</label>
+            <input id="adc-pass"
               type="password" placeholder="Password"
               value={creds.password}
               onChange={e => setCreds({ ...creds, password: e.target.value })}
             />
-            <input
+            <label htmlFor="adc-2fa" className="sr-only">2FA Cookie (optional)</label>
+            <input id="adc-2fa"
               type="text" placeholder="2FA Cookie (optional)"
               value={creds.two_factor_cookie}
               onChange={e => setCreds({ ...creds, two_factor_cookie: e.target.value })}
@@ -260,7 +263,8 @@ function AlarmComPage() {
         <div className="setup-card">
           <p>Enter the verification code from your authenticator app:</p>
           <div className="otp-form">
-            <input
+            <label htmlFor="adc-otp" className="sr-only">Verification code</label>
+            <input id="adc-otp"
               type="text" placeholder="6-digit code"
               value={otpCode}
               onChange={e => setOtpCode(e.target.value)}
@@ -293,12 +297,14 @@ function AlarmComPage() {
 
   return (
     <div className="alarm-com-page">
-      {banner && (
-        <div className={`app-banner app-banner-${banner.type}`}>
-          {banner.message}
-          <button className="banner-close" onClick={() => setBanner(null)}>&times;</button>
-        </div>
-      )}
+      <div aria-live="polite" aria-atomic="true" role="status">
+        {banner && (
+          <div className={`app-banner app-banner-${banner.type}`}>
+            {banner.message}
+            <button className="banner-close" onClick={() => setBanner(null)} aria-label="Dismiss notification">&times;</button>
+          </div>
+        )}
+      </div>
       <div className="page-header">
         <h2>Alarm.com</h2>
         <p className="subtitle">
@@ -324,13 +330,16 @@ function AlarmComPage() {
 
       {showCredForm && (
         <div className="cred-form-inline">
-          <input type="text" placeholder="Email / Username"
+          <label htmlFor="adc-user-inline" className="sr-only">Email / Username</label>
+          <input id="adc-user-inline" type="text" placeholder="Email / Username"
             value={creds.username}
             onChange={e => setCreds({ ...creds, username: e.target.value })} />
-          <input type="password" placeholder="Password"
+          <label htmlFor="adc-pass-inline" className="sr-only">Password</label>
+          <input id="adc-pass-inline" type="password" placeholder="Password"
             value={creds.password}
             onChange={e => setCreds({ ...creds, password: e.target.value })} />
-          <input type="text" placeholder="2FA Cookie"
+          <label htmlFor="adc-2fa-inline" className="sr-only">2FA Cookie</label>
+          <input id="adc-2fa-inline" type="text" placeholder="2FA Cookie"
             value={creds.two_factor_cookie}
             onChange={e => setCreds({ ...creds, two_factor_cookie: e.target.value })} />
           <button className="save-btn" onClick={handleSaveCreds}>Save</button>

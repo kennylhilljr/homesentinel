@@ -205,7 +205,7 @@ const DeviceSearch = ({ onSearchResults }) => {
             className="search-input"
           />
           {query && (
-            <button className="clear-button" onClick={handleClearSearch} title="Clear search">
+            <button className="clear-button" onClick={handleClearSearch} title="Clear search" aria-label="Clear search">
               ✕
             </button>
           )}

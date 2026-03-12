@@ -35,7 +35,8 @@ function DeviceCard({ device, groups, onClick }) {
     >
       <div className="device-card-header">
         <div className="device-card-title">
-          <div className={`status-indicator status-${getStatusIndicator()}`} />
+          <div className={`status-indicator status-${getStatusIndicator()}`} aria-hidden="true" />
+              <span className="sr-only">{getStatusLabel()}</span>
           <span className="device-name-card">
             {device.friendly_name || device.mac_address}
           </span>

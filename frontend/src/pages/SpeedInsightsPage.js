@@ -167,12 +167,14 @@ function SpeedInsightsPage() {
 
   return (
     <div className="si-page">
-      {banner && (
-        <div className={`app-banner app-banner-${banner.type}`}>
-          {banner.message}
-          <button className="banner-close" onClick={() => setBanner(null)}>&times;</button>
-        </div>
-      )}
+      <div aria-live="polite" aria-atomic="true" role="status">
+        {banner && (
+          <div className={`app-banner app-banner-${banner.type}`}>
+            {banner.message}
+            <button className="banner-close" onClick={() => setBanner(null)} aria-label="Dismiss notification">&times;</button>
+          </div>
+        )}
+      </div>
       <div className="si-header">
         <h2>Speed Insights</h2>
         <div className="si-header-actions">
@@ -282,6 +284,7 @@ function SpeedInsightsPage() {
               ))}
             </div>
           </div>
+          <div role="img" aria-label={`Speed history chart showing download and upload speeds over ${historyHours} hours. ${chartData.length} data points.`}>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <defs>
@@ -322,6 +325,7 @@ function SpeedInsightsPage() {
               />
             </AreaChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
 
@@ -329,6 +333,7 @@ function SpeedInsightsPage() {
       {chartData.length > 0 && (
         <div className="si-card">
           <h3>Latency History</h3>
+          <div role="img" aria-label="Latency history chart showing ping and jitter over time in milliseconds.">
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -343,6 +348,7 @@ function SpeedInsightsPage() {
               <Line type="monotone" dataKey="jitter_ms" name="Jitter" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
 
@@ -350,6 +356,7 @@ function SpeedInsightsPage() {
       {hourlyChart.some(h => h.download > 0) && (
         <div className="si-card">
           <h3>Average Speed by Hour of Day <span className="si-subtitle">(last 7 days)</span></h3>
+          <div role="img" aria-label="Bar chart showing average download and upload speeds grouped by hour of day over the last 7 days.">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={hourlyChart} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -364,6 +371,7 @@ function SpeedInsightsPage() {
               <Bar dataKey="upload" name="Upload" fill="#3b82f6" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
 
@@ -371,6 +379,7 @@ function SpeedInsightsPage() {
       {chartData.some(t => t.cellular_rsrp != null) && (
         <div className="si-card">
           <h3>Cellular Signal vs Download Speed</h3>
+          <div role="img" aria-label="Dual-axis line chart correlating cellular RSRP signal strength in dBm with download speed in Mbps over time.">
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -383,6 +392,7 @@ function SpeedInsightsPage() {
               <Line yAxisId="signal" type="monotone" dataKey="cellular_rsrp" name="RSRP (dBm)" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} />
             </LineChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
 
@@ -390,6 +400,7 @@ function SpeedInsightsPage() {
       {chartData.some(t => t.cellular_ca_count != null) && (
         <div className="si-card">
           <h3>Download Speed vs Carrier Aggregation Count</h3>
+          <div role="img" aria-label="Dual-axis chart showing download speed vs number of carrier aggregation bands active during each speed test.">
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={chartData.filter(t => t.cellular_ca_count != null)} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -402,6 +413,7 @@ function SpeedInsightsPage() {
               <Line yAxisId="ca" type="stepAfter" dataKey="cellular_ca_count" name="CA Bands" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
 
@@ -429,6 +441,7 @@ function SpeedInsightsPage() {
         return bandData.length > 0 ? (
           <div className="si-card">
             <h3>Average Download by Band Combination</h3>
+            <div role="img" aria-label={`Horizontal bar chart comparing average and max download speeds across ${bandData.length} different NR band combinations.`}>
             <ResponsiveContainer width="100%" height={Math.max(180, bandData.length * 40)}>
               <BarChart data={bandData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -440,6 +453,7 @@ function SpeedInsightsPage() {
                 <Bar dataKey="max_download" name="Max Download" fill="#86efac" radius={[0, 3, 3, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            </div>
           </div>
         ) : null;
       })()}

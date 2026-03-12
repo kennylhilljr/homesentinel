@@ -14,7 +14,7 @@
 }
 
 .alarm-com-page .subtitle {
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   margin: 0 0 16px 0;
   font-size: 14px;
 }
@@ -49,7 +49,7 @@
 
 .alarm-com-page .settings-btn {
   background: var(--card-bg, #2a2a2a);
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
 }
 
 .alarm-com-page .save-btn {
@@ -73,7 +73,7 @@
 }
 
 .alarm-com-page .setup-card p {
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   margin-bottom: 16px;
 }
 
@@ -125,7 +125,7 @@
   padding: 6px 14px;
   border: 1px solid var(--border-color, #444);
   background: var(--card-bg, #2a2a2a);
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
@@ -176,7 +176,7 @@
 }
 
 .alarm-com-page .device-type {
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   font-size: 11px;
 }
 
@@ -203,7 +203,7 @@
 
 .alarm-com-page .battery-info,
 .alarm-com-page .mac-info {
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   font-size: 12px;
   margin-top: 4px;
 }
@@ -269,7 +269,7 @@
 .alarm-com-page .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   font-size: 15px;
 }
 

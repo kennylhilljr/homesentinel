@@ -14,7 +14,7 @@
 }
 
 .smart-home-page .subtitle {
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   margin: 0 0 16px 0;
   font-size: 14px;
 }
@@ -35,7 +35,7 @@
   padding: 6px 14px;
   border: 1px solid var(--border-color, #444);
   background: var(--card-bg, #2a2a2a);
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
@@ -96,7 +96,7 @@
 }
 
 .smart-home-page .device-desc {
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   font-size: 12px;
   margin-top: 2px;
 }
@@ -203,7 +203,7 @@
 .smart-home-page .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   font-size: 15px;
 }
 
@@ -263,7 +263,7 @@
 }
 
 .smart-home-page .match-detail {
-  color: var(--text-secondary, #bbb);
+  color: var(--text-muted, #556277);
   font-size: 12px;
 }
 
@@ -314,12 +314,12 @@
 
 .smart-home-page .candidate-ip {
   font-family: monospace;
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
   min-width: 120px;
 }
 
 .smart-home-page .candidate-name {
-  color: var(--text-secondary, #bbb);
+  color: var(--text-muted, #556277);
   flex: 1;
 }
 
@@ -382,7 +382,7 @@
 
 .smart-home-page .control-btn.cancel-identify {
   background: var(--border-color, #444);
-  color: var(--text-secondary, #999);
+  color: var(--text-muted, #556277);
 }
 
 .smart-home-page .control-btn.cancel-identify:hover:not(:disabled) {

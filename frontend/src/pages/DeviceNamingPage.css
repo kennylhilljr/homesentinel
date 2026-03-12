@@ -126,7 +126,7 @@
 
 .net-device-details .mac {
   font-family: monospace;
-  color: #aaa;
+  color: var(--text-muted, #556277);
 }
 
 .net-device-details .vendor {

@@ -177,12 +177,14 @@ function SmartHomePage() {
 
   return (
     <div className="smart-home-page">
-      {banner && (
-        <div className={`app-banner app-banner-${banner.type}`}>
-          {banner.message}
-          <button className="banner-close" onClick={() => setBanner(null)}>&times;</button>
-        </div>
-      )}
+      <div aria-live="polite" aria-atomic="true" role="status">
+        {banner && (
+          <div className={`app-banner app-banner-${banner.type}`}>
+            {banner.message}
+            <button className="banner-close" onClick={() => setBanner(null)} aria-label="Dismiss notification">&times;</button>
+          </div>
+        )}
+      </div>
       <div className="page-header">
         <h2>Smart Home Control</h2>
         <p className="subtitle">
