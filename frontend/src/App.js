@@ -48,6 +48,8 @@ function App() {
   // 2026-03-11: Speed test state
   const [speedTestData, setSpeedTestData] = useState(null);
   const [speedTestRunning, setSpeedTestRunning] = useState(false);
+  // 2026-03-11: Chester 5G cellular info for dashboard card
+  const [chesterInfo, setChesterInfo] = useState(null);
   // 2026-03-11: Banner notification state (replaces all alert() popups)
   const [banner, setBanner] = useState(null); // { message, type: 'success'|'error'|'info' }
 
@@ -154,12 +156,26 @@ function App() {
       }
     };
 
+    // 2026-03-11: Fetch Chester 5G cellular info for dashboard card
+    const getChesterInfo = async () => {
+      try {
+        const response = await fetch(buildUrl('/chester/system-info'));
+        if (response.ok) {
+          const data = await response.json();
+          setChesterInfo(data);
+        }
+      } catch (error) {
+        // Silently fail — Chester may not be reachable
+      }
+    };
+
     checkHealth();
     getDevices();
     getPollingConfig();
     getDeviceGroups();
     getClientNodeMap();
     getSpeedTestLatest();
+    getChesterInfo();
 
     // 2026-03-11: Fast poll for devices/health (5s), slow poll for Deco map (30s)
     const fastInterval = setInterval(() => {
@@ -171,6 +187,7 @@ function App() {
 
     const slowInterval = setInterval(() => {
       getClientNodeMap();
+      getChesterInfo();
     }, 30000);
 
     // 2026-03-11: Speed test poll (60s) — updates after scheduled 30-min tests
@@ -630,18 +647,81 @@ function App() {
             </div>
           </div>
         </div>
-        {/* 2026-03-11: Split System Status into two cards — System + Speed Test */}
-        <div className="status-split">
-          <div className="status-card">
+        {/* 2026-03-11: Three-card layout — System + 5G Signal + Speed Test */}
+        <div className="status-split status-split-3">
+          <div className="status-card status-card-compact">
             <h2>System Status</h2>
-            <p>API Connection: <strong className={apiStatus === 'connected' ? 'status-ok' : 'status-error'}>{apiStatus}</strong></p>
+            <p>API: <strong className={apiStatus === 'connected' ? 'status-ok' : 'status-error'}>{apiStatus}</strong></p>
             {pollingConfig && (
-              <>
-                <p>Polling Interval: <strong>{pollingConfig.interval}s</strong></p>
-                <p>Last Scanned: <strong>{formatDate(pollingConfig.last_scan)}</strong></p>
-              </>
+              <p>Scan: <strong>{pollingConfig.interval}s</strong> — {formatDate(pollingConfig.last_scan)}</p>
             )}
-            <p>Devices with Vendor Info: <strong>{vendorNamesPresent}/{devices.length}</strong></p>
+            <p>Vendors: <strong>{vendorNamesPresent}/{devices.length}</strong></p>
+          </div>
+
+          {/* 2026-03-11: 5G Cellular Signal card — live Chester router metrics */}
+          <div className="status-card cellular-card">
+            <h2>5G Signal</h2>
+            {chesterInfo ? (
+              <div className="cellular-info">
+                <div className="cellular-type">
+                  <span className={`cellular-badge ${chesterInfo.is_5g ? 'badge-5g' : 'badge-lte'}`}>
+                    {chesterInfo.connection_type || 'Unknown'}
+                  </span>
+                  {chesterInfo.ca_band && chesterInfo.ca_band.length > 0 && (
+                    <span className="cellular-ca-count">{chesterInfo.ca_band.length}x CA</span>
+                  )}
+                </div>
+                <div className="cellular-metrics">
+                  <div className="cellular-metric">
+                    <span className="cellular-label">RSRP</span>
+                    <span className={`cellular-value ${
+                      chesterInfo.rsrp > -80 ? 'signal-excellent' :
+                      chesterInfo.rsrp > -100 ? 'signal-good' :
+                      chesterInfo.rsrp > -110 ? 'signal-fair' : 'signal-poor'
+                    }`}>{chesterInfo.rsrp} <small>dBm</small></span>
+                  </div>
+                  <div className="cellular-metric">
+                    <span className="cellular-label">SINR</span>
+                    <span className={`cellular-value ${
+                      chesterInfo.sinr > 20 ? 'signal-excellent' :
+                      chesterInfo.sinr > 10 ? 'signal-good' :
+                      chesterInfo.sinr > 0 ? 'signal-fair' : 'signal-poor'
+                    }`}>{chesterInfo.sinr} <small>dB</small></span>
+                  </div>
+                  <div className="cellular-metric">
+                    <span className="cellular-label">RSRQ</span>
+                    <span className="cellular-value">{chesterInfo.rsrq} <small>dB</small></span>
+                  </div>
+                  <div className="cellular-metric">
+                    <span className="cellular-label">Band</span>
+                    <span className="cellular-value">n{chesterInfo.band}</span>
+                  </div>
+                </div>
+                {chesterInfo.ca_band && chesterInfo.ca_band.length > 0 && (
+                  <div className="cellular-ca-list">
+                    {chesterInfo.ca_band.map((entry, i) => {
+                      const parts = entry.replace(/"/g, '').split(',');
+                      const role = parts[0]?.trim() || '';
+                      const bandName = parts[3]?.trim().replace('NR5G BAND ', 'n').replace('LTE BAND ', 'B') || '';
+                      const arfcn = parts[1]?.trim() || '';
+                      return (
+                        <span key={i} className={`ca-chip ${role === 'PCC' ? 'ca-pcc' : 'ca-scc'}`}
+                              title={`${role} — ARFCN ${arfcn}`}>
+                          {role === 'PCC' ? '\u2605 ' : ''}{bandName}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="cellular-meta">
+                  <span>Cell {chesterInfo.cell_id}</span>
+                  <span>PCID {chesterInfo.pcid}</span>
+                  <span>ARFCN {chesterInfo.arfcn}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted">Chester not reachable</p>
+            )}
           </div>
 
           <div className="status-card speedtest-card">

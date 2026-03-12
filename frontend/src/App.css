@@ -326,10 +326,151 @@
   margin-bottom: 10px;
 }
 
+/* 2026-03-11: Three-card layout — System + 5G + Speed */
+.status-split-3 {
+  grid-template-columns: 1fr 1.2fr 1.3fr;
+}
+
+.status-card-compact p {
+  font-size: 0.82rem;
+  margin: 4px 0;
+}
+
+@media (max-width: 1024px) {
+  .status-split-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 768px) {
-  .status-split {
+  .status-split,
+  .status-split-3 {
     grid-template-columns: 1fr;
   }
+}
+
+/* 2026-03-11: 5G Cellular Signal Card */
+.cellular-card h2 {
+  margin-bottom: 8px;
+}
+
+.cellular-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cellular-type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cellular-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
+.badge-5g {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+}
+
+.badge-lte {
+  background: linear-gradient(135deg, #059669, #0d9488);
+  color: #fff;
+}
+
+.cellular-ca-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.cellular-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.cellular-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: var(--bg-accent);
+  border: 1px solid var(--border);
+}
+
+.cellular-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.cellular-value {
+  font-size: 1.05rem;
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.cellular-value small {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.signal-excellent { color: #16a34a; }
+.signal-good { color: #2563eb; }
+.signal-fair { color: #d97706; }
+.signal-poor { color: #dc2626; }
+
+.cellular-ca-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ca-chip {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-accent);
+  color: var(--text-muted);
+}
+
+.ca-pcc {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.ca-scc {
+  background: var(--bg-accent);
+  color: var(--text-muted);
+}
+
+.cellular-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 /* Speed Test Card */

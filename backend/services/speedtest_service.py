@@ -170,25 +170,57 @@ class SpeedTestService:
             return self._store_error_result(test_id, str(e), cellular)
 
     def _get_cellular_snapshot(self) -> Dict[str, Any]:
-        """Capture Chester cellular signal data at time of speed test."""
+        """Capture Chester cellular signal + carrier aggregation data at time of speed test.
+
+        2026-03-11: Extended to capture full CA band info, ARFCN, PCID, cell_id
+        for tracking which bands/channels correlate with better speeds.
+        """
         empty = {
             "cellular_band": None,
             "cellular_rsrp": None,
             "cellular_rsrq": None,
             "cellular_sinr": None,
             "cellular_connection_type": None,
+            "cellular_ca_bands": None,
+            "cellular_ca_count": None,
+            "cellular_arfcn": None,
+            "cellular_pcid": None,
+            "cellular_cell_id": None,
+            "cellular_is_5g": None,
+            "cellular_mcc": None,
+            "cellular_mnc": None,
         }
         if not self.chester_service:
             return empty
 
         try:
             info = self.chester_service.get_system_info()
+            ca_bands = info.get("ca_band", [])
+            # Parse CA bands into structured list: [{role, band, arfcn}, ...]
+            parsed_ca = []
+            for entry in ca_bands:
+                parts = entry.replace('"', '').split(",")
+                if len(parts) >= 4:
+                    parsed_ca.append({
+                        "role": parts[0].strip(),       # PCC or SCC
+                        "arfcn": parts[1].strip(),
+                        "bandwidth": parts[2].strip(),
+                        "band": parts[3].strip(),       # e.g. "NR5G BAND 41"
+                    })
             return {
                 "cellular_band": info.get("band", ""),
                 "cellular_rsrp": info.get("rsrp"),
                 "cellular_rsrq": info.get("rsrq"),
                 "cellular_sinr": info.get("sinr"),
                 "cellular_connection_type": info.get("connection_type", ""),
+                "cellular_ca_bands": json.dumps(parsed_ca) if parsed_ca else None,
+                "cellular_ca_count": len(parsed_ca) if parsed_ca else None,
+                "cellular_arfcn": str(info.get("arfcn", "")),
+                "cellular_pcid": str(info.get("pcid", "")),
+                "cellular_cell_id": str(info.get("cell_id", "")),
+                "cellular_is_5g": 1 if info.get("is_5g") else 0,
+                "cellular_mcc": str(info.get("mcc", "")),
+                "cellular_mnc": str(info.get("mnc", "")),
             }
         except Exception as e:
             logger.warning(f"Failed to capture cellular snapshot: {e}")
@@ -202,9 +234,12 @@ class SpeedTestService:
                 test_id, download_mbps, upload_mbps, ping_ms, jitter_ms,
                 server_name, server_id, server_host, isp, external_ip,
                 cellular_band, cellular_rsrp, cellular_rsrq, cellular_sinr,
-                cellular_connection_type, bytes_sent, bytes_received,
+                cellular_connection_type, cellular_ca_bands, cellular_ca_count,
+                cellular_arfcn, cellular_pcid, cellular_cell_id, cellular_is_5g,
+                cellular_mcc, cellular_mnc,
+                bytes_sent, bytes_received,
                 test_duration_seconds, error, timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 result["test_id"],
                 result["download_mbps"],
@@ -221,6 +256,14 @@ class SpeedTestService:
                 result.get("cellular_rsrq"),
                 result.get("cellular_sinr"),
                 result.get("cellular_connection_type"),
+                result.get("cellular_ca_bands"),
+                result.get("cellular_ca_count"),
+                result.get("cellular_arfcn"),
+                result.get("cellular_pcid"),
+                result.get("cellular_cell_id"),
+                result.get("cellular_is_5g"),
+                result.get("cellular_mcc"),
+                result.get("cellular_mnc"),
                 result.get("bytes_sent"),
                 result.get("bytes_received"),
                 result.get("test_duration_seconds"),
@@ -576,6 +619,109 @@ class SpeedTestService:
                     }
                     insights.append(insight)
                     self.store_insight(insight)
+
+        # --- Insight 6: Carrier aggregation band correlation ---
+        # 2026-03-11: Track which CA band combos give better speeds
+        tests_with_ca = [
+            t for t in history
+            if t.get("cellular_ca_count") is not None and t["cellular_ca_count"] > 0
+        ]
+        if len(tests_with_ca) >= 5:
+            # Group by CA count
+            by_ca_count: Dict[int, list] = {}
+            for t in tests_with_ca:
+                count = t["cellular_ca_count"]
+                by_ca_count.setdefault(count, []).append(t)
+
+            # Compare speeds by CA count
+            ca_stats = {}
+            for count, tests in sorted(by_ca_count.items()):
+                avg_dl = sum(t["download_mbps"] for t in tests) / len(tests)
+                avg_ul = sum(t["upload_mbps"] for t in tests) / len(tests)
+                ca_stats[count] = {
+                    "avg_download": round(avg_dl, 1),
+                    "avg_upload": round(avg_ul, 1),
+                    "sample_count": len(tests),
+                }
+
+            if len(ca_stats) >= 2:
+                best_count = max(ca_stats, key=lambda c: ca_stats[c]["avg_download"])
+                worst_count = min(ca_stats, key=lambda c: ca_stats[c]["avg_download"])
+                best = ca_stats[best_count]
+                worst = ca_stats[worst_count]
+                if worst["avg_download"] > 0:
+                    diff_pct = ((best["avg_download"] - worst["avg_download"]) / worst["avg_download"]) * 100
+                    if diff_pct > 10:
+                        insight = {
+                            "insight_id": f"ca-count-{datetime.utcnow().strftime('%Y%m%d')}",
+                            "insight_type": "recommendation",
+                            "title": "More carrier aggregation = faster speeds",
+                            "description": (
+                                f"With {best_count} aggregated carriers, download averages "
+                                f"{best['avg_download']} Mbps vs {worst['avg_download']} Mbps "
+                                f"with only {worst_count} carrier{'s' if worst_count != 1 else ''}. "
+                                f"That's {diff_pct:.0f}% faster. "
+                                f"More carriers are typically available during off-peak hours."
+                            ),
+                            "data": {
+                                "ca_stats": ca_stats,
+                                "best_count": best_count,
+                                "worst_count": worst_count,
+                                "diff_pct": round(diff_pct, 0),
+                            },
+                            "confidence": min(0.85, 0.4 + len(tests_with_ca) * 0.03),
+                        }
+                        insights.append(insight)
+                        self.store_insight(insight)
+
+            # Group by primary band and compare
+            by_band: Dict[str, list] = {}
+            for t in tests_with_ca:
+                band = str(t.get("cellular_band", ""))
+                if band:
+                    by_band.setdefault(band, []).append(t)
+
+            band_stats = {}
+            for band, tests in by_band.items():
+                if len(tests) >= 3:
+                    avg_dl = sum(t["download_mbps"] for t in tests) / len(tests)
+                    avg_ul = sum(t["upload_mbps"] for t in tests) / len(tests)
+                    avg_ping = sum(t["ping_ms"] for t in tests) / len(tests)
+                    band_stats[band] = {
+                        "avg_download": round(avg_dl, 1),
+                        "avg_upload": round(avg_ul, 1),
+                        "avg_ping": round(avg_ping, 1),
+                        "sample_count": len(tests),
+                    }
+
+            if len(band_stats) >= 2:
+                best_band = max(band_stats, key=lambda b: band_stats[b]["avg_download"])
+                worst_band = min(band_stats, key=lambda b: band_stats[b]["avg_download"])
+                best_b = band_stats[best_band]
+                worst_b = band_stats[worst_band]
+                if worst_b["avg_download"] > 0:
+                    diff_pct = ((best_b["avg_download"] - worst_b["avg_download"]) / worst_b["avg_download"]) * 100
+                    if diff_pct > 15:
+                        insight = {
+                            "insight_id": f"band-perf-{datetime.utcnow().strftime('%Y%m%d')}",
+                            "insight_type": "recommendation",
+                            "title": f"Band n{best_band} outperforms n{worst_band}",
+                            "description": (
+                                f"On primary band n{best_band}: avg {best_b['avg_download']} Mbps down, "
+                                f"{best_b['avg_ping']} ms ping ({best_b['sample_count']} tests). "
+                                f"On n{worst_band}: avg {worst_b['avg_download']} Mbps down, "
+                                f"{worst_b['avg_ping']} ms ping ({worst_b['sample_count']} tests). "
+                                f"Band n{best_band} is {diff_pct:.0f}% faster on average."
+                            ),
+                            "data": {
+                                "band_stats": band_stats,
+                                "best_band": best_band,
+                                "worst_band": worst_band,
+                            },
+                            "confidence": min(0.85, 0.4 + sum(b["sample_count"] for b in band_stats.values()) * 0.02),
+                        }
+                        insights.append(insight)
+                        self.store_insight(insight)
 
         return insights
 
