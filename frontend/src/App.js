@@ -1033,6 +1033,13 @@ function App() {
                         // 2026-03-12: Chester 5G router gets a satellite dish icon
                         const displayName = (device.friendly_name || device.deco_name || device.mac_address || '').toLowerCase();
                         const isChester = displayName.includes('chester');
+                        const chesterRsrp = chesterInfo ? chesterInfo.rsrp : null;
+                        const chesterSigColor = chesterRsrp == null ? '#bbb'
+                          : chesterRsrp > -80 ? '#2e7d32'
+                          : chesterRsrp > -100 ? '#f9a825'
+                          : '#e53935';
+                        const chesterSigLabel = chesterRsrp == null ? 'Chester — no signal data'
+                          : `Chester 5G — RSRP ${chesterRsrp} dBm`;
                         // Signal strength
                         // 2026-03-12: Signal level based on Wi-Fi band, not throughput.
                         // Deco local API only reports instantaneous kbps (down_speed/up_speed),
@@ -1104,30 +1111,15 @@ function App() {
                             <td className="deco-node-cell">
                               <div className="deco-node-info">
                                 {/* Signal/backhaul icon — far left of column */}
-                                {isChester ? (() => {
-                                  // 2026-03-12: Satellite dish icon colored by Chester 5G signal
-                                  const rsrp = chesterInfo ? chesterInfo.rsrp : null;
-                                  const sigColor = rsrp == null ? '#bbb'
-                                    : rsrp > -80 ? '#2e7d32'
-                                    : rsrp > -100 ? '#f9a825'
-                                    : '#e53935';
-                                  const sigLabel = rsrp == null ? 'Chester — no signal data'
-                                    : `Chester 5G — RSRP ${rsrp} dBm`;
-                                  return (
+                                {isChester ? (
                                   <svg className="conn-icon" viewBox="0 0 24 24" style={{ transform: 'scaleX(-1)' }}>
-                                    <title>{sigLabel}</title>
-                                    {/* Dish arm */}
+                                    <title>{chesterSigLabel}</title>
                                     <line x1="18" y1="18" x2="8" y2="8" stroke="#78909c" strokeWidth="2" strokeLinecap="round"/>
-                                    {/* Dish base */}
                                     <circle cx="18" cy="18" r="2" fill="#78909c"/>
-                                    {/* Dish reflector */}
                                     <path d="M10 4 Q4 4 4 10" fill="none" stroke="#78909c" strokeWidth="2.5" strokeLinecap="round"/>
-                                    {/* Signal arcs — colored by RSRP */}
-                                    <path d="M4 14 a3 3 0 0 1 4 -4" fill="none" stroke={sigColor} strokeWidth="2" strokeLinecap="round"/>
-                                    <path d="M2 17 a7 7 0 0 1 7.5 -8" fill="none" stroke={sigColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.7"/>
+                                    <path d="M4 14 a3 3 0 0 1 4 -4" fill="none" stroke={chesterSigColor} strokeWidth="2" strokeLinecap="round"/>
+                                    <path d="M2 17 a7 7 0 0 1 7.5 -8" fill="none" stroke={chesterSigColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.7"/>
                                   </svg>
-                                  );
-                                })()
                                 ) : isDecoNode ? (
                                   backhaulWired ? (
                                     <svg className="conn-icon" viewBox="0 0 24 24">
