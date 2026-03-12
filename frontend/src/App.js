@@ -1031,18 +1031,21 @@ function App() {
                         const connType = nodeInfo ? (nodeInfo.connection_type || '') : '';
                         const isWired = wireType === 'wired' || connType === 'wired';
                         // Signal strength
+                        // 2026-03-12: Signal level based on Wi-Fi band, not throughput.
+                        // Deco local API only reports instantaneous kbps (down_speed/up_speed),
+                        // NOT actual RSSI. Idle devices show ~1 kbps despite strong signal.
+                        // Band is a reliable proxy: 5/6 GHz = strong, 2.4 GHz = medium.
                         let signalLevel = 'none';
                         let signalTitle = '';
                         if (nodeInfo && !isWired) {
                           const downSpeed = nodeInfo.down_speed || 0;
                           const upSpeed = nodeInfo.up_speed || 0;
-                          const totalSpeed = downSpeed + upSpeed;
                           const band = connType.toLowerCase();
                           if (band.includes('band5') || band.includes('band6')) {
-                            signalLevel = totalSpeed > 100 ? 'strong' : totalSpeed > 0 ? 'medium' : 'strong';
+                            signalLevel = 'strong';
                             signalTitle = `${band.includes('6') ? '6 GHz' : '5 GHz'} — ${downSpeed} kbps down, ${upSpeed} kbps up`;
                           } else if (band.includes('band2')) {
-                            signalLevel = totalSpeed > 500 ? 'medium' : totalSpeed > 0 ? 'low' : 'low';
+                            signalLevel = 'medium';
                             signalTitle = `2.4 GHz — ${downSpeed} kbps down, ${upSpeed} kbps up`;
                           } else {
                             signalLevel = 'medium';
