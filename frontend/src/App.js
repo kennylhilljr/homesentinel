@@ -1104,15 +1104,30 @@ function App() {
                             <td className="deco-node-cell">
                               <div className="deco-node-info">
                                 {/* Signal/backhaul icon — far left of column */}
-                                {isChester ? (
-                                  <svg className="conn-icon" viewBox="0 0 24 24">
-                                    <title>5G Cellular (Chester)</title>
-                                    <circle cx="6" cy="18" r="2" fill="#1565c0"/>
-                                    <path d="M6 18 L18 6" stroke="#1565c0" strokeWidth="2.5" strokeLinecap="round"/>
-                                    <path d="M14 4 a8 8 0 0 1 6 6" fill="none" stroke="#1565c0" strokeWidth="2.5" strokeLinecap="round"/>
-                                    <path d="M12 7 a5 5 0 0 1 5 5" fill="none" stroke="#1565c0" strokeWidth="2" strokeLinecap="round"/>
-                                    <path d="M10 10 a2.5 2.5 0 0 1 4 2" fill="none" stroke="#1565c0" strokeWidth="1.5" strokeLinecap="round"/>
+                                {isChester ? (() => {
+                                  // 2026-03-12: Satellite dish icon colored by Chester 5G signal
+                                  const rsrp = chesterInfo ? chesterInfo.rsrp : null;
+                                  const sigColor = rsrp == null ? '#bbb'
+                                    : rsrp > -80 ? '#2e7d32'
+                                    : rsrp > -100 ? '#f9a825'
+                                    : '#e53935';
+                                  const sigLabel = rsrp == null ? 'Chester — no signal data'
+                                    : `Chester 5G — RSRP ${rsrp} dBm`;
+                                  return (
+                                  <svg className="conn-icon" viewBox="0 0 24 24" style={{ transform: 'scaleX(-1)' }}>
+                                    <title>{sigLabel}</title>
+                                    {/* Dish arm */}
+                                    <line x1="18" y1="18" x2="8" y2="8" stroke="#78909c" strokeWidth="2" strokeLinecap="round"/>
+                                    {/* Dish base */}
+                                    <circle cx="18" cy="18" r="2" fill="#78909c"/>
+                                    {/* Dish reflector */}
+                                    <path d="M10 4 Q4 4 4 10" fill="none" stroke="#78909c" strokeWidth="2.5" strokeLinecap="round"/>
+                                    {/* Signal arcs — colored by RSRP */}
+                                    <path d="M4 14 a3 3 0 0 1 4 -4" fill="none" stroke={sigColor} strokeWidth="2" strokeLinecap="round"/>
+                                    <path d="M2 17 a7 7 0 0 1 7.5 -8" fill="none" stroke={sigColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.7"/>
                                   </svg>
+                                  );
+                                })()
                                 ) : isDecoNode ? (
                                   backhaulWired ? (
                                     <svg className="conn-icon" viewBox="0 0 24 24">
