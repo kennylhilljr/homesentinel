@@ -51,7 +51,8 @@ function App() {
   // 2026-03-11: Chester 5G cellular info for dashboard card
   const [chesterInfo, setChesterInfo] = useState(null);
   // 2026-03-12: Home/Away network detection state
-  const [homeStatus, setHomeStatus] = useState(null); // { is_home, method, detail, auto_scan_active }
+  // 2026-03-12: Default to home=true until backend confirms, avoids flash of "Away"
+  const [homeStatus, setHomeStatus] = useState({ is_home: true, method: 'init', detail: 'loading...', auto_scan_active: true, auto_scan_paused: false });
   // 2026-03-11: Banner notification state (replaces all alert() popups)
   const [banner, setBanner] = useState(null); // { message, type: 'success'|'error'|'info' }
 
@@ -199,12 +200,12 @@ function App() {
       getDevices();
       getPollingConfig();
       getDeviceGroups();
+      getHomeStatus();
     }, 5000);
 
     const slowInterval = setInterval(() => {
       getClientNodeMap();
       getChesterInfo();
-      getHomeStatus();
     }, 30000);
 
     // 2026-03-11: Speed test poll (60s) — updates after scheduled 30-min tests
