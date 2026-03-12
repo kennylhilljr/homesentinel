@@ -6,7 +6,7 @@ import './DeviceCard.css';
  * Displays a compact device card showing key information with click to expand
  * References TaskCard styling patterns for dark theme and badge layout
  */
-function DeviceCard({ device, groups, onClick }) {
+function DeviceCard({ device, groups, isNew, onClick }) {
   const getGroupColor = (groupId) => {
     const group = groups.find(g => g.group_id === groupId);
     return group?.color || '#6b7280';
@@ -22,7 +22,7 @@ function DeviceCard({ device, groups, onClick }) {
 
   return (
     <div
-      className={`device-card device-card-${getStatusIndicator()}`}
+      className={`device-card device-card-${getStatusIndicator()}${isNew ? ' device-card-new' : ''}`}
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -40,6 +40,8 @@ function DeviceCard({ device, groups, onClick }) {
           <span className="device-name-card">
             {device.friendly_name || device.mac_address}
           </span>
+          {/* 2026-03-12: NEW badge in grid view for devices first seen in last 24h */}
+          {isNew && <span className="device-new-badge">NEW</span>}
         </div>
         <span className="status-badge-card">{getStatusLabel()}</span>
       </div>

@@ -9,6 +9,12 @@
   overflow: hidden;
 }
 
+/* 2026-03-12: Amber highlight for new devices in grid view */
+.device-card-new {
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.04);
+}
+
 .device-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);

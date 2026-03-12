@@ -35,9 +35,13 @@ from routes import chester as chester_routes
 from routes import oauth as oauth_routes
 from routes import alarm_com as alarm_com_routes
 from routes import speedtest as speedtest_routes
+from routes import digest as digest_routes
+from routes import health as health_routes
 from services.alarm_com_client import AlarmComClient
 from services.speedtest_service import SpeedTestService
 from services.speedtest_scheduler import SpeedTestScheduler
+from services.digest_service import DigestService
+from services.health_service import NetworkHealthService
 from services.alexa_client import AlexaClient
 from services.alexa_service import AlexaService
 from services.chester_client import ChesterClient
@@ -82,6 +86,8 @@ app.include_router(chester_routes.router)
 app.include_router(oauth_routes.router)
 app.include_router(alarm_com_routes.router)
 app.include_router(speedtest_routes.router)
+app.include_router(digest_routes.router)
+app.include_router(health_routes.router)
 
 # Pydantic models
 class DeviceUpdate(BaseModel):
@@ -267,6 +273,21 @@ async def startup_event():
         logger.info(f"Speed test service initialized (interval: {speedtest_interval}s)")
     except Exception as e:
         logger.warning(f"Failed to initialize speed test service: {e}")
+
+    # 2026-03-12: Initialize digest and health services
+    try:
+        _digest_service = DigestService(db=db)
+        digest_routes.set_digest_service(_digest_service)
+        logger.info("Digest service initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize digest service: {e}")
+
+    try:
+        _health_service = NetworkHealthService(db=db)
+        health_routes.set_health_service(_health_service)
+        logger.info("Health score service initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize health service: {e}")
 
     # Initialize polling service
     polling_manager = PollingServiceManager()
@@ -541,6 +562,20 @@ async def get_device_details(device_id: str):
     return device
 
 
+# 2026-03-12: Device presence history for timeline heatmap
+@app.get("/api/devices/{device_id}/presence-history")
+async def get_device_presence_history(device_id: str, days: int = 7):
+    """Get per-day presence history for a device (hourly online/offline)."""
+    global event_service
+    if event_service is None:
+        raise HTTPException(status_code=500, detail="Event service not initialized")
+
+    try:
+        return event_service.get_presence_history(device_id, days=days)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.put("/api/devices/{device_id}")
 async def update_device(device_id: str, updates: DeviceUpdate):
     """Update device metadata"""
@@ -787,6 +822,62 @@ async def dismiss_alert(alert_id: str, body: AlertDismiss = None):
         }
     except Exception as e:
         logger.error(f"Failed to dismiss alert: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 2026-03-12: Unseen alerts for browser push notifications
+@app.get("/api/events/alerts/unseen")
+async def get_unseen_alerts():
+    """Get alerts that haven't been shown as browser notifications yet."""
+    global db
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.execute(
+                """SELECT da.alert_id, da.device_id, da.alert_type, da.created_at,
+                          nd.friendly_name, nd.mac_address
+                   FROM device_alerts da
+                   LEFT JOIN network_devices nd ON nd.device_id = da.device_id
+                   WHERE da.dismissed = 0 AND da.seen = 0
+                   ORDER BY da.created_at DESC LIMIT 20"""
+            )
+            alerts = []
+            for row in cursor.fetchall():
+                alerts.append({
+                    "alert_id": row[0],
+                    "device_id": row[1],
+                    "alert_type": row[2],
+                    "created_at": row[3],
+                    "device_name": row[4] or row[5] or "Unknown",
+                })
+            return alerts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class MarkSeenRequest(BaseModel):
+    alert_ids: list
+
+
+@app.post("/api/events/alerts/mark-seen")
+async def mark_alerts_seen(body: MarkSeenRequest):
+    """Mark alerts as seen (browser notification was shown)."""
+    global db
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    try:
+        with db.get_connection() as conn:
+            for aid in body.alert_ids:
+                conn.execute(
+                    "UPDATE device_alerts SET seen = 1 WHERE alert_id = ?",
+                    (aid,)
+                )
+            conn.commit()
+        return {"success": True, "marked": len(body.alert_ids)}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

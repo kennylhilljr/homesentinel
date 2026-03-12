@@ -478,3 +478,69 @@
     padding: 12px 14px;
   }
 }
+
+/* 2026-03-12: Presence timeline heatmap */
+.presence-grid {
+  margin-top: 8px;
+}
+
+.presence-hours {
+  display: flex;
+  margin-left: 36px;
+  margin-bottom: 2px;
+}
+
+.presence-hour-label {
+  font-size: 9px;
+  color: var(--text-muted, #556277);
+  width: 25%;
+  text-align: left;
+}
+
+.presence-day {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.presence-day-label {
+  font-size: 10px;
+  color: var(--text-muted, #556277);
+  width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.presence-cells {
+  display: flex;
+  gap: 1px;
+  flex: 1;
+}
+
+.presence-cell {
+  flex: 1;
+  height: 12px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.presence-cell.online {
+  background: #27ae60;
+}
+
+.presence-cell.offline {
+  background: rgba(192, 57, 43, 0.25);
+}
+
+.presence-cell.unknown {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.presence-minutes {
+  font-size: 9px;
+  color: var(--text-muted, #556277);
+  width: 24px;
+  text-align: right;
+  flex-shrink: 0;
+}

@@ -17,6 +17,8 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
     device_type: device?.device_type || '',
     notes: device?.notes || '',
   });
+  // 2026-03-12: Presence timeline heatmap state
+  const [presenceHistory, setPresenceHistory] = useState(null);
 
   useEffect(() => {
     setFormData({
@@ -25,6 +27,18 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
       notes: device?.notes || '',
     });
   }, [device]);
+
+  // 2026-03-12: Fetch presence history on mount
+  useEffect(() => {
+    if (!device?.device_id) return;
+    const fetchPresence = async () => {
+      try {
+        const response = await fetch(buildUrl(`/devices/${device.device_id}/presence-history?days=7`));
+        if (response.ok) setPresenceHistory(await response.json());
+      } catch (err) { /* silent */ }
+    };
+    fetchPresence();
+  }, [device?.device_id]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Never';
@@ -340,6 +354,35 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
               <label className="detail-label">Last Seen</label>
               <div className="detail-value timestamp">{formatDate(device.last_seen)}</div>
             </div>
+
+            {/* 2026-03-12: 7-day presence heatmap */}
+            {presenceHistory && presenceHistory.history && (
+              <div className="detail-field">
+                <label className="detail-label">Presence History (7 days)</label>
+                <div className="presence-grid">
+                  <div className="presence-hours">
+                    {[0, 6, 12, 18].map(h => (
+                      <span key={h} className="presence-hour-label">{h}h</span>
+                    ))}
+                  </div>
+                  {presenceHistory.history.map((day) => (
+                    <div key={day.date} className="presence-day">
+                      <span className="presence-day-label">{day.day_label}</span>
+                      <div className="presence-cells">
+                        {day.hourly.map((online, h) => (
+                          <div
+                            key={h}
+                            className={`presence-cell ${online ? 'online' : day.event_count > 0 ? 'offline' : 'unknown'}`}
+                            title={`${day.day_label} ${h}:00 — ${online ? 'Online' : 'Offline'}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="presence-minutes">{day.online_minutes > 0 ? `${Math.round(day.online_minutes / 60)}h` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {showAdvanced && (

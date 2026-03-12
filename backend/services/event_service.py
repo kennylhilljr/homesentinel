@@ -361,6 +361,104 @@ class EventService:
             logger.error(f"Failed to get event stats: {e}")
             raise
 
+    # 2026-03-12: Presence history for device detail timeline heatmap
+    def get_presence_history(self, device_id: str, days: int = 7) -> Dict[str, Any]:
+        """
+        Build per-day online presence windows from device events.
+
+        Args:
+            device_id: Device UUID.
+            days: Number of days to look back (default 7).
+
+        Returns:
+            Dict with device_id, days, and history array of per-day summaries.
+        """
+        try:
+            cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+
+            with self.db.get_connection() as conn:
+                # Get device current status for initial state assumption
+                dev_row = conn.execute(
+                    "SELECT status, last_seen FROM network_devices WHERE device_id = ?",
+                    (device_id,)
+                ).fetchone()
+
+                cursor = conn.execute(
+                    """SELECT event_type, timestamp FROM device_events
+                       WHERE device_id = ? AND timestamp >= ?
+                         AND event_type IN ('online', 'offline', 'connected', 'disconnected')
+                       ORDER BY timestamp ASC""",
+                    (device_id, cutoff)
+                )
+                events = [(row[0], row[1]) for row in cursor.fetchall()]
+
+            # Build per-day buckets
+            history = []
+            for d in range(days - 1, -1, -1):
+                day_dt = datetime.utcnow() - timedelta(days=d)
+                date_str = day_dt.strftime("%Y-%m-%d")
+                day_label = day_dt.strftime("%a")
+
+                # Filter events for this day
+                day_events = [
+                    (etype, ts) for etype, ts in events
+                    if ts and ts.startswith(date_str)
+                ]
+
+                # Count online minutes — simplified: count online events as "came online",
+                # offline as "went offline". Assume 60 min per online window if no closing event.
+                online_minutes = 0
+                last_online_time = None
+
+                for etype, ts in day_events:
+                    try:
+                        evt_time = datetime.fromisoformat(ts.replace('Z', '+00:00').replace('+00:00', ''))
+                    except Exception:
+                        continue
+
+                    if etype in ('online', 'connected'):
+                        last_online_time = evt_time
+                    elif etype in ('offline', 'disconnected') and last_online_time:
+                        minutes = (evt_time - last_online_time).total_seconds() / 60
+                        online_minutes += min(minutes, 1440)  # cap at 24h
+                        last_online_time = None
+
+                # If still online at end of day, count remaining
+                if last_online_time:
+                    end_of_day = day_dt.replace(hour=23, minute=59, second=59)
+                    if day_dt.date() == datetime.utcnow().date():
+                        end_of_day = datetime.utcnow()
+                    minutes = (end_of_day - last_online_time).total_seconds() / 60
+                    online_minutes += max(0, min(minutes, 1440))
+
+                # Build hourly presence (24 slots)
+                hourly = [False] * 24
+                for etype, ts in day_events:
+                    try:
+                        hour = int(ts[11:13])
+                        if etype in ('online', 'connected'):
+                            hourly[hour] = True
+                    except Exception:
+                        pass
+
+                history.append({
+                    "date": date_str,
+                    "day_label": day_label,
+                    "online_minutes": round(online_minutes),
+                    "event_count": len(day_events),
+                    "hourly": hourly,
+                })
+
+            return {
+                "device_id": device_id,
+                "days": days,
+                "history": history,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get presence history: {e}")
+            raise
+
     def clean_old_events(self, days: int = 90) -> int:
         """
         Clean up events older than specified days

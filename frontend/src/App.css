@@ -372,7 +372,8 @@
 .status-card,
 .devices-card,
 .info-card,
-.groups-card {
+.groups-card,
+.alerts-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -989,6 +990,209 @@
 @keyframes newBadgePulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* 2026-03-12: Amber tint for new devices in table view */
+.device-row-new {
+  background: rgba(245, 158, 11, 0.06);
+}
+
+/* 2026-03-12: Nav count badge for new devices */
+.nav-count-badge {
+  display: inline-block;
+  background: #f59e0b;
+  color: #1a1a2e;
+  font-size: 0.6rem;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  margin-left: 5px;
+  padding: 0 4px;
+  vertical-align: middle;
+}
+
+/* 2026-03-12: Active alerts dashboard card */
+.alerts-card h2 {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+}
+
+.alerts-clear {
+  color: #27ae60;
+  font-size: 0.85rem;
+  padding: 12px 0;
+  font-weight: 600;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(192, 57, 43, 0.06);
+  border: 1px solid rgba(192, 57, 43, 0.2);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.alert-row-anomaly {
+  background: rgba(243, 156, 18, 0.06);
+  border-color: rgba(243, 156, 18, 0.2);
+}
+
+.alert-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.alert-msg {
+  flex: 1;
+  color: var(--text);
+}
+
+.alert-time {
+  color: var(--text-muted, #556277);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.alert-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted, #556277);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.alert-dismiss:hover {
+  color: #c0392b;
+}
+
+/* 2026-03-12: Daily Digest card */
+.digest-card h2 {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+}
+
+.digest-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+}
+
+.digest-stat {
+  text-align: center;
+}
+
+.digest-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text, #e0e0e0);
+}
+
+.digest-label {
+  font-size: 0.68rem;
+  color: var(--text-muted, #556277);
+  margin-top: 2px;
+}
+
+.digest-empty {
+  color: var(--text-muted, #556277);
+  font-size: 0.82rem;
+  padding: 12px 0;
+}
+
+/* 2026-03-12: Health Score card + SVG gauge */
+.health-card h2 {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+}
+
+.health-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.score-gauge-container {
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
+}
+
+.score-gauge {
+  width: 100%;
+  height: 100%;
+}
+
+.score-number {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.score-label-svg {
+  font-size: 10px;
+}
+
+.health-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.health-fact {
+  font-size: 0.78rem;
+  color: var(--text-muted, #556277);
+}
+
+/* 2026-03-12: Notification bell */
+.notification-bell {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted, #556277);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  transition: color 0.15s;
+}
+
+.notification-bell:hover {
+  color: var(--text, #e0e0e0);
+}
+
+.header-content {
+  position: relative;
+}
+
+.bell-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: #c0392b;
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 800;
+  min-width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 7px;
+  padding: 0 3px;
 }
 
 .device-type {

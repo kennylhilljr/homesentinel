@@ -53,6 +53,14 @@ function App() {
   const [speedTestRunning, setSpeedTestRunning] = useState(false);
   // 2026-03-11: Chester 5G cellular info for dashboard card
   const [chesterInfo, setChesterInfo] = useState(null);
+  // 2026-03-12: Active alerts + anomaly insights for dashboard card
+  const [activeAlerts, setActiveAlerts] = useState([]);
+  const [anomalyInsights, setAnomalyInsights] = useState([]);
+  // 2026-03-12: Daily digest + network health score
+  const [dailyDigest, setDailyDigest] = useState(null);
+  const [healthScore, setHealthScore] = useState(null);
+  // 2026-03-12: Browser push notifications
+  const [unseenCount, setUnseenCount] = useState(0);
   // 2026-03-12: Home/Away network detection state
   // 2026-03-12: Default to home=true until backend confirms, avoids flash of "Away"
   const [homeStatus, setHomeStatus] = useState({ is_home: true, method: 'init', detail: 'loading...', auto_scan_active: true, auto_scan_paused: false });
@@ -62,6 +70,24 @@ function App() {
   const showBanner = (message, type = 'info') => {
     setBanner({ message, type });
     setTimeout(() => setBanner(null), type === 'error' ? 6000 : 4000);
+  };
+
+  // 2026-03-12: Helper — is this device new (first seen within last 24h)?
+  const isNewDevice = (device) => {
+    if (!device.first_seen) return false;
+    const ts = device.first_seen + (device.first_seen.includes('Z') ? '' : 'Z');
+    return (Date.now() - new Date(ts).getTime()) < 86400000;
+  };
+  const newDeviceCount = devices.filter(isNewDevice).length;
+
+  // 2026-03-12: Dismiss an active alert
+  const dismissAlert = async (alertId) => {
+    try {
+      await fetch(buildUrl(`/events/alerts/${alertId}/dismiss`), { method: 'POST' });
+      setActiveAlerts(prev => prev.filter(a => a.alert_id !== alertId));
+    } catch (error) {
+      console.error('Failed to dismiss alert:', error);
+    }
   };
 
   useEffect(() => {
@@ -188,6 +214,44 @@ function App() {
       }
     };
 
+    // 2026-03-12: Fetch active alerts for dashboard card
+    const getActiveAlerts = async () => {
+      try {
+        const response = await fetch(buildUrl('/events/alerts?limit=10'));
+        if (response.ok) {
+          const data = await response.json();
+          setActiveAlerts(data);
+        }
+      } catch (error) { /* silent */ }
+    };
+
+    // 2026-03-12: Fetch speed insights, filter anomalies for dashboard
+    const getAnomalyInsights = async () => {
+      try {
+        const response = await fetch(buildUrl('/speedtest/insights'));
+        if (response.ok) {
+          const data = await response.json();
+          setAnomalyInsights(data.filter(i => i.insight_type === 'anomaly'));
+        }
+      } catch (error) { /* silent */ }
+    };
+
+    // 2026-03-12: Fetch daily digest (yesterday's summary)
+    const getDailyDigest = async () => {
+      try {
+        const response = await fetch(buildUrl('/digest/daily'));
+        if (response.ok) setDailyDigest(await response.json());
+      } catch (error) { /* silent */ }
+    };
+
+    // 2026-03-12: Fetch network health score
+    const getHealthScore = async () => {
+      try {
+        const response = await fetch(buildUrl('/network/health-score'));
+        if (response.ok) setHealthScore(await response.json());
+      } catch (error) { /* silent */ }
+    };
+
     checkHealth();
     getDevices();
     getPollingConfig();
@@ -196,6 +260,10 @@ function App() {
     getSpeedTestLatest();
     getChesterInfo();
     getHomeStatus();
+    getActiveAlerts();
+    getAnomalyInsights();
+    getDailyDigest();
+    getHealthScore();
 
     // 2026-03-11: Fast poll for devices/health (5s), slow poll for Deco map (30s)
     const fastInterval = setInterval(() => {
@@ -204,16 +272,19 @@ function App() {
       getPollingConfig();
       getDeviceGroups();
       getHomeStatus();
+      getActiveAlerts();
     }, 5000);
 
     const slowInterval = setInterval(() => {
       getClientNodeMap();
       getChesterInfo();
+      getHealthScore();
     }, 30000);
 
     // 2026-03-11: Speed test poll (60s) — updates after scheduled 30-min tests
     const speedInterval = setInterval(() => {
       getSpeedTestLatest();
+      getAnomalyInsights();
     }, 60000);
 
     return () => {
@@ -221,6 +292,47 @@ function App() {
       clearInterval(slowInterval);
       clearInterval(speedInterval);
     };
+  }, []);
+
+  // 2026-03-12: Browser push notifications — request permission + poll unseen alerts
+  useEffect(() => {
+    // Request notification permission once
+    if ('Notification' in window && !localStorage.getItem('hs_notification_asked')) {
+      Notification.requestPermission();
+      localStorage.setItem('hs_notification_asked', '1');
+    }
+
+    const pollUnseen = async () => {
+      try {
+        const response = await fetch(buildUrl('/events/alerts/unseen'));
+        if (!response.ok) return;
+        const alerts = await response.json();
+        setUnseenCount(alerts.length);
+
+        // Fire browser notifications for each unseen alert
+        if ('Notification' in window && Notification.permission === 'granted' && alerts.length > 0) {
+          for (const alert of alerts) {
+            const msg = alert.alert_type === 'new_device'
+              ? `New device detected: ${alert.device_name}`
+              : alert.alert_type === 'device_offline'
+                ? `Device offline: ${alert.device_name}`
+                : `Device reconnected: ${alert.device_name}`;
+            try { new Notification('HomeSentinel', { body: msg, icon: '/favicon.ico' }); } catch (e) { /* silent */ }
+          }
+          // Mark as seen
+          const ids = alerts.map(a => a.alert_id);
+          await fetch(buildUrl('/events/alerts/mark-seen'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ alert_ids: ids }),
+          });
+        }
+      } catch (error) { /* silent */ }
+    };
+
+    pollUnseen();
+    const notifInterval = setInterval(pollUnseen, 10000);
+    return () => clearInterval(notifInterval);
   }, []);
 
   useEffect(() => {
@@ -588,13 +700,21 @@ function App() {
         <div className="header-content">
           <h1>HomeSentinel</h1>
           <p>Home Network Monitor & Device Management Platform</p>
+          {/* 2026-03-12: Notification bell with unseen count */}
+          <button className="notification-bell" onClick={() => setCurrentPage('dashboard')} title="View alerts" aria-label={`Notifications${unseenCount > 0 ? ` (${unseenCount} new)` : ''}`}>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            {unseenCount > 0 && <span className="bell-badge">{unseenCount}</span>}
+          </button>
         </div>
         {/* 2026-03-12: Nav consolidated into 3 groups — Network | Smart Home | Performance */}
         <nav className="main-nav">
           <div className="nav-group">
             <span className="nav-group-label">Network</span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>Dashboard</button>
+              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>Dashboard{newDeviceCount > 0 && <span className="nav-count-badge">{newDeviceCount}</span>}</button>
               <button className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`} onClick={() => setCurrentPage('topology')}>Topology</button>
             </div>
           </div>
@@ -808,6 +928,116 @@ function App() {
           </div>
         </div>
 
+        {/* 2026-03-12: Daily Digest + Health Score row */}
+        <div className="status-split status-split-2">
+          {/* Daily Digest Card */}
+          <div className="status-card digest-card">
+            <h2>Yesterday's Summary</h2>
+            {dailyDigest ? (
+              <div className="digest-grid">
+                <div className="digest-stat">
+                  <div className="digest-value">{dailyDigest.online_devices}</div>
+                  <div className="digest-label">Devices Online</div>
+                </div>
+                <div className="digest-stat">
+                  <div className="digest-value">{dailyDigest.new_devices_count}</div>
+                  <div className="digest-label">New Devices</div>
+                </div>
+                {dailyDigest.speed ? (
+                  <>
+                    <div className="digest-stat">
+                      <div className="digest-value">{dailyDigest.speed.avg_download}</div>
+                      <div className="digest-label">Avg Mbps</div>
+                    </div>
+                    <div className="digest-stat">
+                      <div className="digest-value">{dailyDigest.speed.max_download}</div>
+                      <div className="digest-label">Best Mbps</div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="digest-stat">
+                    <div className="digest-value">—</div>
+                    <div className="digest-label">No tests</div>
+                  </div>
+                )}
+                {dailyDigest.avg_signal_rsrp && (
+                  <div className="digest-stat">
+                    <div className="digest-value">{dailyDigest.avg_signal_rsrp}</div>
+                    <div className="digest-label">Avg RSRP</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="digest-empty">Loading digest...</div>
+            )}
+          </div>
+
+          {/* Health Score Card */}
+          <div className="status-card health-card">
+            <h2>Network Health</h2>
+            {healthScore ? (
+              <div className="health-content">
+                <div className="score-gauge-container">
+                  <svg viewBox="0 0 100 100" className="score-gauge">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border, #333)" strokeWidth="8" />
+                    <circle cx="50" cy="50" r="42" fill="none"
+                      stroke={healthScore.score >= 80 ? '#27ae60' : healthScore.score >= 60 ? '#f39c12' : '#c0392b'}
+                      strokeWidth="8"
+                      strokeDasharray={`${healthScore.score * 2.64} 264`}
+                      strokeLinecap="round"
+                      transform="rotate(-90 50 50)"
+                    />
+                    <text x="50" y="46" textAnchor="middle" className="score-number" fill="var(--text, #e0e0e0)">{healthScore.score}</text>
+                    <text x="50" y="60" textAnchor="middle" className="score-label-svg" fill="var(--text-muted, #556277)">/ 100</text>
+                  </svg>
+                </div>
+                <div className="health-details">
+                  <div className="health-fact">{healthScore.streak_days} day uptime streak</div>
+                  <div className="health-fact">Speed record: {healthScore.speed_record_mbps} Mbps</div>
+                  <div className="health-fact">{healthScore.devices_ever_seen} devices ever seen</div>
+                </div>
+              </div>
+            ) : (
+              <div className="digest-empty">Loading score...</div>
+            )}
+          </div>
+        </div>
+
+        {/* 2026-03-12: Active Alerts dashboard card — surfaces device alerts + speed anomalies */}
+        <div className="alerts-card">
+          <h2>Active Alerts</h2>
+          {activeAlerts.length === 0 && anomalyInsights.length === 0 ? (
+            <div className="alerts-clear">All clear — no active alerts</div>
+          ) : (
+            <div className="alerts-list">
+              {activeAlerts.map(alert => {
+                const alertDevice = devices.find(d => d.device_id === alert.device_id);
+                const name = alertDevice?.friendly_name || alertDevice?.mac_address || alert.device_id?.slice(0, 8);
+                const icon = alert.alert_type === 'new_device' ? '\u{1F195}' :
+                             alert.alert_type === 'device_offline' ? '\u{1F534}' : '\u{1F7E2}';
+                const msg = alert.alert_type === 'new_device' ? `New device detected: ${name}` :
+                            alert.alert_type === 'device_offline' ? `Device offline: ${name}` :
+                            `Device reconnected: ${name}`;
+                return (
+                  <div key={alert.alert_id} className="alert-row">
+                    <span className="alert-icon">{icon}</span>
+                    <span className="alert-msg">{msg}</span>
+                    <span className="alert-time">{formatDate(alert.created_at)}</span>
+                    <button className="alert-dismiss" onClick={() => dismissAlert(alert.alert_id)} title="Dismiss">×</button>
+                  </div>
+                );
+              })}
+              {anomalyInsights.map(insight => (
+                <div key={insight.insight_id} className="alert-row alert-row-anomaly">
+                  <span className="alert-icon">{'\u26A0\uFE0F'}</span>
+                  <span className="alert-msg">{insight.title}</span>
+                  <span className="alert-time">{formatDate(insight.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {deviceGroups.length > 0 && (
           <div className="groups-card">
             <h2>Device Groups ({deviceGroups.length})</h2>
@@ -930,6 +1160,7 @@ function App() {
                     key={device.device_id}
                     device={device}
                     groups={deviceGroups}
+                    isNew={isNewDevice(device)}
                     onClick={() => handleDeviceClick(device)}
                   />
                 ))}
@@ -985,7 +1216,7 @@ function App() {
                     return (
                     <tr
                       key={device.device_id}
-                      className={`device-row ${device.status === 'online' ? 'online' : 'offline'}`}
+                      className={`device-row ${device.status === 'online' ? 'online' : 'offline'}${isNewDevice(device) ? ' device-row-new' : ''}`}
                       onClick={() => !isDropdownOpen && handleDeviceClick(device)}
                       role="button"
                       tabIndex={0}
@@ -1036,9 +1267,7 @@ function App() {
                           </span>
                         )}
                         {/* 2026-03-12: "New" badge for devices first seen in last 24h */}
-                        {device.first_seen && (Date.now() - new Date(device.first_seen + (device.first_seen.includes('Z') ? '' : 'Z')).getTime()) < 86400000 && (
-                          <span className="device-new-badge">NEW</span>
-                        )}
+                        {isNewDevice(device) && <span className="device-new-badge">NEW</span>}
                         {inlineEditId !== device.device_id && (
                         <div className="name-action-wrapper">
                           <button
