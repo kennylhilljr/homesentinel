@@ -1112,13 +1112,20 @@ function App() {
                               <div className="deco-node-info">
                                 {/* Signal/backhaul icon — far left of column */}
                                 {isChester ? (
-                                  <svg className="conn-icon" viewBox="0 0 24 24" style={{ transform: 'scaleX(-1)' }}>
+                                  <svg className="conn-icon" viewBox="0 0 24 24">
                                     <title>{chesterSigLabel}</title>
-                                    <line x1="18" y1="18" x2="8" y2="8" stroke="#78909c" strokeWidth="2" strokeLinecap="round"/>
-                                    <circle cx="18" cy="18" r="2" fill="#78909c"/>
-                                    <path d="M10 4 Q4 4 4 10" fill="none" stroke="#78909c" strokeWidth="2.5" strokeLinecap="round"/>
-                                    <path d="M4 14 a3 3 0 0 1 4 -4" fill="none" stroke={chesterSigColor} strokeWidth="2" strokeLinecap="round"/>
-                                    <path d="M2 17 a7 7 0 0 1 7.5 -8" fill="none" stroke={chesterSigColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.7"/>
+                                    {/* Dish bowl — parabolic, tilted upper-left */}
+                                    <ellipse cx="10" cy="10" rx="9" ry="5" transform="rotate(-45 10 10)" fill="none" stroke="#78909c" strokeWidth="1.8"/>
+                                    {/* Feed arm from dish center to lower-right */}
+                                    <line x1="10" y1="10" x2="19" y2="19" stroke="#78909c" strokeWidth="1.8" strokeLinecap="round"/>
+                                    {/* Feed base */}
+                                    <circle cx="19" cy="19" r="1.5" fill="#78909c"/>
+                                    {/* Stand/base */}
+                                    <line x1="19" y1="19" x2="19" y2="23" stroke="#78909c" strokeWidth="1.8" strokeLinecap="round"/>
+                                    <line x1="16" y1="23" x2="22" y2="23" stroke="#78909c" strokeWidth="1.8" strokeLinecap="round"/>
+                                    {/* Signal arcs — upper-left, colored by RSRP */}
+                                    <path d="M7 3 a4 4 0 0 0 -4 4" fill="none" stroke={chesterSigColor} strokeWidth="1.8" strokeLinecap="round"/>
+                                    <path d="M8.5 0.5 a7 7 0 0 0 -8 7" fill="none" stroke={chesterSigColor} strokeWidth="1.5" strokeLinecap="round" opacity="0.6"/>
                                   </svg>
                                 ) : isDecoNode ? (
                                   backhaulWired ? (
