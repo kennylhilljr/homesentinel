@@ -138,12 +138,24 @@ class AlexaClient:
             raise AlexaAuthError(f"Token refresh request failed: {e}")
 
     def _get_valid_token(self) -> str:
-        """Get a valid access token, refreshing if necessary"""
+        """Get a valid access token, refreshing if necessary.
+        2026-03-12: Circuit breaker — if refresh failed recently, don't retry
+        for 5 minutes to avoid hammering LWA on every device query.
+        """
         if not self._access_token:
             raise AlexaAuthError("Not authenticated. Please complete OAuth flow.")
 
+        if hasattr(self, '_refresh_backoff_until') and self._refresh_backoff_until:
+            if datetime.now() < self._refresh_backoff_until:
+                raise AlexaAuthError("Token refresh in backoff — re-auth required")
+
         if self._token_expiry and datetime.now() >= self._token_expiry - timedelta(seconds=self.TOKEN_REFRESH_MARGIN):
-            self._refresh_access_token()
+            try:
+                self._refresh_access_token()
+                self._refresh_backoff_until = None
+            except AlexaAuthError:
+                self._refresh_backoff_until = datetime.now() + timedelta(minutes=5)
+                raise
 
         return self._access_token
 
