@@ -374,6 +374,64 @@ function SpeedInsightsPage() {
         </div>
       )}
 
+      {/* 2026-03-12: Download vs CA Band Count */}
+      {chartData.some(t => t.cellular_ca_count != null) && (
+        <div className="si-card">
+          <h3>Download Speed vs Carrier Aggregation Count</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={chartData.filter(t => t.cellular_ca_count != null)} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="time" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="speed" tick={{ fontSize: 11 }} unit=" Mbps" width={70} />
+              <YAxis yAxisId="ca" orientation="right" tick={{ fontSize: 11 }} domain={[0, 6]} width={40} label={{ value: 'CA', angle: -90, position: 'insideRight', fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+              <Line yAxisId="speed" type="monotone" dataKey="download_mbps" name="Download (Mbps)" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
+              <Line yAxisId="ca" type="stepAfter" dataKey="cellular_ca_count" name="CA Bands" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* 2026-03-12: Average Download by Band Combination */}
+      {chartData.some(t => t.cellular_ca_bands) && (() => {
+        const bandMap = {};
+        chartData.forEach(t => {
+          if (!t.cellular_ca_bands) return;
+          try {
+            const bands = typeof t.cellular_ca_bands === 'string' ? JSON.parse(t.cellular_ca_bands) : t.cellular_ca_bands;
+            const key = bands.map(b => b.band.replace('NR5G BAND ', 'n')).sort().join('+');
+            if (!bandMap[key]) bandMap[key] = { speeds: [], count: 0 };
+            bandMap[key].speeds.push(t.download_mbps);
+            bandMap[key].count++;
+          } catch (e) { /* skip bad data */ }
+        });
+        const bandData = Object.entries(bandMap)
+          .map(([combo, d]) => ({
+            combo,
+            avg_download: Math.round(d.speeds.reduce((a, b) => a + b, 0) / d.speeds.length * 10) / 10,
+            max_download: Math.round(Math.max(...d.speeds) * 10) / 10,
+            tests: d.count,
+          }))
+          .sort((a, b) => b.avg_download - a.avg_download);
+        return bandData.length > 0 ? (
+          <div className="si-card">
+            <h3>Average Download by Band Combination</h3>
+            <ResponsiveContainer width="100%" height={Math.max(180, bandData.length * 40)}>
+              <BarChart data={bandData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis type="number" tick={{ fontSize: 11 }} unit=" Mbps" />
+                <YAxis type="category" dataKey="combo" tick={{ fontSize: 10 }} width={140} />
+                <Tooltip formatter={(val, name) => [`${val} Mbps`, name]} />
+                <Legend />
+                <Bar dataKey="avg_download" name="Avg Download" fill="#22c55e" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="max_download" name="Max Download" fill="#86efac" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null;
+      })()}
+
       {/* AI Insights */}
       {insights.length > 0 && (
         <div className="si-card si-insights">
