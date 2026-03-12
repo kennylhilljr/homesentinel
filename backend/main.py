@@ -440,18 +440,28 @@ async def search_devices(q: str = "", status: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 2026-03-12: Home network detection endpoint
+# 2026-03-12: Home network detection + auto-scan control
 @app.get("/api/network/home-status")
 async def get_home_status():
-    """Check if server is on the home network (gateway ping + SSID fallback)."""
+    """Check if server is on the home network and return auto-scan state."""
     from services.polling_service import check_home_network
     status = check_home_network()
-    # Also include poller's cached state
     poller_status = polling_manager.get_status()
     return {
         **status,
-        "auto_scan_active": status["is_home"] and poller_status.get("is_running", False),
+        "auto_scan_paused": poller_status.get("auto_scan_paused", False),
+        "auto_scan_active": status["is_home"] and not poller_status.get("auto_scan_paused", False),
     }
+
+
+@app.post("/api/network/auto-scan")
+async def toggle_auto_scan(enabled: bool):
+    """Toggle auto-scan on/off. When off, background scans are paused."""
+    poller = polling_manager.get_poller()
+    if poller is None:
+        raise HTTPException(status_code=500, detail="Polling service not initialized")
+    poller.auto_scan_paused = not enabled
+    return {"auto_scan_paused": poller.auto_scan_paused, "enabled": enabled}
 
 
 @app.get("/api/config/polling")

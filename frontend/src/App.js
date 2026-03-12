@@ -857,13 +857,24 @@ function App() {
                 value={deviceViewMode}
                 onChange={setDeviceViewMode}
               />
-              {/* 2026-03-12: Auto-scan toggle — shows live home/away state */}
-              <label className="auto-scan-toggle" title={homeStatus?.is_home ? `Home (${homeStatus.detail})` : `Away (${homeStatus?.detail || 'checking...'})`}>
-                <span className="auto-scan-label">Auto-Scan</span>
-                <span className={`auto-scan-indicator ${homeStatus?.is_home ? 'home' : 'away'}`}>
-                  {homeStatus?.is_home ? 'ON' : 'OFF'}
-                </span>
-              </label>
+              {/* 2026-03-12: Auto-scan toggle — Scan/Off, same style as Tiles/List */}
+              <ViewModeToggle
+                label=""
+                value={homeStatus?.auto_scan_active ? 'scan' : 'off'}
+                onChange={(val) => {
+                  const enabled = val === 'scan';
+                  fetch(buildUrl('/network/auto-scan?enabled=' + enabled), { method: 'POST' })
+                    .then(r => r.json())
+                    .then(() => {
+                      setHomeStatus(prev => prev ? { ...prev, auto_scan_paused: !enabled, auto_scan_active: enabled && prev.is_home } : prev);
+                    })
+                    .catch(() => {});
+                }}
+                options={[
+                  { value: 'scan', label: 'Scan' },
+                  { value: 'off', label: 'Off' },
+                ]}
+              />
               <button
                 onClick={triggerManualScan}
                 disabled={loading}

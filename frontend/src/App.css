@@ -278,44 +278,6 @@
   justify-content: center;
 }
 
-/* 2026-03-12: Auto-scan toggle indicator */
-.auto-scan-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1.5px solid var(--border);
-  background: var(--surface, #fff);
-  cursor: default;
-  height: 38px;
-  box-sizing: border-box;
-}
-
-.auto-scan-label {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.auto-scan-indicator {
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.auto-scan-indicator.home {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.auto-scan-indicator.away {
-  background: #fff3e0;
-  color: #e67e22;
-}
 
 .timestamp-small {
   font-size: 0.85em !important;

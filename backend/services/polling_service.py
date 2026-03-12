@@ -72,6 +72,7 @@ class BackgroundPoller:
         self.is_home = False
         self.home_detail = ""
         self.home_method = ""
+        self.auto_scan_paused = False  # User-controlled pause toggle
 
     def set_interval(self, interval_seconds: int):
         """Set polling interval"""
@@ -117,7 +118,9 @@ class BackgroundPoller:
                 self.home_method = status["method"]
                 self.home_detail = status["detail"]
 
-                if self.is_home:
+                if self.auto_scan_paused:
+                    logger.debug("Auto-scan paused by user — skipping")
+                elif self.is_home:
                     await self._perform_scan()
                 else:
                     logger.debug(f"Away from home ({self.home_detail}) — skipping auto-scan")
@@ -168,6 +171,7 @@ class BackgroundPoller:
             'is_home': self.is_home,
             'home_method': self.home_method,
             'home_detail': self.home_detail,
+            'auto_scan_paused': self.auto_scan_paused,
         }
 
 
