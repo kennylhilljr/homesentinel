@@ -19,6 +19,8 @@ function SpeedInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [testRunning, setTestRunning] = useState(false);
   const [historyHours, setHistoryHours] = useState(24);
+  // 2026-03-12: Live Chester cell info for carrier table
+  const [chesterInfo, setChesterInfo] = useState(null);
   // 2026-03-11: Inline banner notification (replaces alert() popups)
   const [banner, setBanner] = useState(null);
   const showBanner = (message, type = 'info') => {
@@ -64,11 +66,21 @@ function SpeedInsightsPage() {
     }
   }, [historyHours]);
 
+  // 2026-03-12: Fetch Chester cell info for carrier aggregation table
+  const fetchChester = useCallback(async () => {
+    try {
+      const res = await fetch(buildUrl('/chester/system-info'));
+      if (res.ok) setChesterInfo(await res.json());
+    } catch (e) { /* Chester may not be reachable */ }
+  }, []);
+
   useEffect(() => {
     fetchAll();
+    fetchChester();
     const interval = setInterval(fetchAll, 60000);
-    return () => clearInterval(interval);
-  }, [fetchAll]);
+    const chesterInterval = setInterval(fetchChester, 30000);
+    return () => { clearInterval(interval); clearInterval(chesterInterval); };
+  }, [fetchAll, fetchChester]);
 
   const runTest = async () => {
     setTestRunning(true);
@@ -430,6 +442,101 @@ function SpeedInsightsPage() {
             </ResponsiveContainer>
           </div>
         ) : null;
+      })()}
+
+      {/* 2026-03-12: Live Carrier Aggregation table from Chester */}
+      {chesterInfo && chesterInfo.ca_band && chesterInfo.ca_band.length > 0 && (() => {
+        // Parse raw AT+QCAINFO entries and serving cell
+        const raw = chesterInfo.raw_lte_cell || '';
+        // Parse serving cell: ...,"NR5G-SA","TDD",MCC,MNC,CellID,PCID,TAC,ARFCN,Band,BW,RSRP,RSRQ,SINR,...
+        const servMatch = raw.match(/servingcell.*?,(\d+),(\d+),([A-F0-9]+),(\d+),([A-F0-9]+),(\d+),(\d+),(\d+),([-\d]+),([-\d]+),([-\d]+)/);
+        const servingCell = servMatch ? {
+          mcc: servMatch[1], mnc: servMatch[2], cellId: servMatch[3], pcid: servMatch[4],
+          arfcn: servMatch[6], band: servMatch[7], rsrp: servMatch[9], rsrq: servMatch[10], sinr: servMatch[11],
+        } : null;
+
+        // Parse CA entries
+        // PCC: type,ARFCN,BW,Band,PCID
+        // SCC: type,ARFCN,BW,Band,SCS,PCID,DL_active,UL_active,UL_ARFCN
+        const carriers = chesterInfo.ca_band.map(entry => {
+          const parts = entry.replace(/"/g, '').split(',').map(s => s.trim());
+          const role = parts[0]; // PCC or SCC
+          const arfcn = parts[1];
+          const bw = parts[2];
+          const band = parts[3];
+          if (role === 'PCC') {
+            const pcid = parts[4] || '';
+            return { role, arfcn, bw, band, pcid, scs: '-', dlActive: '1', ulActive: '1', ulArfcn: arfcn,
+              rsrp: servingCell ? servingCell.rsrp : '-', cellId: chesterInfo.cell_id || '-',
+              type: chesterInfo.raw_lte_cell?.includes('NR5G') ? 'NR5G' : 'LTE' };
+          } else {
+            return { role, arfcn, bw, band, scs: parts[4] || '-', pcid: parts[5] || '-',
+              dlActive: parts[6] || '-', ulActive: parts[7] || '-', ulArfcn: parts[8] || '-',
+              rsrp: '-', cellId: '-', type: band.includes('NR5G') ? 'NR5G' : 'LTE' };
+          }
+        });
+
+        // Count frequency from historical data — how often each cell+band combo appears
+        const freqMap = {};
+        chartData.forEach(t => {
+          if (!t.cellular_ca_bands) return;
+          try {
+            const bands = typeof t.cellular_ca_bands === 'string' ? JSON.parse(t.cellular_ca_bands) : t.cellular_ca_bands;
+            bands.forEach(b => {
+              const key = `${b.arfcn}-${b.band}`;
+              freqMap[key] = (freqMap[key] || 0) + 1;
+            });
+          } catch (e) {}
+        });
+
+        // Sort by frequency (most seen first), PCC always on top
+        const sorted = [...carriers].sort((a, b) => {
+          if (a.role === 'PCC') return -1;
+          if (b.role === 'PCC') return 1;
+          const freqA = freqMap[`${a.arfcn}-${a.band}`] || 0;
+          const freqB = freqMap[`${b.arfcn}-${b.band}`] || 0;
+          return freqB - freqA;
+        });
+
+        return (
+          <div className="si-card">
+            <h3>Live Carrier Aggregation — Cell {chesterInfo.cell_id || '?'}</h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="si-ca-table">
+                <thead>
+                  <tr>
+                    <th>Cell ID</th>
+                    <th>Type</th>
+                    <th>DL ARFCN</th>
+                    <th>SCS</th>
+                    <th>Band</th>
+                    <th>PCI</th>
+                    <th>RSRP</th>
+                    <th>DL Active</th>
+                    <th>UL Active</th>
+                    <th>UL ARFCN</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((c, i) => (
+                    <tr key={i} className={c.role === 'PCC' ? 'si-ca-pcc' : ''}>
+                      <td>{c.role === 'PCC' ? chesterInfo.cell_id || '-' : '-'}</td>
+                      <td><span className={`si-ca-role ${c.role.toLowerCase()}`}>{c.role}</span></td>
+                      <td>{c.arfcn}</td>
+                      <td>{c.scs}</td>
+                      <td>{c.band.replace('NR5G BAND ', 'n')}</td>
+                      <td>{c.pcid}</td>
+                      <td>{c.rsrp !== '-' ? `${c.rsrp} dBm` : '-'}</td>
+                      <td>{c.dlActive === '1' ? 'Yes' : c.dlActive === '0' ? 'No' : c.dlActive}</td>
+                      <td>{c.ulActive === '1' ? 'Yes' : c.ulActive === '0' ? 'No' : c.ulActive}</td>
+                      <td>{c.ulArfcn !== '-' ? c.ulArfcn : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
       })()}
 
       {/* AI Insights */}
