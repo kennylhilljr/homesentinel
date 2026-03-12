@@ -50,6 +50,8 @@ function App() {
   const [speedTestRunning, setSpeedTestRunning] = useState(false);
   // 2026-03-11: Chester 5G cellular info for dashboard card
   const [chesterInfo, setChesterInfo] = useState(null);
+  // 2026-03-12: Home/Away network detection state
+  const [homeStatus, setHomeStatus] = useState(null); // { is_home, method, detail, auto_scan_active }
   // 2026-03-11: Banner notification state (replaces all alert() popups)
   const [banner, setBanner] = useState(null); // { message, type: 'success'|'error'|'info' }
 
@@ -169,6 +171,19 @@ function App() {
       }
     };
 
+    // 2026-03-12: Home/Away network detection
+    const getHomeStatus = async () => {
+      try {
+        const response = await fetch(buildUrl('/network/home-status'));
+        if (response.ok) {
+          const data = await response.json();
+          setHomeStatus(data);
+        }
+      } catch (error) {
+        // Silently fail
+      }
+    };
+
     checkHealth();
     getDevices();
     getPollingConfig();
@@ -176,6 +191,7 @@ function App() {
     getClientNodeMap();
     getSpeedTestLatest();
     getChesterInfo();
+    getHomeStatus();
 
     // 2026-03-11: Fast poll for devices/health (5s), slow poll for Deco map (30s)
     const fastInterval = setInterval(() => {
@@ -188,6 +204,7 @@ function App() {
     const slowInterval = setInterval(() => {
       getClientNodeMap();
       getChesterInfo();
+      getHomeStatus();
     }, 30000);
 
     // 2026-03-11: Speed test poll (60s) — updates after scheduled 30-min tests
@@ -640,10 +657,15 @@ function App() {
             <div className="summary-label">Offline</div>
             <div className="summary-value">{offlineCount}</div>
           </div>
-          <div className="summary-card">
-            <div className="summary-label">Last Refreshed</div>
-            <div className="summary-value timestamp-small">
-              {lastScanTime ? new Date(lastScanTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York' }) : 'Never'}
+          <div className={`summary-card ${homeStatus?.is_home ? 'home' : 'away'}`}>
+            <div className="summary-label">{homeStatus?.is_home ? 'Home' : 'Away'}</div>
+            <div className="summary-value home-icon">
+              <svg viewBox="0 0 24 24" width="36" height="36">
+                <path d="M3 12 L12 3 L21 12 V21 H15 V15 H9 V21 H3 Z"
+                  fill={homeStatus?.is_home ? '#2e7d32' : '#e67e22'}
+                  stroke={homeStatus?.is_home ? '#1b5e20' : '#d35400'}
+                  strokeWidth="1.5" strokeLinejoin="round"/>
+              </svg>
             </div>
           </div>
         </div>
@@ -835,6 +857,13 @@ function App() {
                 value={deviceViewMode}
                 onChange={setDeviceViewMode}
               />
+              {/* 2026-03-12: Auto-scan toggle — shows live home/away state */}
+              <label className="auto-scan-toggle" title={homeStatus?.is_home ? `Home (${homeStatus.detail})` : `Away (${homeStatus?.detail || 'checking...'})`}>
+                <span className="auto-scan-label">Auto-Scan</span>
+                <span className={`auto-scan-indicator ${homeStatus?.is_home ? 'home' : 'away'}`}>
+                  {homeStatus?.is_home ? 'ON' : 'OFF'}
+                </span>
+              </label>
               <button
                 onClick={triggerManualScan}
                 disabled={loading}

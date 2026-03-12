@@ -440,6 +440,20 @@ async def search_devices(q: str = "", status: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# 2026-03-12: Home network detection endpoint
+@app.get("/api/network/home-status")
+async def get_home_status():
+    """Check if server is on the home network (gateway ping + SSID fallback)."""
+    from services.polling_service import check_home_network
+    status = check_home_network()
+    # Also include poller's cached state
+    poller_status = polling_manager.get_status()
+    return {
+        **status,
+        "auto_scan_active": status["is_home"] and poller_status.get("is_running", False),
+    }
+
+
 @app.get("/api/config/polling")
 async def get_polling_config():
     """Get polling configuration"""

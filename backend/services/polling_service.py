@@ -1,15 +1,59 @@
 """
 Background Polling Service for HomeSentinel
-Implements periodic ARP scanning and device updates
+Implements periodic ARP scanning and device updates with home network detection
 """
 
 import asyncio
 import logging
+import subprocess
+import socket
 from datetime import datetime
 from typing import Optional
 import os
 
 logger = logging.getLogger(__name__)
+
+# 2026-03-12: Home network detection — Option A (gateway) with Option B (SSID) fallback
+HOME_GATEWAY = os.getenv("HOME_GATEWAY_IP", "192.168.12.1")
+HOME_SSIDS = {"USVA42_Home", "USVA42_MLO"}
+
+
+def check_home_network() -> dict:
+    """Detect whether we're on the home network.
+    Option A: Try to reach the home gateway (Chester at 192.168.12.1).
+    Option B fallback: Check current SSID against known home SSIDs.
+    Returns dict with is_home, method, and detail.
+    """
+    # Option A: Gateway ping (fast — 1 second timeout)
+    try:
+        result = subprocess.run(
+            ["ping", "-c", "1", "-W", "1", HOME_GATEWAY],
+            capture_output=True, timeout=3
+        )
+        if result.returncode == 0:
+            return {"is_home": True, "method": "gateway", "detail": f"{HOME_GATEWAY} reachable"}
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Option B fallback: SSID check (macOS)
+    try:
+        result = subprocess.run(
+            ["/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-I"],
+            capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("SSID:"):
+                    ssid = line.split(":", 1)[1].strip()
+                    if ssid in HOME_SSIDS:
+                        return {"is_home": True, "method": "ssid", "detail": ssid}
+                    return {"is_home": False, "method": "ssid", "detail": ssid}
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Neither method worked — assume away
+    return {"is_home": False, "method": "none", "detail": "gateway unreachable, SSID unknown"}
 
 
 class BackgroundPoller:
@@ -24,6 +68,10 @@ class BackgroundPoller:
         self.scan_count = 0
         self.last_error = None
         self.task = None
+        # 2026-03-12: Home/away state
+        self.is_home = False
+        self.home_detail = ""
+        self.home_method = ""
 
     def set_interval(self, interval_seconds: int):
         """Set polling interval"""
@@ -59,10 +107,21 @@ class BackgroundPoller:
         logger.info("Background polling stopped")
 
     async def _polling_loop(self):
-        """Main polling loop"""
+        """Main polling loop — skips scan when away from home network"""
         while self.is_running:
             try:
-                await self._perform_scan()
+                # 2026-03-12: Check home network before scanning
+                loop = asyncio.get_event_loop()
+                status = await loop.run_in_executor(None, check_home_network)
+                self.is_home = status["is_home"]
+                self.home_method = status["method"]
+                self.home_detail = status["detail"]
+
+                if self.is_home:
+                    await self._perform_scan()
+                else:
+                    logger.debug(f"Away from home ({self.home_detail}) — skipping auto-scan")
+
                 await asyncio.sleep(self.polling_interval)
             except asyncio.CancelledError:
                 logger.debug("Polling loop cancelled")
@@ -105,7 +164,10 @@ class BackgroundPoller:
             'subnet': self.subnet,
             'last_scan_time': self.last_scan_time.isoformat() if self.last_scan_time else None,
             'scan_count': self.scan_count,
-            'last_error': self.last_error
+            'last_error': self.last_error,
+            'is_home': self.is_home,
+            'home_method': self.home_method,
+            'home_detail': self.home_detail,
         }
 
 
