@@ -1030,6 +1030,9 @@ function App() {
                         const wireType = nodeInfo ? (nodeInfo.wire_type || '') : '';
                         const connType = nodeInfo ? (nodeInfo.connection_type || '') : '';
                         const isWired = wireType === 'wired' || connType === 'wired';
+                        // 2026-03-12: Chester 5G router gets a satellite dish icon
+                        const displayName = (device.friendly_name || device.deco_name || device.mac_address || '').toLowerCase();
+                        const isChester = displayName.includes('chester');
                         // Signal strength
                         // 2026-03-12: Signal level based on Wi-Fi band, not throughput.
                         // Deco local API only reports instantaneous kbps (down_speed/up_speed),
@@ -1101,7 +1104,16 @@ function App() {
                             <td className="deco-node-cell">
                               <div className="deco-node-info">
                                 {/* Signal/backhaul icon — far left of column */}
-                                {isDecoNode ? (
+                                {isChester ? (
+                                  <svg className="conn-icon" viewBox="0 0 24 24">
+                                    <title>5G Cellular (Chester)</title>
+                                    <circle cx="6" cy="18" r="2" fill="#1565c0"/>
+                                    <path d="M6 18 L18 6" stroke="#1565c0" strokeWidth="2.5" strokeLinecap="round"/>
+                                    <path d="M14 4 a8 8 0 0 1 6 6" fill="none" stroke="#1565c0" strokeWidth="2.5" strokeLinecap="round"/>
+                                    <path d="M12 7 a5 5 0 0 1 5 5" fill="none" stroke="#1565c0" strokeWidth="2" strokeLinecap="round"/>
+                                    <path d="M10 10 a2.5 2.5 0 0 1 4 2" fill="none" stroke="#1565c0" strokeWidth="1.5" strokeLinecap="round"/>
+                                  </svg>
+                                ) : isDecoNode ? (
                                   backhaulWired ? (
                                     <svg className="conn-icon" viewBox="0 0 24 24">
                                       <title>{bhTitle}</title>
