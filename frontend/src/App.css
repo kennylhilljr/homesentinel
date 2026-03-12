@@ -715,11 +715,16 @@
 
 .devices-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   margin-top: 15px;
 }
 
 .devices-table thead {
+  /* 2026-03-12: Sticky header — freezes when table hits top of viewport */
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background-color: #f4f7ff;
   border-bottom: 2px solid #dce6fd;
 }
@@ -730,6 +735,7 @@
   font-weight: 700;
   color: var(--text);
   border-bottom: 2px solid #dce6fd;
+  background-color: #f4f7ff;
 }
 
 .sort-button {
