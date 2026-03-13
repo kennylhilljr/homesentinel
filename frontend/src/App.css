@@ -179,6 +179,29 @@
 
 .header-content {
   flex: 1;
+  position: relative;
+}
+
+/* 2026-03-12: Brand lockup — logo + wordmark */
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  flex-shrink: 0;
+}
+
+/* 2026-03-12: Nav button inline SVG icons */
+.nav-icon {
+  vertical-align: -2px;
+  margin-right: 4px;
+  opacity: 0.85;
+}
+
+.nav-button.active .nav-icon {
+  opacity: 1;
 }
 
 .App-header h1 {
@@ -318,7 +341,15 @@
   color: #667289;
 }
 
-/* 2026-03-12: Home/Away summary card */
+/* 2026-03-12: Home/Away summary card — demoted visual weight */
+.summary-card.home,
+.summary-card.away {
+  border-top-width: 2px;
+  padding: 16px;
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
 .summary-card.home {
   border-top-color: #2e7d32;
 }
@@ -335,12 +366,53 @@
   color: #e67e22;
 }
 
+.summary-card.home .summary-value,
+.summary-card.away .summary-value {
+  font-size: 1.5rem;
+}
+
 .home-icon {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+
+/* 2026-03-12: "What Changed" summary bar — dashboard engagement hook */
+.whats-new-bar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.whats-new-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.whats-new-item::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.whats-new-device::before { background: #f59e0b; }
+.whats-new-offline::before { background: #ef4444; }
+.whats-new-anomaly::before { background: #8b5cf6; }
+.whats-new-scan::before { background: var(--brand); }
 
 .timestamp-small {
   font-size: 0.85em !important;

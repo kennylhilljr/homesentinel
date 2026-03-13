@@ -21,6 +21,9 @@ function SpeedInsightsPage() {
   const [historyHours, setHistoryHours] = useState(24);
   // 2026-03-12: Live Chester cell info for carrier table
   const [chesterInfo, setChesterInfo] = useState(null);
+  // 2026-03-12: Collapsible sections to reduce scroll depth
+  const [showCellular, setShowCellular] = useState(false);
+  const [showCarrierTable, setShowCarrierTable] = useState(false);
   // 2026-03-11: Inline banner notification (replaces alert() popups)
   const [banner, setBanner] = useState(null);
   const showBanner = (message, type = 'info') => {
@@ -375,8 +378,18 @@ function SpeedInsightsPage() {
         </div>
       )}
 
-      {/* Cellular Signal vs Speed (if data available) */}
-      {chartData.some(t => t.cellular_rsrp != null) && (
+      {/* 2026-03-12: Collapsible cellular analysis section */}
+      {chartData.some(t => t.cellular_rsrp != null || t.cellular_ca_count != null || t.cellular_ca_bands) && (
+        <button className="si-section-toggle" onClick={() => setShowCellular(v => !v)} aria-expanded={showCellular}>
+          <svg className="si-toggle-chevron" viewBox="0 0 16 16" width="14" height="14" style={{ transform: showCellular ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+            <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Cellular Analysis
+          <span className="si-toggle-hint">{showCellular ? 'collapse' : 'expand'}</span>
+        </button>
+      )}
+
+      {showCellular && chartData.some(t => t.cellular_rsrp != null) && (
         <div className="si-card">
           <h3>Cellular Signal vs Download Speed</h3>
           <div role="img" aria-label="Dual-axis line chart correlating cellular RSRP signal strength in dBm with download speed in Mbps over time.">
@@ -397,7 +410,7 @@ function SpeedInsightsPage() {
       )}
 
       {/* 2026-03-12: Download vs CA Band Count */}
-      {chartData.some(t => t.cellular_ca_count != null) && (
+      {showCellular && chartData.some(t => t.cellular_ca_count != null) && (
         <div className="si-card">
           <h3>Download Speed vs Carrier Aggregation Count</h3>
           <div role="img" aria-label="Dual-axis chart showing download speed vs number of carrier aggregation bands active during each speed test.">
@@ -418,7 +431,7 @@ function SpeedInsightsPage() {
       )}
 
       {/* 2026-03-12: Average Download by Band Combination */}
-      {chartData.some(t => t.cellular_ca_bands) && (() => {
+      {showCellular && chartData.some(t => t.cellular_ca_bands) && (() => {
         const bandMap = {};
         chartData.forEach(t => {
           if (!t.cellular_ca_bands) return;
@@ -458,8 +471,18 @@ function SpeedInsightsPage() {
         ) : null;
       })()}
 
-      {/* 2026-03-12: Carrier Aggregation history + live status */}
-      {chartData.some(t => t.cellular_ca_bands) && (() => {
+      {/* 2026-03-12: Collapsible CA history table */}
+      {chartData.some(t => t.cellular_ca_bands) && (
+        <button className="si-section-toggle" onClick={() => setShowCarrierTable(v => !v)} aria-expanded={showCarrierTable}>
+          <svg className="si-toggle-chevron" viewBox="0 0 16 16" width="14" height="14" style={{ transform: showCarrierTable ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+            <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Carrier Aggregation History
+          <span className="si-toggle-hint">{showCarrierTable ? 'collapse' : 'expand'}</span>
+        </button>
+      )}
+
+      {showCarrierTable && chartData.some(t => t.cellular_ca_bands) && (() => {
         // Build historical inventory of all bands/ARFCNs ever seen
         const bandInventory = {}; // key: "arfcn-band" → { band, arfcn, role counts, first/last seen, timestamps }
         const totalTests = chartData.filter(t => t.cellular_ca_bands).length;

@@ -698,8 +698,18 @@ function App() {
       </div>
       <header className="App-header">
         <div className="header-content">
-          <h1>HomeSentinel</h1>
-          <p>Home Network Monitor & Device Management Platform</p>
+          {/* 2026-03-12: SVG shield logo + wordmark for brand identity */}
+          <div className="brand-lockup">
+            <svg className="brand-logo" viewBox="0 0 32 36" width="32" height="36" fill="none">
+              <path d="M16 1L2 8v10c0 9.5 6 16.5 14 18 8-1.5 14-8.5 14-18V8L16 1z" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/>
+              <circle cx="16" cy="17" r="5" fill="none" stroke="#fff" strokeWidth="1.5"/>
+              <path d="M16 12v-3M16 22v3M11 17H8M24 17h-3" stroke="rgba(255,255,255,0.5)" strokeWidth="1" strokeLinecap="round"/>
+            </svg>
+            <div>
+              <h1>HomeSentinel</h1>
+              <p>Network Monitor & Device Management</p>
+            </div>
+          </div>
           {/* 2026-03-12: Notification bell with unseen count */}
           <button className="notification-bell" onClick={() => setCurrentPage('dashboard')} title="View alerts" aria-label={`Notifications${unseenCount > 0 ? ` (${unseenCount} new)` : ''}`}>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -714,24 +724,42 @@ function App() {
           <div className="nav-group">
             <span className="nav-group-label">Network</span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>Dashboard{newDeviceCount > 0 && <span className="nav-count-badge">{newDeviceCount}</span>}</button>
-              <button className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`} onClick={() => setCurrentPage('topology')}>Topology</button>
+              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M1 8l7-6 7 6v7H9v-4H7v4H1V8z" fill="currentColor"/></svg>
+                Dashboard{newDeviceCount > 0 && <span className="nav-count-badge">{newDeviceCount}</span>}
+              </button>
+              <button className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`} onClick={() => setCurrentPage('topology')}>
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="3" r="2" fill="currentColor"/><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="13" r="2" fill="currentColor"/><path d="M8 5v3M6 10L3 11M10 10l3 1" stroke="currentColor" strokeWidth="1.2"/></svg>
+                Topology
+              </button>
             </div>
           </div>
           <div className="nav-group">
             <span className="nav-group-label">Smart Home</span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`} onClick={() => setCurrentPage('alexa')}>Alexa</button>
-              <button className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`} onClick={() => setCurrentPage('smart-home')}>Controls</button>
+              <button className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`} onClick={() => setCurrentPage('alexa')}>
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                Alexa
+              </button>
+              <button className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`} onClick={() => setCurrentPage('smart-home')}>
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><rect x="2" y="7" width="5" height="7" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="12" rx="1" fill="currentColor"/></svg>
+                Controls
+              </button>
             </div>
           </div>
           <div className="nav-group">
             <span className="nav-group-label">Performance</span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`} onClick={() => setCurrentPage('speed-insights')}>Speed</button>
+              <button className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`} onClick={() => setCurrentPage('speed-insights')}>
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M1 14l4-5 3 2 4-6 3 3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Speed
+              </button>
             </div>
           </div>
-          <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => setCurrentPage('settings')}>Settings</button>
+          <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => setCurrentPage('settings')}>
+            <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.5 1.5M11.6 11.6l1.5 1.5M13.1 2.9l-1.5 1.5M4.4 11.6l-1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+            Settings
+          </button>
         </nav>
       </header>
       <main className="App-main" id="main-content">
@@ -784,6 +812,24 @@ function App() {
             </div>
           </div>
         </div>
+        {/* 2026-03-12: "What Changed" summary — answers "why should I care right now?" */}
+        {(newDeviceCount > 0 || activeAlerts.length > 0 || anomalyInsights.length > 0) && (
+          <div className="whats-new-bar">
+            {newDeviceCount > 0 && (
+              <span className="whats-new-item whats-new-device">{newDeviceCount} new device{newDeviceCount > 1 ? 's' : ''} in last 24h</span>
+            )}
+            {activeAlerts.filter(a => a.alert_type === 'device_offline').length > 0 && (
+              <span className="whats-new-item whats-new-offline">{activeAlerts.filter(a => a.alert_type === 'device_offline').length} device{activeAlerts.filter(a => a.alert_type === 'device_offline').length > 1 ? 's' : ''} went offline</span>
+            )}
+            {anomalyInsights.length > 0 && (
+              <span className="whats-new-item whats-new-anomaly">{anomalyInsights.length} speed anomal{anomalyInsights.length > 1 ? 'ies' : 'y'} detected</span>
+            )}
+            {pollingConfig && (
+              <span className="whats-new-item whats-new-scan">Last scan: {formatDate(pollingConfig.last_scan)}</span>
+            )}
+          </div>
+        )}
+
         {/* 2026-03-11: Three-card layout — System + 5G Signal + Speed Test */}
         <div className="status-split status-split-3">
           <div className="status-card status-card-compact">

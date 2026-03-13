@@ -507,3 +507,39 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* 2026-03-12: Collapsible section toggles to reduce scroll depth */
+.si-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background: #f3f6fa;
+  border: 1px solid #d4dde8;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #344a62;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.si-section-toggle:hover {
+  background: #e8edf3;
+}
+
+.si-toggle-chevron {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.si-toggle-hint {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #8c96a9;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
