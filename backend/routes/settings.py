@@ -53,6 +53,8 @@ def set_chester_client(client):
 
 # 2026-03-12: Extracted _get_setting/_set_setting to utils.py for reuse
 from utils import get_setting as _get_setting_impl, set_setting as _set_setting_impl
+# 2026-03-12: Encrypted credential storage
+from utils import store_encrypted_setting, load_encrypted_setting
 
 
 def _get_setting(key: str) -> Optional[str]:
@@ -111,15 +113,19 @@ def load_deco_credentials_on_startup():
         logger.info(f"Loaded Deco credentials from environment (mode: {mode})")
         return
 
-    # Fall back to DB
+    # Fall back to DB (2026-03-12: now using encrypted storage with plaintext fallback)
     if db is None:
         return
-    creds_json = _get_setting("deco_credentials")
-    if not creds_json:
+    try:
+        with db.get_connection() as conn:
+            creds = load_encrypted_setting(conn, "deco_credentials")
+    except Exception as e:
+        logger.warning(f"Failed to load Deco credentials: {e}")
+        return
+    if not creds:
         return
 
     try:
-        creds = json.loads(creds_json)
         deco_client.username = creds.get("username", "")
         deco_client.password = creds.get("password", "")
 
@@ -135,7 +141,7 @@ def load_deco_credentials_on_startup():
             deco_client.active_endpoint = deco_client.cloud_endpoint
             deco_client.verify_ssl = True
 
-        logger.info(f"Loaded Deco credentials from database (mode: {mode})")
+        logger.info(f"Loaded Deco credentials from database (mode: {mode}, encrypted)")
     except Exception as e:
         logger.warning(f"Failed to load Deco credentials: {e}")
 
@@ -162,15 +168,19 @@ def load_chester_credentials_on_startup():
         logger.info("Loaded Chester credentials from environment")
         return
 
-    # Fall back to DB
+    # Fall back to DB (2026-03-12: now using encrypted storage with plaintext fallback)
     if db is None:
         return
-    creds_json = _get_setting("chester_credentials")
-    if not creds_json:
+    try:
+        with db.get_connection() as conn:
+            creds = load_encrypted_setting(conn, "chester_credentials")
+    except Exception as e:
+        logger.warning(f"Failed to load Chester credentials: {e}")
+        return
+    if not creds:
         return
 
     try:
-        creds = json.loads(creds_json)
         chester_client.set_credentials(
             host=creds.get("host", "192.168.12.1"),
             username=creds.get("username", "admin"),
@@ -179,7 +189,7 @@ def load_chester_credentials_on_startup():
             use_https=bool(creds.get("use_https", False)),
             verify_ssl=bool(creds.get("verify_ssl", False)),
         )
-        logger.info("Loaded Chester credentials from database")
+        logger.info("Loaded Chester credentials from database (encrypted)")
     except Exception as e:
         logger.warning(f"Failed to load Chester credentials: {e}")
 
@@ -190,14 +200,15 @@ async def save_deco_credentials(creds: DecoCredentials) -> Dict[str, Any]:
     if deco_client is None:
         raise HTTPException(status_code=500, detail="Deco client not initialized")
 
-    # Save to database
+    # 2026-03-12: Save to database with encryption
     creds_data = {
         "username": creds.username,
         "password": creds.password,
         "mode": creds.mode,
         "local_endpoint": creds.local_endpoint,
     }
-    _set_setting("deco_credentials", json.dumps(creds_data))
+    with db.get_connection() as conn:
+        store_encrypted_setting(conn, "deco_credentials", creds_data)
 
     # Update the client
     deco_client.username = creds.username
@@ -292,6 +303,7 @@ async def save_chester_credentials(creds: ChesterCredentials) -> Dict[str, Any]:
     if chester_client is None:
         raise HTTPException(status_code=500, detail="Chester client not initialized")
 
+    # 2026-03-12: Save to database with encryption
     creds_data = {
         "host": creds.host,
         "port": creds.port,
@@ -300,7 +312,8 @@ async def save_chester_credentials(creds: ChesterCredentials) -> Dict[str, Any]:
         "use_https": creds.use_https,
         "verify_ssl": creds.verify_ssl,
     }
-    _set_setting("chester_credentials", json.dumps(creds_data))
+    with db.get_connection() as conn:
+        store_encrypted_setting(conn, "chester_credentials", creds_data)
 
     chester_client.set_credentials(
         host=creds.host,

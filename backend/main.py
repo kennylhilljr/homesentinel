@@ -37,6 +37,7 @@ from routes import alarm_com as alarm_com_routes
 from routes import speedtest as speedtest_routes
 from routes import digest as digest_routes
 from routes import health as health_routes
+from routes import sse as sse_routes  # 2026-03-12: SSE push-based device updates
 from services.alarm_com_client import AlarmComClient
 from services.speedtest_service import SpeedTestService
 from services.speedtest_scheduler import SpeedTestScheduler
@@ -93,6 +94,7 @@ app.include_router(alarm_com_routes.router)
 app.include_router(speedtest_routes.router)
 app.include_router(digest_routes.router)
 app.include_router(health_routes.router)
+app.include_router(sse_routes.router)  # 2026-03-12: SSE push-based device updates
 
 # Pydantic models
 class DeviceUpdate(BaseModel):

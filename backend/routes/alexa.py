@@ -92,6 +92,8 @@ def set_chester_client(client):
 
 # 2026-03-12: Extracted _get_setting/_set_setting and _normalize_mac to utils.py for reuse
 from utils import get_setting as _get_setting_impl, set_setting as _set_setting_impl
+# 2026-03-12: Encrypted credential storage
+from utils import store_encrypted_setting, load_encrypted_setting
 
 
 def _normalize_mac(mac: str) -> str:
@@ -137,14 +139,15 @@ def load_alexa_credentials_on_startup():
         alexa_client.set_credentials(env_id, env_secret)
         logger.info("Loaded Alexa credentials from environment")
     elif db is not None:
-        creds_json = _get_setting("alexa_credentials")
-        if creds_json:
-            try:
-                creds = json.loads(creds_json)
+        # 2026-03-12: Use encrypted storage with plaintext fallback
+        try:
+            with db.get_connection() as conn:
+                creds = load_encrypted_setting(conn, "alexa_credentials")
+            if creds:
                 alexa_client.set_credentials(creds.get("client_id", ""), creds.get("client_secret", ""))
-                logger.info("Loaded Alexa credentials from database")
-            except Exception as e:
-                logger.warning(f"Failed to load Alexa credentials: {e}")
+                logger.info("Loaded Alexa credentials from database (encrypted)")
+        except Exception as e:
+            logger.warning(f"Failed to load Alexa credentials: {e}")
 
     tokens_json = _get_setting("alexa_tokens")
     if tokens_json:
@@ -247,11 +250,12 @@ async def start_alexa_auth(auth_req: AlexaAuthRequest) -> Dict[str, Any]:
         "redirect_uri": auth_req.redirect_uri or DEFAULT_ALEXA_REDIRECT_URI,
     }
 
-    # Save credentials
-    _set_setting("alexa_credentials", json.dumps({
-        "client_id": auth_req.client_id,
-        "client_secret": auth_req.client_secret,
-    }))
+    # 2026-03-12: Save credentials with encryption
+    with db.get_connection() as conn:
+        store_encrypted_setting(conn, "alexa_credentials", {
+            "client_id": auth_req.client_id,
+            "client_secret": auth_req.client_secret,
+        })
     _set_setting("alexa_oauth_config", json.dumps(oauth_config))
 
     redirect_uri = oauth_config["redirect_uri"]

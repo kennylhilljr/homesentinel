@@ -54,6 +54,8 @@ def set_db(database):
 
 # 2026-03-12: Extracted _get_setting/_set_setting to utils.py for reuse
 from utils import get_setting as _get_setting_impl, set_setting as _set_setting_impl
+# 2026-03-12: Encrypted credential storage
+from utils import store_encrypted_setting, load_encrypted_setting
 
 
 def _get_setting(key: str) -> Optional[str]:
@@ -98,19 +100,23 @@ def load_alarm_com_credentials_on_startup():
         logger.info("Loaded Alarm.com credentials from environment")
         return
 
-    # Fall back to DB
+    # Fall back to DB (2026-03-12: now using encrypted storage with plaintext fallback)
     if db is None:
         return
-    creds_json = _get_setting("alarm_com_credentials")
-    if not creds_json:
+    try:
+        with db.get_connection() as conn:
+            creds = load_encrypted_setting(conn, "alarm_com_credentials")
+    except Exception as e:
+        logger.warning(f"Failed to load Alarm.com credentials: {e}")
+        return
+    if not creds:
         return
 
     try:
-        creds = json.loads(creds_json)
         alarm_com_client.username = creds.get("username", "")
         alarm_com_client.password = creds.get("password", "")
         alarm_com_client.two_factor_cookie = creds.get("two_factor_cookie", "")
-        logger.info("Loaded Alarm.com credentials from database")
+        logger.info("Loaded Alarm.com credentials from database (encrypted)")
     except Exception as e:
         logger.warning(f"Failed to load Alarm.com credentials: {e}")
 
@@ -123,12 +129,14 @@ async def save_alarm_com_credentials(creds: AlarmComCredentials) -> Dict[str, An
     if alarm_com_client is None:
         raise HTTPException(status_code=500, detail="Alarm.com client not initialized")
 
+    # 2026-03-12: Save to database with encryption
     creds_data = {
         "username": creds.username,
         "password": creds.password,
         "two_factor_cookie": creds.two_factor_cookie or "",
     }
-    _set_setting("alarm_com_credentials", json.dumps(creds_data))
+    with db.get_connection() as conn:
+        store_encrypted_setting(conn, "alarm_com_credentials", creds_data)
 
     alarm_com_client.set_credentials(
         username=creds.username,
@@ -186,12 +194,14 @@ async def submit_otp(body: OtpSubmit) -> Dict[str, Any]:
     try:
         result = await alarm_com_client.submit_otp(body.code, body.method)
         # Persist the 2FA cookie so future restarts don't need OTP again
+        # 2026-03-12: Use encrypted storage
         if result.get("two_factor_cookie"):
-            existing = _get_setting("alarm_com_credentials")
+            with db.get_connection() as conn:
+                existing = load_encrypted_setting(conn, "alarm_com_credentials")
             if existing:
-                creds = json.loads(existing)
-                creds["two_factor_cookie"] = result["two_factor_cookie"]
-                _set_setting("alarm_com_credentials", json.dumps(creds))
+                existing["two_factor_cookie"] = result["two_factor_cookie"]
+                with db.get_connection() as conn:
+                    store_encrypted_setting(conn, "alarm_com_credentials", existing)
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -7,6 +7,7 @@ import sqlite3
 import os
 import logging
 import json
+import threading  # 2026-03-12: Thread-safe write locking
 from typing import Optional, List
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -21,11 +22,19 @@ MIGRATIONS_PATH = os.path.join(_SCRIPT_DIR, "migrations")
 
 
 class Database:
-    """Database connection and management class"""
+    """Database connection and management class.
+
+    # 2026-03-12: Uses WAL journal mode for concurrent read/write safety.
+    # Reads are lock-free (WAL allows concurrent readers). Writes are serialized
+    # via a threading.Lock to prevent "database is locked" errors from concurrent
+    # write attempts. This avoids a full aiosqlite migration while fixing the
+    # actual concurrency issue (multiple threads/coroutines writing simultaneously).
+    """
 
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self.connection = None
+        self._write_lock = threading.Lock()  # 2026-03-12: Serialize writes
         self._ensure_db_dir()
         self._init_db()
 
@@ -43,14 +52,20 @@ class Database:
             self.connection.row_factory = sqlite3.Row
             # Enable foreign keys
             self.connection.execute("PRAGMA foreign_keys = ON")
-            logger.info(f"Database initialized at {self.db_path}")
+            # 2026-03-12: Enable WAL mode for concurrent read safety
+            self.connection.execute("PRAGMA journal_mode=WAL")
+            logger.info(f"Database initialized at {self.db_path} (WAL mode)")
         except sqlite3.Error as e:
             logger.error(f"Failed to initialize database: {e}")
             raise
 
     @contextmanager
     def get_connection(self):
-        """Get a database connection context manager"""
+        """Get a database connection for reads (lock-free in WAL mode).
+
+        # 2026-03-12: Reads don't need the write lock — WAL mode allows
+        # concurrent readers alongside a single writer.
+        """
         if self.connection is None:
             self._init_db()
         try:
@@ -58,6 +73,23 @@ class Database:
         except sqlite3.Error as e:
             logger.error(f"Database error: {e}")
             raise
+
+    @contextmanager
+    def write_connection(self):
+        """Get a database connection with write lock acquired.
+
+        # 2026-03-12: Serializes all write operations to prevent concurrent
+        # write corruption. Use this instead of get_connection() when the
+        # caller will INSERT/UPDATE/DELETE.
+        """
+        if self.connection is None:
+            self._init_db()
+        with self._write_lock:
+            try:
+                yield self.connection
+            except sqlite3.Error as e:
+                logger.error(f"Database write error: {e}")
+                raise
 
     def run_migrations(self):
         """Run all migrations in order"""

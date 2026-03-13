@@ -155,6 +155,20 @@ class BackgroundPoller:
                 f"Offline {result['devices_offline']}"
             )
 
+            # 2026-03-12: Push scan results to SSE subscribers
+            try:
+                from routes.sse import publish_event
+                publish_event("device_update", {
+                    "device_count": result.get("devices_found", 0),
+                    "online": result.get("devices_found", 0) - result.get("devices_offline", 0),
+                    "offline": result.get("devices_offline", 0),
+                    "added": result.get("devices_added", 0),
+                    "updated": result.get("devices_updated", 0),
+                    "scan_number": self.scan_count,
+                })
+            except Exception as sse_err:
+                logger.debug(f"SSE publish failed (non-fatal): {sse_err}")
+
         except Exception as e:
             logger.error(f"Error performing scan: {e}")
             self.last_error = str(e)

@@ -1,11 +1,15 @@
 """
 Shared utility functions for HomeSentinel backend.
 # 2026-03-12: Extracted from routes/settings.py, routes/alarm_com.py, routes/alexa.py
+# 2026-03-12: Added credential encryption at rest (Fernet symmetric encryption)
 """
 
+import os
 import re
+import json
 import logging
 from typing import Optional
+from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
 
@@ -74,3 +78,78 @@ def normalize_mac(mac: str) -> str:
 
     hex_lower = hex_only.lower()
     return ":".join(hex_lower[i:i+2] for i in range(0, 12, 2))
+
+
+# ---------------------------------------------------------------------------
+# 2026-03-12: Credential encryption at rest
+# Key sourced from CREDENTIAL_KEY env var, or auto-generated and persisted
+# to a .credential_key file alongside the backend code.
+# ---------------------------------------------------------------------------
+
+def _get_cipher() -> Fernet:
+    """Build a Fernet cipher from env var or auto-generated key file."""
+    key = os.getenv("CREDENTIAL_KEY")
+    if not key:
+        key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".credential_key")
+        if os.path.exists(key_path):
+            with open(key_path, "r") as f:
+                key = f.read().strip()
+        else:
+            key = Fernet.generate_key().decode()
+            with open(key_path, "w") as f:
+                f.write(key)
+            os.chmod(key_path, 0o600)
+    return Fernet(key.encode() if isinstance(key, str) else key)
+
+
+_cipher = _get_cipher()
+
+
+def encrypt_credential(plaintext: str) -> str:
+    """Encrypt a credential string for storage."""
+    return _cipher.encrypt(plaintext.encode()).decode()
+
+
+def decrypt_credential(ciphertext: str) -> str:
+    """Decrypt a stored credential string."""
+    return _cipher.decrypt(ciphertext.encode()).decode()
+
+
+def store_encrypted_setting(conn, key: str, value: dict) -> None:
+    """Store a dict as encrypted JSON in app_settings.
+
+    Args:
+        conn: sqlite3 connection (from db.get_connection()).
+        key: Setting key string.
+        value: Dict to serialize, encrypt, and store.
+    """
+    encrypted = encrypt_credential(json.dumps(value))
+    set_setting(conn, key, encrypted)
+
+
+def load_encrypted_setting(conn, key: str) -> dict | None:
+    """Load and decrypt a dict from app_settings.
+
+    Falls back to parsing as plain JSON for backwards compatibility with
+    credentials stored before encryption was added.
+
+    Args:
+        conn: sqlite3 connection (from db.get_connection()).
+        key: Setting key string.
+
+    Returns:
+        Decrypted dict, or None if not found.
+    """
+    raw = get_setting(conn, key)
+    if not raw:
+        return None
+    # Try decrypting first; if it fails, it's probably unencrypted (pre-migration)
+    try:
+        decrypted = decrypt_credential(raw)
+        return json.loads(decrypted)
+    except Exception:
+        # Fallback: try parsing as plain JSON (backwards compat)
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
