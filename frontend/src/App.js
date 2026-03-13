@@ -803,11 +803,11 @@ function App() {
             </span>
           </div>
           <div className="strip-changes">
+            {activeAlerts.length > 0 && (
+              <span className="whats-new-item whats-new-offline">{activeAlerts.length} active alert{activeAlerts.length > 1 ? 's' : ''}</span>
+            )}
             {newDeviceCount > 0 && (
               <span className="whats-new-item whats-new-device">{newDeviceCount} new</span>
-            )}
-            {activeAlerts.filter(a => a.alert_type === 'device_offline').length > 0 && (
-              <span className="whats-new-item whats-new-offline">{activeAlerts.filter(a => a.alert_type === 'device_offline').length} went offline</span>
             )}
             {anomalyInsights.length > 0 && (
               <span className="whats-new-item whats-new-anomaly">{anomalyInsights.length} anomal{anomalyInsights.length > 1 ? 'ies' : 'y'}</span>
