@@ -1048,40 +1048,6 @@ function App() {
           </div>
         </div>
 
-        {/* 2026-03-12: Active Alerts dashboard card — surfaces device alerts + speed anomalies */}
-        <div className="alerts-card">
-          <h2>Active Alerts</h2>
-          {activeAlerts.length === 0 && anomalyInsights.length === 0 ? (
-            <div className="alerts-clear">All clear — no active alerts</div>
-          ) : (
-            <div className="alerts-list">
-              {activeAlerts.map(alert => {
-                const alertDevice = devices.find(d => d.device_id === alert.device_id);
-                const name = alertDevice?.friendly_name || alertDevice?.mac_address || alert.device_id?.slice(0, 8);
-                const icon = alert.alert_type === 'new_device' ? '\u{1F195}' :
-                             alert.alert_type === 'device_offline' ? '\u{1F534}' : '\u{1F7E2}';
-                const msg = alert.alert_type === 'new_device' ? `New device detected: ${name}` :
-                            alert.alert_type === 'device_offline' ? `Device offline: ${name}` :
-                            `Device reconnected: ${name}`;
-                return (
-                  <div key={alert.alert_id} className="alert-row">
-                    <span className="alert-icon">{icon}</span>
-                    <span className="alert-msg">{msg}</span>
-                    <span className="alert-time">{formatDate(alert.created_at)}</span>
-                    <button className="alert-dismiss" onClick={() => dismissAlert(alert.alert_id)} title="Dismiss">×</button>
-                  </div>
-                );
-              })}
-              {anomalyInsights.map(insight => (
-                <div key={insight.insight_id} className="alert-row alert-row-anomaly">
-                  <span className="alert-icon">{'\u26A0\uFE0F'}</span>
-                  <span className="alert-msg">{insight.title}</span>
-                  <span className="alert-time">{formatDate(insight.created_at)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
         </>
         )}
 
