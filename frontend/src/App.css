@@ -450,7 +450,7 @@
   cursor: pointer;
   transition: background 0.15s;
   text-align: left;
-  margin-bottom: 6px;
+  margin-top: -20px;
 }
 
 .insights-toggle:hover {
