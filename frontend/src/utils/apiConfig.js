@@ -11,7 +11,7 @@
  * Get the base API URL.
  *
  * Priority:
- * 1. REACT_APP_API_URL env var (build-time override)
+ * 1. VITE_API_URL env var (build-time override)
  * 2. window.__API_URL__ global (runtime override via index.html)
  * 3. /api relative path — works for both:
  *    - CRA dev server (proxy in package.json → https://localhost:8443)
@@ -21,8 +21,8 @@
  */
 export function getApiUrl() {
   // 1. Build-time override
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL;
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
   }
 
   // 2. Runtime override (e.g. set in index.html before app loads)
