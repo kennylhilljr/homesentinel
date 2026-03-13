@@ -90,35 +90,33 @@ def set_chester_client(client):
     chester_client = client
 
 
+# 2026-03-12: Extracted _get_setting/_set_setting and _normalize_mac to utils.py for reuse
+from utils import get_setting as _get_setting_impl, set_setting as _set_setting_impl
+
+
 def _normalize_mac(mac: str) -> str:
     """Normalize MAC address for comparisons (aa:bb -> aabb)."""
     return "".join(ch for ch in (mac or "").lower() if ch.isalnum())
 
 
 def _get_setting(key: str) -> Optional[str]:
+    """Get a setting value from the database (delegates to shared utils)."""
     if db is None:
         return None
     try:
         with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM app_settings WHERE key = ?", (key,))
-            row = cursor.fetchone()
-            return row[0] if row else None
+            return _get_setting_impl(conn, key)
     except Exception:
         return None
 
 
 def _set_setting(key: str, value: str):
+    """Set a setting value in the database (delegates to shared utils)."""
     if db is None:
         return
     try:
         with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
-                (key, value),
-            )
-            conn.commit()
+            _set_setting_impl(conn, key, value)
     except Exception as e:
         logger.error(f"Failed to set setting {key}: {e}")
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import DeviceCard from './components/DeviceCard';
 import DeviceDetailCard from './components/DeviceDetailCard';
@@ -7,6 +7,7 @@ import SettingsPage from './pages/SettingsPage';
 import AlexaDevicesPage from './pages/AlexaDevicesPage';
 import SmartHomePage from './pages/SmartHomePage';
 import SpeedInsightsPage from './pages/SpeedInsightsPage';
+import ErrorBoundary from './components/ErrorBoundary';
 import { buildUrl } from './utils/apiConfig';
 import ViewModeToggle from './components/ViewModeToggle';
 
@@ -20,8 +21,7 @@ function App() {
   const [deviceGroups, setDeviceGroups] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [showDetailCard, setShowDetailCard] = useState(false);
-  const [editingDevice, setEditingDevice] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
+  // 2026-03-12: Removed legacy editingDevice/showEditModal state (dead code — modal never opened)
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [deviceViewMode, setDeviceViewMode] = useState('list');
   const [deviceQuery, setDeviceQuery] = useState('');
@@ -33,11 +33,7 @@ function App() {
   // 2026-03-12: Inline rename on double-click
   const [inlineEditId, setInlineEditId] = useState(null);
   const [inlineEditValue, setInlineEditValue] = useState('');
-  const [formData, setFormData] = useState({
-    friendly_name: '',
-    device_type: '',
-    notes: '',
-  });
+  // 2026-03-12: Removed legacy formData state (part of dead edit modal code)
   // 2026-03-10: Deco node mapping — which Deco each client is connected to
   const [clientNodeMap, setClientNodeMap] = useState({});
   // 2026-03-11: Set of normalized Deco node MACs (for hiding mesh toggle on nodes)
@@ -91,6 +87,14 @@ function App() {
       console.error('Failed to dismiss alert:', error);
     }
   };
+
+  // 2026-03-12: Refs for polling interval IDs (used by visibility handler to pause/resume)
+  const fastIntervalRef = useRef(null);
+  const slowIntervalRef = useRef(null);
+  const speedIntervalRef = useRef(null);
+  const notifIntervalRef = useRef(null);
+  // Store polling callbacks in a ref so the visibility handler can restart intervals
+  const pollingCallbacksRef = useRef(null);
 
   useEffect(() => {
     // Check backend API health
@@ -268,31 +272,36 @@ function App() {
     getHealthScore();
 
     // 2026-03-11: Fast poll for devices/health (5s), slow poll for Deco map (30s)
-    const fastInterval = setInterval(() => {
+    const fastPoll = () => {
       checkHealth();
       getDevices();
       getPollingConfig();
       getDeviceGroups();
       getHomeStatus();
       getActiveAlerts();
-    }, 5000);
-
-    const slowInterval = setInterval(() => {
+    };
+    const slowPoll = () => {
       getClientNodeMap();
       getChesterInfo();
       getHealthScore();
-    }, 30000);
-
+    };
     // 2026-03-11: Speed test poll (60s) — updates after scheduled 30-min tests
-    const speedInterval = setInterval(() => {
+    const speedPoll = () => {
       getSpeedTestLatest();
       getAnomalyInsights();
-    }, 60000);
+    };
+
+    // 2026-03-12: Store callbacks so the visibility handler can restart intervals
+    pollingCallbacksRef.current = { fastPoll, slowPoll, speedPoll };
+
+    fastIntervalRef.current = setInterval(fastPoll, 5000);
+    slowIntervalRef.current = setInterval(slowPoll, 30000);
+    speedIntervalRef.current = setInterval(speedPoll, 60000);
 
     return () => {
-      clearInterval(fastInterval);
-      clearInterval(slowInterval);
-      clearInterval(speedInterval);
+      clearInterval(fastIntervalRef.current);
+      clearInterval(slowIntervalRef.current);
+      clearInterval(speedIntervalRef.current);
     };
   }, []);
 
@@ -333,8 +342,45 @@ function App() {
     };
 
     pollUnseen();
-    const notifInterval = setInterval(pollUnseen, 10000);
-    return () => clearInterval(notifInterval);
+    notifIntervalRef.current = setInterval(pollUnseen, 10000);
+    // 2026-03-12: Store pollUnseen in callbacks ref for visibility handler
+    if (pollingCallbacksRef.current) {
+      pollingCallbacksRef.current.notifPoll = pollUnseen;
+    }
+    return () => clearInterval(notifIntervalRef.current);
+  }, []);
+
+  // 2026-03-12: Pause all polling when the browser tab is hidden to avoid
+  // unnecessary network requests. Resume when the user returns to the tab.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearInterval(fastIntervalRef.current);
+        clearInterval(slowIntervalRef.current);
+        clearInterval(speedIntervalRef.current);
+        clearInterval(notifIntervalRef.current);
+      } else {
+        // Tab became visible — restart all polling intervals
+        const cbs = pollingCallbacksRef.current;
+        if (cbs) {
+          if (cbs.fastPoll) {
+            cbs.fastPoll(); // immediate refresh
+            fastIntervalRef.current = setInterval(cbs.fastPoll, 5000);
+          }
+          if (cbs.slowPoll) {
+            slowIntervalRef.current = setInterval(cbs.slowPoll, 30000);
+          }
+          if (cbs.speedPoll) {
+            speedIntervalRef.current = setInterval(cbs.speedPoll, 60000);
+          }
+          if (cbs.notifPoll) {
+            notifIntervalRef.current = setInterval(cbs.notifPoll, 10000);
+          }
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   useEffect(() => {
@@ -392,9 +438,10 @@ function App() {
       if (response.ok) {
         const data = await response.json();
         console.log('Manual scan completed:', data);
-        // Refresh devices after scan
+        // 2026-03-12: Re-fetch device data instead of full page reload
         setTimeout(() => {
-          window.location.reload();
+          const cbs = pollingCallbacksRef.current;
+          if (cbs && cbs.fastPoll) cbs.fastPoll();
         }, 1000);
       }
     } catch (error) {
@@ -496,52 +543,8 @@ function App() {
     };
   }, [showDetailCard, nameDropdownDevice]);
 
-  const openEditModal = (device) => {
-    setEditingDevice(device);
-    setFormData({
-      friendly_name: device.friendly_name || '',
-      device_type: device.device_type || '',
-      notes: device.notes || '',
-    });
-    setShowEditModal(true);
-  };
-
-  const closeEditModal = () => {
-    setShowEditModal(false);
-    setEditingDevice(null);
-    setFormData({
-      friendly_name: '',
-      device_type: '',
-      notes: '',
-    });
-  };
-
-  const saveDeviceChanges = async () => {
-    if (!editingDevice) return;
-
-    try {
-      const response = await fetch(
-        buildUrl(`/devices/${editingDevice.device_id}`),
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        }
-      );
-
-      if (response.ok) {
-        const updatedDevice = await response.json();
-        setDevices(devices.map(d => d.device_id === updatedDevice.device_id ? updatedDevice : d));
-        closeEditModal();
-        showBanner('Device updated successfully', 'success');
-      } else {
-        showBanner('Failed to update device', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to save device:', error);
-      showBanner('Error saving device', 'error');
-    }
-  };
+  // 2026-03-12: Removed openEditModal, closeEditModal, saveDeviceChanges — dead code
+  // (legacy edit modal was never opened; editing is handled via DeviceDetailCard)
 
   // Set a display name for a device (stored in DB as friendly_name).
   // Note: Deco client names are read-only (auto-detected by router fingerprinting).
@@ -589,11 +592,11 @@ function App() {
     }
   };
 
-  // 2026-03-11: All dates displayed in Eastern Time
+  // 2026-03-12: Use browser's local timezone instead of hardcoded America/New_York
   const formatDate = (dateString) => {
     if (!dateString) return 'Never';
     const date = new Date(dateString + (dateString.endsWith('Z') || dateString.includes('+') ? '' : 'Z'));
-    return date.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    return date.toLocaleString('en-US');
   };
 
   const getSortableValue = (device, key) => {
@@ -686,6 +689,7 @@ function App() {
   const offlineCount = devices.filter(d => d.status === 'offline').length;
 
   return (
+    <ErrorBoundary>
     <div className={`App theme-${theme}`}>
       {/* 2026-03-12: skip-to-content for keyboard users */}
       <a href="#main-content" className="skip-to-content">Skip to main content</a>
@@ -1578,76 +1582,7 @@ function App() {
           />
         )}
 
-        {/* Legacy Edit Modal - Keeping for backwards compatibility */}
-        {showEditModal && editingDevice && (
-          <div className="modal-overlay" role="dialog" aria-modal="true" aria-label={`Edit device ${editingDevice.mac_address}`}>
-            <div className="modal-content">
-              <h2>Edit Device: {editingDevice.mac_address}</h2>
-              <form>
-                <div className="form-group">
-                  <label htmlFor="friendly_name">Friendly Name:</label>
-                  <input
-                    type="text"
-                    id="friendly_name"
-                    value={formData.friendly_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, friendly_name: e.target.value })
-                    }
-                    placeholder="e.g., Living Room TV"
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="device_type">Device Type:</label>
-                  <select
-                    id="device_type"
-                    value={formData.device_type}
-                    onChange={(e) =>
-                      setFormData({ ...formData, device_type: e.target.value })
-                    }
-                  >
-                    <option value="">Select type...</option>
-                    <option value="mobile">Mobile</option>
-                    <option value="computer">Computer</option>
-                    <option value="iot">IoT</option>
-                    <option value="printer">Printer</option>
-                    <option value="router">Router</option>
-                    <option value="tv">Smart TV</option>
-                    <option value="camera">Camera</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="notes">Notes:</label>
-                  <textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) =>
-                      setFormData({ ...formData, notes: e.target.value })
-                    }
-                    placeholder="Add any notes about this device..."
-                    rows="4"
-                  />
-                </div>
-                <div className="modal-buttons">
-                  <button
-                    type="button"
-                    className="btn-save"
-                    onClick={saveDeviceChanges}
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    onClick={closeEditModal}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        {/* 2026-03-12: Removed legacy edit modal (dead code — never opened) */}
 
         <div className="info-card">
           <h3>Welcome to HomeSentinel</h3>
@@ -1660,6 +1595,7 @@ function App() {
         )}
       </main>
     </div>
+    </ErrorBoundary>
   );
 }
 

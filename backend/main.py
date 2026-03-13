@@ -4,14 +4,14 @@ HomeSentinel Backend - FastAPI Application
 Main entry point for the backend server
 """
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import asyncio
 from pathlib import Path
@@ -55,9 +55,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 2026-03-11: CORS — allow localhost + any private network (ZeroTier, LAN)
-# ZeroTier is already encrypted at the network layer, safe to allow all origins.
-ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+# 2026-03-12: CORS — default to localhost only. Wildcard "*" is dangerous because it allows
+# any website to make authenticated cross-origin requests to this API, potentially leaking
+# device data or triggering actions. Override via CORS_ORIGINS env var if needed.
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://localhost:8443").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -65,6 +66,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 2026-03-12: API key auth middleware — checks X-API-Key header on /api/* if configured
+from middleware.auth import APIKeyAuthMiddleware
+app.add_middleware(APIKeyAuthMiddleware)
 
 # 2026-03-11: Serve React production build from FastAPI
 # After running: cd frontend && npm run build
@@ -390,7 +395,7 @@ async def get_devices():
     return {
         "devices": devices,
         "total": len(devices),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -454,7 +459,7 @@ async def search_devices(q: str = "", status: Optional[str] = None):
             "status_filter": status,
             "devices": devices,
             "total": len(devices),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Search failed: {e}")
@@ -746,14 +751,15 @@ async def remove_device_from_group(group_id: str, device_id: str):
 
 
 # Event and Alert Endpoints
+# 2026-03-12: Added Query validation for limit/offset to prevent abuse
 @app.get("/api/events")
 async def get_events(
     device_id: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     event_type: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ):
     """Get events with optional filtering"""
     global event_service
@@ -780,15 +786,19 @@ async def get_events(
             "total": count,
             "limit": limit,
             "offset": offset,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Failed to get events: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# 2026-03-12: Added Query validation for limit/offset
 @app.get("/api/events/alerts")
-async def get_alerts(limit: int = 50, offset: int = 0):
+async def get_alerts(
+    limit: int = Query(default=50, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
     """Get recent active (not dismissed) alerts"""
     global event_service
     if event_service is None:
@@ -799,7 +809,7 @@ async def get_alerts(limit: int = 50, offset: int = 0):
         return {
             "alerts": alerts,
             "total": len(alerts),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Failed to get alerts: {e}")
@@ -892,7 +902,7 @@ async def get_event_stats():
         stats = event_service.get_event_stats()
         return {
             "stats": stats,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Failed to get event stats: {e}")

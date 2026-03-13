@@ -9,7 +9,7 @@ import logging
 import json
 from typing import Optional, List
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ class NetworkDeviceRepository:
                     if current_ip and old_ip and old_ip != current_ip:
                         ip_history.append({
                             'ip': old_ip,
-                            'seen_at': datetime.utcnow().isoformat()
+                            'seen_at': datetime.now(timezone.utc).isoformat()
                         })
 
                     new_history_json = json.dumps(ip_history) if ip_history else None
@@ -175,7 +175,7 @@ class NetworkDeviceRepository:
                         UPDATE network_devices
                         SET current_ip = ?, ip_history = ?, ip_history_updated_at = ?, last_seen = ?, status = ?, updated_at = ?
                         WHERE device_id = ?
-                    """, (current_ip, new_history_json, datetime.utcnow(), datetime.utcnow(), 'online', datetime.utcnow(), device_id))
+                    """, (current_ip, new_history_json, datetime.now(timezone.utc), datetime.now(timezone.utc), 'online', datetime.now(timezone.utc), device_id))
                 else:
                     # Create new device
                     cursor.execute("""
@@ -183,7 +183,7 @@ class NetworkDeviceRepository:
                         (device_id, mac_address, current_ip, status, first_seen, last_seen, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """, (device_id, mac_address, current_ip, 'online',
-                          datetime.utcnow(), datetime.utcnow(), datetime.utcnow(), datetime.utcnow()))
+                          datetime.now(timezone.utc), datetime.now(timezone.utc), datetime.now(timezone.utc), datetime.now(timezone.utc)))
 
                 conn.commit()
 
@@ -244,7 +244,7 @@ class NetworkDeviceRepository:
                     return self.get_by_id(device_id)
 
                 updates.append("updated_at = ?")
-                params.append(datetime.utcnow())
+                params.append(datetime.now(timezone.utc))
                 params.append(device_id)
 
                 cursor.execute(f"""
@@ -309,7 +309,7 @@ class NetworkDeviceRepository:
                     UPDATE network_devices
                     SET status = ?, updated_at = ?
                     WHERE device_id = ?
-                """, ('offline', datetime.utcnow(), device_id))
+                """, ('offline', datetime.now(timezone.utc), device_id))
                 conn.commit()
                 return self.get_by_id(device_id)
         except sqlite3.Error as e:
@@ -325,7 +325,7 @@ class NetworkDeviceRepository:
                     UPDATE network_devices
                     SET status = ?, last_seen = ?, updated_at = ?
                     WHERE device_id = ?
-                """, ('online', datetime.utcnow(), datetime.utcnow(), device_id))
+                """, ('online', datetime.now(timezone.utc), datetime.now(timezone.utc), device_id))
                 conn.commit()
                 return self.get_by_id(device_id)
         except sqlite3.Error as e:
@@ -386,7 +386,7 @@ class PollingConfigRepository:
                     UPDATE polling_config
                     SET polling_interval_seconds = ?, updated_at = ?
                     WHERE id = 1
-                """, (interval_seconds, datetime.utcnow()))
+                """, (interval_seconds, datetime.now(timezone.utc)))
                 conn.commit()
                 return self.get_config()
         except sqlite3.Error as e:
@@ -402,7 +402,7 @@ class PollingConfigRepository:
                     UPDATE polling_config
                     SET last_scan_timestamp = ?, updated_at = ?
                     WHERE id = 1
-                """, (timestamp, datetime.utcnow()))
+                """, (timestamp, datetime.now(timezone.utc)))
                 conn.commit()
                 return self.get_config()
         except sqlite3.Error as e:
@@ -424,7 +424,7 @@ class DeviceGroupRepository:
                 cursor.execute("""
                     INSERT INTO device_groups (group_id, name, color, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?)
-                """, (group_id, name, color, datetime.utcnow(), datetime.utcnow()))
+                """, (group_id, name, color, datetime.now(timezone.utc), datetime.now(timezone.utc)))
                 conn.commit()
                 return self.get_by_id(group_id)
         except sqlite3.Error as e:
@@ -487,7 +487,7 @@ class DeviceGroupRepository:
                     return self.get_by_id(group_id)
 
                 updates.append("updated_at = ?")
-                params.append(datetime.utcnow())
+                params.append(datetime.now(timezone.utc))
                 params.append(group_id)
 
                 cursor.execute(f"""
@@ -528,7 +528,7 @@ class DeviceGroupMemberRepository:
                 cursor.execute("""
                     INSERT OR IGNORE INTO device_group_members (group_id, device_id, created_at)
                     VALUES (?, ?, ?)
-                """, (group_id, device_id, datetime.utcnow()))
+                """, (group_id, device_id, datetime.now(timezone.utc)))
                 conn.commit()
                 return cursor.rowcount > 0
         except sqlite3.Error as e:
@@ -668,7 +668,7 @@ class DeviceEventRepository:
     def delete_older_than(self, days: int = 90) -> int:
         """Delete events older than specified days"""
         try:
-            cutoff_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM device_events WHERE timestamp < ?", (cutoff_date,))

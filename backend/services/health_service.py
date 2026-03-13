@@ -4,7 +4,7 @@ Network Health Score Service for HomeSentinel
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from db import Database
@@ -111,26 +111,36 @@ class NetworkHealthService:
             raise
 
     def _compute_uptime_streak(self, conn, total_devices: int) -> int:
-        """Count consecutive days (backwards from today) with <10% device offline events."""
+        """Count consecutive days (backwards from today) with <10% device offline events.
+
+        # 2026-03-12: Rewritten to use a single GROUP BY query instead of N+1 per-day queries.
+        """
         if total_devices == 0:
             return 0
 
         threshold = max(1, total_devices * 0.1)
+
+        # Single query: get offline event counts per day for the last 365 days
+        rows = conn.execute(
+            """SELECT DATE(timestamp) as d, COUNT(*) as cnt
+               FROM device_events
+               WHERE event_type IN ('offline', 'disconnected')
+                 AND timestamp >= datetime('now', '-365 days')
+               GROUP BY DATE(timestamp)
+               ORDER BY d DESC"""
+        ).fetchall()
+
+        # Build a set of "bad days" (days that exceed the threshold)
+        bad_days = set()
+        for row in rows:
+            if row[1] >= threshold:
+                bad_days.add(row[0])
+
+        # Walk backwards from today counting consecutive good days
         streak = 0
-
         for days_ago in range(0, 365):
-            date = (datetime.utcnow() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
-            day_start = f"{date}T00:00:00"
-            day_end = f"{date}T23:59:59"
-
-            offline_count = conn.execute(
-                """SELECT COUNT(*) FROM device_events
-                   WHERE event_type IN ('offline', 'disconnected')
-                     AND timestamp >= ? AND timestamp <= ?""",
-                (day_start, day_end)
-            ).fetchone()[0]
-
-            if offline_count >= threshold:
+            date_str = (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+            if date_str in bad_days:
                 break
             streak += 1
 

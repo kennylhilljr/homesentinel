@@ -4,7 +4,7 @@ Daily Digest Service for HomeSentinel
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from db import Database
@@ -29,7 +29,7 @@ class DigestService:
             Dict with summary statistics.
         """
         if date is None:
-            date = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+            date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
         day_start = f"{date}T00:00:00"
         day_end = f"{date}T23:59:59"

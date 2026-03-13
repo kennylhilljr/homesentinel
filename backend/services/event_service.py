@@ -5,7 +5,7 @@ Handles device event tracking and alert generation
 
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from db import Database
 
@@ -105,19 +105,10 @@ class EventService:
             query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])
 
+            # 2026-03-12: Use dict(row) instead of numeric index — row_factory = sqlite3.Row
             with self.db.get_connection() as conn:
                 cursor = conn.execute(query, params)
-                events = []
-                for row in cursor.fetchall():
-                    events.append({
-                        "event_id": row[0],
-                        "device_id": row[1],
-                        "event_type": row[2],
-                        "timestamp": row[3],
-                        "description": row[4],
-                        "metadata": row[5],
-                        "created_at": row[6]
-                    })
+                events = [dict(row) for row in cursor.fetchall()]
 
             return events
 
@@ -240,20 +231,14 @@ class EventService:
             query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])
 
+            # 2026-03-12: Use dict(row) instead of numeric index — row_factory = sqlite3.Row
             with self.db.get_connection() as conn:
                 cursor = conn.execute(query, params)
                 alerts = []
                 for row in cursor.fetchall():
-                    alerts.append({
-                        "alert_id": row[0],
-                        "device_id": row[1],
-                        "event_id": row[2],
-                        "alert_type": row[3],
-                        "dismissed": bool(row[4]),
-                        "dismissed_at": row[5],
-                        "created_at": row[6],
-                        "updated_at": row[7]
-                    })
+                    d = dict(row)
+                    d["dismissed"] = bool(d.get("dismissed", 0))
+                    alerts.append(d)
 
             return alerts
 
@@ -374,7 +359,7 @@ class EventService:
             Dict with device_id, days, and history array of per-day summaries.
         """
         try:
-            cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
             with self.db.get_connection() as conn:
                 # Get device current status for initial state assumption
@@ -395,7 +380,7 @@ class EventService:
             # Build per-day buckets
             history = []
             for d in range(days - 1, -1, -1):
-                day_dt = datetime.utcnow() - timedelta(days=d)
+                day_dt = datetime.now(timezone.utc) - timedelta(days=d)
                 date_str = day_dt.strftime("%Y-%m-%d")
                 day_label = day_dt.strftime("%a")
 
@@ -426,8 +411,8 @@ class EventService:
                 # If still online at end of day, count remaining
                 if last_online_time:
                     end_of_day = day_dt.replace(hour=23, minute=59, second=59)
-                    if day_dt.date() == datetime.utcnow().date():
-                        end_of_day = datetime.utcnow()
+                    if day_dt.date() == datetime.now(timezone.utc).date():
+                        end_of_day = datetime.now(timezone.utc)
                     minutes = (end_of_day - last_online_time).total_seconds() / 60
                     online_minutes += max(0, min(minutes, 1440))
 
@@ -470,7 +455,7 @@ class EventService:
             Number of deleted events
         """
         try:
-            cutoff_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
             with self.db.get_connection() as conn:
                 cursor = conn.execute(

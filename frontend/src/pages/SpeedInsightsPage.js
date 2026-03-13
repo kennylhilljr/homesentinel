@@ -1,6 +1,6 @@
 // 2026-03-11: Speed Insights page — deep metrics, charts, and AI-driven insights
 // from Ookla speedtest results run on the Chester 5G router via SSH.
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -105,11 +105,11 @@ function SpeedInsightsPage() {
     }
   };
 
+  // 2026-03-12: Use browser's local timezone instead of hardcoded America/New_York
   const formatTime = (ts) => {
     if (!ts) return '';
     const d = new Date(ts + (ts.includes('Z') ? '' : 'Z'));
     return d.toLocaleTimeString('en-US', {
-      timeZone: 'America/New_York',
       hour: 'numeric',
       minute: '2-digit',
     });
@@ -119,7 +119,6 @@ function SpeedInsightsPage() {
     if (!ts) return '';
     const d = new Date(ts + (ts.includes('Z') ? '' : 'Z'));
     return d.toLocaleString('en-US', {
-      timeZone: 'America/New_York',
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
@@ -163,6 +162,98 @@ function SpeedInsightsPage() {
       samples: found ? found.sample_count : 0,
     };
   });
+
+  // 2026-03-12: Extracted from inline IIFEs into useMemo for cleaner JSX and
+  // to avoid recomputing on every render when inputs haven't changed.
+  const bandCombinationData = useMemo(() => {
+    const bandMap = {};
+    chartData.forEach(t => {
+      if (!t.cellular_ca_bands) return;
+      try {
+        const bands = typeof t.cellular_ca_bands === 'string' ? JSON.parse(t.cellular_ca_bands) : t.cellular_ca_bands;
+        const key = bands.map(b => b.band.replace('NR5G BAND ', 'n')).sort().join('+');
+        if (!bandMap[key]) bandMap[key] = { speeds: [], count: 0 };
+        bandMap[key].speeds.push(t.download_mbps);
+        bandMap[key].count++;
+      } catch (e) { /* skip bad data */ }
+    });
+    return Object.entries(bandMap)
+      .map(([combo, d]) => ({
+        combo,
+        avg_download: Math.round(d.speeds.reduce((a, b) => a + b, 0) / d.speeds.length * 10) / 10,
+        max_download: Math.round(Math.max(...d.speeds) * 10) / 10,
+        tests: d.count,
+      }))
+      .sort((a, b) => b.avg_download - a.avg_download);
+  }, [chartData]);
+
+  const carrierHistoryData = useMemo(() => {
+    const bandInventory = {};
+    const totalTests = chartData.filter(t => t.cellular_ca_bands).length;
+
+    chartData.forEach(t => {
+      if (!t.cellular_ca_bands) return;
+      try {
+        const bands = typeof t.cellular_ca_bands === 'string' ? JSON.parse(t.cellular_ca_bands) : t.cellular_ca_bands;
+        const ts = t.timestamp;
+        bands.forEach(b => {
+          const key = `${b.arfcn}-${b.band}`;
+          if (!bandInventory[key]) {
+            bandInventory[key] = {
+              band: b.band, arfcn: b.arfcn, bandwidth: b.bandwidth || '-',
+              pccCount: 0, sccCount: 0, totalCount: 0,
+              firstSeen: ts, lastSeen: ts,
+              avgDownload: [], cellIds: new Set(),
+            };
+          }
+          const entry = bandInventory[key];
+          entry.totalCount++;
+          if (b.role === 'PCC') entry.pccCount++;
+          else entry.sccCount++;
+          if (ts < entry.firstSeen) entry.firstSeen = ts;
+          if (ts > entry.lastSeen) entry.lastSeen = ts;
+          if (t.download_mbps) entry.avgDownload.push(t.download_mbps);
+          if (t.cellular_cell_id) entry.cellIds.add(t.cellular_cell_id);
+        });
+      } catch (e) {}
+    });
+
+    // Parse live CA entries from Chester
+    const liveArfcns = new Set();
+    const liveRole = {};
+    if (chesterInfo && chesterInfo.ca_band) {
+      chesterInfo.ca_band.forEach(entry => {
+        const parts = entry.replace(/"/g, '').split(',').map(s => s.trim());
+        const role = parts[0];
+        const arfcn = parts[1];
+        const band = parts[3];
+        const key = `${arfcn}-${band}`;
+        liveArfcns.add(key);
+        liveRole[key] = role;
+        if (!bandInventory[key]) {
+          bandInventory[key] = {
+            band, arfcn, bandwidth: parts[2] || '-',
+            pccCount: 0, sccCount: 0, totalCount: 0,
+            firstSeen: null, lastSeen: null,
+            avgDownload: [], cellIds: new Set(),
+          };
+        }
+      });
+    }
+
+    return Object.entries(bandInventory).map(([key, v]) => ({
+      key,
+      ...v,
+      avgDl: v.avgDownload.length > 0
+        ? (v.avgDownload.reduce((a, b) => a + b, 0) / v.avgDownload.length).toFixed(1)
+        : '-',
+      pct: totalTests > 0 ? Math.round((v.totalCount / totalTests) * 100) : 0,
+      isLive: liveArfcns.has(key),
+      liveRole: liveRole[key] || null,
+      isNew: v.totalCount <= 2 && v.firstSeen === v.lastSeen,
+      cellIdList: [...v.cellIds].join(', '),
+    })).sort((a, b) => b.totalCount - a.totalCount);
+  }, [chartData, chesterInfo]);
 
   if (loading) {
     return <div className="si-page"><div className="si-loading">Loading speed data...</div></div>;
@@ -430,33 +521,13 @@ function SpeedInsightsPage() {
         </div>
       )}
 
-      {/* 2026-03-12: Average Download by Band Combination */}
-      {showCellular && chartData.some(t => t.cellular_ca_bands) && (() => {
-        const bandMap = {};
-        chartData.forEach(t => {
-          if (!t.cellular_ca_bands) return;
-          try {
-            const bands = typeof t.cellular_ca_bands === 'string' ? JSON.parse(t.cellular_ca_bands) : t.cellular_ca_bands;
-            const key = bands.map(b => b.band.replace('NR5G BAND ', 'n')).sort().join('+');
-            if (!bandMap[key]) bandMap[key] = { speeds: [], count: 0 };
-            bandMap[key].speeds.push(t.download_mbps);
-            bandMap[key].count++;
-          } catch (e) { /* skip bad data */ }
-        });
-        const bandData = Object.entries(bandMap)
-          .map(([combo, d]) => ({
-            combo,
-            avg_download: Math.round(d.speeds.reduce((a, b) => a + b, 0) / d.speeds.length * 10) / 10,
-            max_download: Math.round(Math.max(...d.speeds) * 10) / 10,
-            tests: d.count,
-          }))
-          .sort((a, b) => b.avg_download - a.avg_download);
-        return bandData.length > 0 ? (
+      {/* 2026-03-12: Average Download by Band Combination (extracted from IIFE into useMemo) */}
+      {showCellular && bandCombinationData.length > 0 && (
           <div className="si-card">
             <h3>Average Download by Band Combination</h3>
-            <div role="img" aria-label={`Horizontal bar chart comparing average and max download speeds across ${bandData.length} different NR band combinations.`}>
-            <ResponsiveContainer width="100%" height={Math.max(180, bandData.length * 40)}>
-              <BarChart data={bandData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <div role="img" aria-label={`Horizontal bar chart comparing average and max download speeds across ${bandCombinationData.length} different NR band combinations.`}>
+            <ResponsiveContainer width="100%" height={Math.max(180, bandCombinationData.length * 40)}>
+              <BarChart data={bandCombinationData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis type="number" tick={{ fontSize: 11 }} unit=" Mbps" />
                 <YAxis type="category" dataKey="combo" tick={{ fontSize: 10 }} width={140} />
@@ -468,8 +539,7 @@ function SpeedInsightsPage() {
             </ResponsiveContainer>
             </div>
           </div>
-        ) : null;
-      })()}
+      )}
 
       {/* 2026-03-12: Collapsible CA history table */}
       {chartData.some(t => t.cellular_ca_bands) && (
@@ -482,77 +552,8 @@ function SpeedInsightsPage() {
         </button>
       )}
 
-      {showCarrierTable && chartData.some(t => t.cellular_ca_bands) && (() => {
-        // Build historical inventory of all bands/ARFCNs ever seen
-        const bandInventory = {}; // key: "arfcn-band" → { band, arfcn, role counts, first/last seen, timestamps }
-        const totalTests = chartData.filter(t => t.cellular_ca_bands).length;
-
-        chartData.forEach(t => {
-          if (!t.cellular_ca_bands) return;
-          try {
-            const bands = typeof t.cellular_ca_bands === 'string' ? JSON.parse(t.cellular_ca_bands) : t.cellular_ca_bands;
-            const ts = t.timestamp;
-            bands.forEach(b => {
-              const key = `${b.arfcn}-${b.band}`;
-              if (!bandInventory[key]) {
-                bandInventory[key] = {
-                  band: b.band, arfcn: b.arfcn, bandwidth: b.bandwidth || '-',
-                  pccCount: 0, sccCount: 0, totalCount: 0,
-                  firstSeen: ts, lastSeen: ts,
-                  avgDownload: [], cellIds: new Set(),
-                };
-              }
-              const entry = bandInventory[key];
-              entry.totalCount++;
-              if (b.role === 'PCC') entry.pccCount++;
-              else entry.sccCount++;
-              if (ts < entry.firstSeen) entry.firstSeen = ts;
-              if (ts > entry.lastSeen) entry.lastSeen = ts;
-              if (t.download_mbps) entry.avgDownload.push(t.download_mbps);
-              if (t.cellular_cell_id) entry.cellIds.add(t.cellular_cell_id);
-            });
-          } catch (e) {}
-        });
-
-        // Parse live CA entries from Chester
-        const liveArfcns = new Set();
-        let liveRole = {};
-        if (chesterInfo && chesterInfo.ca_band) {
-          chesterInfo.ca_band.forEach(entry => {
-            const parts = entry.replace(/"/g, '').split(',').map(s => s.trim());
-            const role = parts[0];
-            const arfcn = parts[1];
-            const band = parts[3];
-            const key = `${arfcn}-${band}`;
-            liveArfcns.add(key);
-            liveRole[key] = role;
-            // Add to inventory if brand new (never seen in history)
-            if (!bandInventory[key]) {
-              bandInventory[key] = {
-                band, arfcn, bandwidth: parts[2] || '-',
-                pccCount: 0, sccCount: 0, totalCount: 0,
-                firstSeen: null, lastSeen: null,
-                avgDownload: [], cellIds: new Set(),
-              };
-            }
-          });
-        }
-
-        // Convert to array and sort by frequency
-        const sorted = Object.entries(bandInventory).map(([key, v]) => ({
-          key,
-          ...v,
-          avgDl: v.avgDownload.length > 0
-            ? (v.avgDownload.reduce((a, b) => a + b, 0) / v.avgDownload.length).toFixed(1)
-            : '-',
-          pct: totalTests > 0 ? Math.round((v.totalCount / totalTests) * 100) : 0,
-          isLive: liveArfcns.has(key),
-          liveRole: liveRole[key] || null,
-          isNew: v.totalCount <= 2 && v.firstSeen === v.lastSeen,
-          cellIdList: [...v.cellIds].join(', '),
-        })).sort((a, b) => b.totalCount - a.totalCount);
-
-        return (
+      {/* 2026-03-12: Carrier history table — extracted from IIFE into useMemo (carrierHistoryData) */}
+      {showCarrierTable && carrierHistoryData.length > 0 && (
           <div className="si-card">
             <div className="si-card-header">
               <h3>Carrier Aggregation History <span className="si-subtitle">All bands ever connected — sorted by frequency</span></h3>
@@ -576,7 +577,7 @@ function SpeedInsightsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((c) => (
+                  {carrierHistoryData.map((c) => (
                     <tr key={c.key} className={c.isLive ? 'si-ca-live' : 'si-ca-inactive'}>
                       <td>
                         {c.isLive
@@ -609,8 +610,7 @@ function SpeedInsightsPage() {
               </table>
             </div>
           </div>
-        );
-      })()}
+      )}
 
       {/* AI Insights */}
       {insights.length > 0 && (

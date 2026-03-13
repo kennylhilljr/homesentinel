@@ -51,33 +51,29 @@ def set_chester_client(client):
     chester_client = client
 
 
+# 2026-03-12: Extracted _get_setting/_set_setting to utils.py for reuse
+from utils import get_setting as _get_setting_impl, set_setting as _set_setting_impl
+
+
 def _get_setting(key: str) -> Optional[str]:
-    """Get a setting value from the database"""
+    """Get a setting value from the database (delegates to shared utils)."""
     if db is None:
         return None
     try:
         with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM app_settings WHERE key = ?", (key,))
-            row = cursor.fetchone()
-            return row[0] if row else None
+            return _get_setting_impl(conn, key)
     except Exception as e:
         logger.error(f"Failed to get setting {key}: {e}")
         return None
 
 
 def _set_setting(key: str, value: str):
-    """Set a setting value in the database"""
+    """Set a setting value in the database (delegates to shared utils)."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     try:
         with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
-                (key, value),
-            )
-            conn.commit()
+            _set_setting_impl(conn, key, value)
     except Exception as e:
         logger.error(f"Failed to set setting {key}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save setting: {e}")

@@ -5,6 +5,7 @@ Minimal OAuth 2.0 Authorization Code Grant flow.
 This is a personal/dev skill — no real user auth needed.
 """
 
+import os
 import secrets
 import time
 import logging
@@ -20,7 +21,8 @@ router = APIRouter(prefix="/oauth", tags=["OAuth"])
 
 # Config — must match what's in the Alexa Developer Console
 CLIENT_ID = "homesentinel"
-CLIENT_SECRET = "cnvTIecW1vZHaByRG0vtTd_X2OCY0b7HKrcA5SPvpMU"
+# 2026-03-12: Moved secret to env var — default kept for backwards compat
+CLIENT_SECRET = os.getenv("OAUTH_CLIENT_SECRET", "cnvTIecW1vZHaByRG0vtTd_X2OCY0b7HKrcA5SPvpMU")
 
 # In-memory stores (sufficient for personal dev skill)
 _auth_codes: dict[str, dict] = {}   # code -> {redirect_uri, expires, client_id}
