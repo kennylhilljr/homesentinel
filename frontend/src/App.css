@@ -271,7 +271,7 @@
 }
 
 .nav-settings {
-  align-self: center;
+  align-self: flex-end;
   opacity: 0.7;
 }
 
@@ -378,7 +378,105 @@
 }
 
 
-/* 2026-03-12: "What Changed" summary bar — dashboard engagement hook */
+/* 2026-03-12: Compact status strip — replaces tall summary cards */
+.status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 6px;
+}
+
+.strip-stats {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.strip-stat {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.strip-stat strong {
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-right: 2px;
+}
+
+.strip-online strong { color: var(--success); }
+.strip-offline strong { color: #667289; }
+.strip-home { font-weight: 600; color: #2e7d32; }
+.strip-away { color: #e67e22; }
+
+.strip-changes {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.strip-scan {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* 2026-03-12: Collapsible insights toggle */
+.insights-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 16px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.insights-toggle:hover {
+  background: var(--surface);
+}
+
+.insights-badge {
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.insights-hint {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+}
+
+/* "What Changed" items (used in strip-changes) */
 .whats-new-bar {
   display: flex;
   gap: 16px;
@@ -397,14 +495,17 @@
 .whats-new-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .whats-new-item::before {
   content: '';
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--text-muted);
 }

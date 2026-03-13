@@ -61,6 +61,8 @@ function App() {
   const [healthScore, setHealthScore] = useState(null);
   // 2026-03-12: Browser push notifications
   const [unseenCount, setUnseenCount] = useState(0);
+  // 2026-03-12: Collapsible insights panel on dashboard
+  const [showInsights, setShowInsights] = useState(false);
   // 2026-03-12: Home/Away network detection state
   // 2026-03-12: Default to home=true until backend confirms, avoids flash of "Away"
   const [homeStatus, setHomeStatus] = useState({ is_home: true, method: 'init', detail: 'loading...', auto_scan_active: true, auto_scan_paused: false });
@@ -786,49 +788,35 @@ function App() {
         {/* Dashboard Page */}
         {currentPage === 'dashboard' && (
           <>
-        {/* Status Summary */}
-        <div className="status-summary">
-          <div className="summary-card">
-            <div className="summary-label">Total Devices</div>
-            <div className="summary-value">{devices.length}</div>
-          </div>
-          <div className="summary-card online">
-            <div className="summary-label">Online</div>
-            <div className="summary-value">{onlineCount}</div>
-          </div>
-          <div className="summary-card offline">
-            <div className="summary-label">Offline</div>
-            <div className="summary-value">{offlineCount}</div>
-          </div>
-          <div className={`summary-card ${homeStatus?.is_home ? 'home' : 'away'}`}>
-            <div className="summary-label">{homeStatus?.is_home ? 'Home' : 'Away'}</div>
-            <div className="summary-value home-icon">
-              <svg viewBox="0 0 24 24" width="36" height="36">
-                <path d="M3 12 L12 3 L21 12 V21 H15 V15 H9 V21 H3 Z"
-                  fill={homeStatus?.is_home ? '#2e7d32' : '#e67e22'}
-                  stroke={homeStatus?.is_home ? '#1b5e20' : '#d35400'}
-                  strokeWidth="1.5" strokeLinejoin="round"/>
+        {/* 2026-03-12: Compact status strip — replaces 4 tall summary cards */}
+        <div className="status-strip">
+          <div className="strip-stats">
+            <span className="strip-stat"><strong>{devices.length}</strong> devices</span>
+            <span className="strip-stat strip-online"><strong>{onlineCount}</strong> online</span>
+            <span className="strip-stat strip-offline"><strong>{offlineCount}</strong> offline</span>
+            <span className={`strip-stat strip-home ${homeStatus?.is_home ? '' : 'strip-away'}`}>
+              <svg viewBox="0 0 16 16" width="13" height="13" style={{verticalAlign: '-2px'}}>
+                <path d="M2 8l6-5 6 5v6h-4v-3H6v3H2V8z"
+                  fill={homeStatus?.is_home ? '#2e7d32' : '#e67e22'}/>
               </svg>
-            </div>
+              {homeStatus?.is_home ? 'Home' : 'Away'}
+            </span>
           </div>
-        </div>
-        {/* 2026-03-12: "What Changed" summary — answers "why should I care right now?" */}
-        {(newDeviceCount > 0 || activeAlerts.length > 0 || anomalyInsights.length > 0) && (
-          <div className="whats-new-bar">
+          <div className="strip-changes">
             {newDeviceCount > 0 && (
-              <span className="whats-new-item whats-new-device">{newDeviceCount} new device{newDeviceCount > 1 ? 's' : ''} in last 24h</span>
+              <span className="whats-new-item whats-new-device">{newDeviceCount} new</span>
             )}
             {activeAlerts.filter(a => a.alert_type === 'device_offline').length > 0 && (
-              <span className="whats-new-item whats-new-offline">{activeAlerts.filter(a => a.alert_type === 'device_offline').length} device{activeAlerts.filter(a => a.alert_type === 'device_offline').length > 1 ? 's' : ''} went offline</span>
+              <span className="whats-new-item whats-new-offline">{activeAlerts.filter(a => a.alert_type === 'device_offline').length} went offline</span>
             )}
             {anomalyInsights.length > 0 && (
-              <span className="whats-new-item whats-new-anomaly">{anomalyInsights.length} speed anomal{anomalyInsights.length > 1 ? 'ies' : 'y'} detected</span>
+              <span className="whats-new-item whats-new-anomaly">{anomalyInsights.length} anomal{anomalyInsights.length > 1 ? 'ies' : 'y'}</span>
             )}
             {pollingConfig && (
-              <span className="whats-new-item whats-new-scan">Last scan: {formatDate(pollingConfig.last_scan)}</span>
+              <span className="strip-scan">Scanned {formatDate(pollingConfig.last_scan)}</span>
             )}
           </div>
-        )}
+        </div>
 
         {/* 2026-03-11: Three-card layout — System + 5G Signal + Speed Test */}
         <div className="status-split status-split-3">
@@ -974,7 +962,18 @@ function App() {
           </div>
         </div>
 
-        {/* 2026-03-12: Daily Digest + Health Score row */}
+        {/* 2026-03-12: Collapsible insights panel — digest, health, alerts */}
+        <button className="insights-toggle" onClick={() => setShowInsights(v => !v)} aria-expanded={showInsights}>
+          <svg viewBox="0 0 16 16" width="14" height="14" style={{ transform: showInsights ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+            <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Insights &amp; Alerts
+          {!showInsights && activeAlerts.length > 0 && <span className="insights-badge">{activeAlerts.length}</span>}
+          <span className="insights-hint">{showInsights ? 'collapse' : 'expand'}</span>
+        </button>
+
+        {showInsights && (
+        <>
         <div className="status-split status-split-2">
           {/* Daily Digest Card */}
           <div className="status-card digest-card">
@@ -1083,6 +1082,8 @@ function App() {
             </div>
           )}
         </div>
+        </>
+        )}
 
         {deviceGroups.length > 0 && (
           <div className="groups-card">
