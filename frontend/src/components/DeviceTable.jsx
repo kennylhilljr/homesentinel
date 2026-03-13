@@ -28,9 +28,6 @@ export default function DeviceTable({
   const [deviceQuery, setDeviceQuery] = useState('');
   const [deviceStatusFilter, setDeviceStatusFilter] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'lastSeen', direction: 'desc' });
-  const [nameDropdownDevice, setNameDropdownDevice] = useState(null);
-  const [customNameInput, setCustomNameInput] = useState('');
-  const [nameActionLoading, setNameActionLoading] = useState(false);
   const [inlineEditId, setInlineEditId] = useState(null);
   const [inlineEditValue, setInlineEditValue] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,7 +35,6 @@ export default function DeviceTable({
 
   // Set a display name for a device (stored in DB as friendly_name)
   const setCustomName = async (device, newName) => {
-    setNameActionLoading(true);
     try {
       const res = await fetch(buildUrl(`/devices/${device.device_id}`), {
         method: 'PUT',
@@ -53,10 +49,6 @@ export default function DeviceTable({
       }
     } catch (e) {
       console.error('Failed to set custom name:', e);
-    } finally {
-      setNameActionLoading(false);
-      setNameDropdownDevice(null);
-      setCustomNameInput('');
     }
   };
 
@@ -385,14 +377,12 @@ export default function DeviceTable({
             <tbody>
               {displayedDevices.map((device) => {
                 const decoName = device.deco_name || '';
-                const alexaName = device.alexa_name || '';
-                const isDropdownOpen = nameDropdownDevice === device.device_id;
 
                 return (
                 <tr
                   key={device.device_id}
                   className={`device-row ${device.status === 'online' ? 'online' : 'offline'}${isNewDevice(device) ? ' device-row-new' : ''}`}
-                  onClick={() => !isDropdownOpen && onDeviceClick(device)}
+                  onClick={() => onDeviceClick(device)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(event) => {
@@ -435,7 +425,6 @@ export default function DeviceTable({
                           e.stopPropagation();
                           setInlineEditId(device.device_id);
                           setInlineEditValue(device.friendly_name || decoName || '');
-                          setNameDropdownDevice(null);
                         }}
                       >
                         {device.friendly_name || decoName || device.mac_address}
@@ -443,63 +432,6 @@ export default function DeviceTable({
                     )}
                     {/* 2026-03-12: "New" badge for devices first seen in last 24h */}
                     {isNewDevice(device) && <span className="device-new-badge">NEW</span>}
-                    {inlineEditId !== device.device_id && (
-                    <div className="name-action-wrapper">
-                      <button
-                        className="name-action-btn"
-                        title="Name actions"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNameDropdownDevice(isDropdownOpen ? null : device.device_id);
-                          setCustomNameInput('');
-                        }}
-                      >
-                        &#9662;
-                      </button>
-                      {isDropdownOpen && (
-                        <div className="name-dropdown" onClick={(e) => e.stopPropagation()}>
-                          {alexaName && alexaName !== device.friendly_name && (
-                            <button
-                              className="dropdown-item"
-                              disabled={nameActionLoading}
-                              onClick={() => setCustomName(device, alexaName)}
-                            >
-                              Use Alexa name "{alexaName}"
-                            </button>
-                          )}
-                          {decoName && decoName !== device.friendly_name && decoName !== alexaName && (
-                            <button
-                              className="dropdown-item"
-                              disabled={nameActionLoading}
-                              onClick={() => setCustomName(device, decoName)}
-                            >
-                              Use Deco name "{decoName}"
-                            </button>
-                          )}
-                          <div className="dropdown-custom">
-                            <input
-                              type="text"
-                              placeholder="Custom name..."
-                              value={customNameInput}
-                              onChange={(e) => setCustomNameInput(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && customNameInput.trim()) {
-                                  setCustomName(device, customNameInput.trim());
-                                }
-                              }}
-                            />
-                            <button
-                              className="dropdown-item custom-save"
-                              disabled={nameActionLoading || !customNameInput.trim()}
-                              onClick={() => setCustomName(device, customNameInput.trim())}
-                            >
-                              Set Name
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    )}
                   </td>
                   {/* 2026-03-11: Status + type badge column */}
                   {(() => {
