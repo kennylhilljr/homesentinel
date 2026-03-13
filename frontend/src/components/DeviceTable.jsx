@@ -484,10 +484,10 @@ export default function DeviceTable({
                     let bhTitle = '';
                     if (isDecoNode) {
                       const nd = decoNodeDetails[mac] || {};
-                      backhaulWired = nd.backhaul === 'wired' || nd.role === 'master';
+                      backhaulWired = nd.backhaul === 'wired' || nd.role === 'primary';
                       const bands = nd.backhaul_bands || [];
                       if (backhaulWired) {
-                        bhTitle = nd.role === 'master' ? 'Master node (WAN)' : 'Wired backhaul (Ethernet)';
+                        bhTitle = nd.role === 'primary' ? 'Primary node (WAN)' : 'Wired backhaul (Ethernet)';
                       } else {
                         const has5g = bands.some(b => b.includes('band5') || b.includes('band6'));
                         const has24g = bands.some(b => b.includes('band2'));

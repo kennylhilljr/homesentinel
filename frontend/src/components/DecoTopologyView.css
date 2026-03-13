@@ -472,6 +472,12 @@
   color: #c62828;
 }
 
+/* 2026-03-13: Pinned badge for devices with a preferred node */
+.conn-badge.conn-pinned {
+  background: #fff3e0;
+  color: #e65100;
+}
+
 .vendor-badge {
   font-size: 10px;
   color: #9aa5b4;

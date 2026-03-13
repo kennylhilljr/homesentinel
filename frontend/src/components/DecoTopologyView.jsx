@@ -72,7 +72,8 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
   const [graphLoading, setGraphLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  // 2026-03-13: Default auto-refresh off — topology data is cached 60s on backend anyway
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [viewMode, setViewMode] = useState('graph'); // 'graph' or 'cards'
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
@@ -498,6 +499,10 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
                               <div className="topo-device-badges">
                                 {connBadge && (
                                   <span className={`conn-badge ${connBadge.className}`}>{connBadge.label}</span>
+                                )}
+                                {/* 2026-03-13: Show Pinned badge if device has a preferred node */}
+                                {device.preferred_deco_node && (
+                                  <span className="conn-badge conn-pinned">Pinned</span>
                                 )}
                                 {device.vendor_name && (
                                   <span className="vendor-badge">{device.vendor_name}</span>

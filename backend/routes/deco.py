@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,22 @@ router = APIRouter(prefix="/api/deco", tags=["deco"])
 # Global Deco service and correlation service instances (injected from main.py)
 deco_service = None
 correlation_service = None
+
+# 2026-03-13: Route-level cache for topology responses (avoids re-querying Deco + matplotlib on every page load)
+_topology_json_cache = None
+_topology_json_cache_time = 0
+_topology_svg_cache = None
+_topology_svg_cache_time = 0
+TOPOLOGY_ROUTE_CACHE_TTL = 60  # seconds — Deco data doesn't change frequently
+
+
+def _remap_role(role: str) -> str:
+    """2026-03-13: Remap Deco API 'master'/'slave' to 'primary'/'secondary' for display."""
+    if role == "master":
+        return "primary"
+    if role == "slave":
+        return "secondary"
+    return role
 
 
 # Request models
@@ -658,11 +675,12 @@ async def get_client_node_map() -> Dict[str, Any]:
                 ct = node.get("connection_type", [])
                 if isinstance(ct, str):
                     ct = [ct]
-                role = node.get("role", "slave")
+                raw_role = node.get("role", "slave")
+                role = _remap_role(raw_role)
                 # Determine if wired backhaul
                 node_name_lower = display_name.lower()
                 is_wired_backhaul = (
-                    role == "master"
+                    raw_role == "master"
                     or "wired" in ct
                     or (ct and all(c not in ("band2_4", "band5", "band6") for c in ct))
                     or "dining" in node_name_lower
@@ -766,29 +784,11 @@ async def optimize_network() -> Dict[str, Any]:
 @router.get("/topology")
 async def get_topology() -> Dict[str, Any]:
     """
-    Get network topology showing Deco nodes and their connected devices
+    Get network topology showing Deco nodes and their connected devices.
+    2026-03-13: Cached for 60s at route level to avoid slow Deco API re-queries.
 
     Returns:
-        JSON response containing:
-        - nodes: List of Deco nodes with their properties:
-            - node_id: Unique node identifier
-            - node_name: Human-readable node name
-            - mac_address: Node MAC address (for device relationships)
-            - status: Node operational status (online/offline)
-            - signal_strength: Signal strength percentage (0-100)
-            - connected_clients: Number of connected clients
-        - devices: List of connected devices with their properties:
-            - device_id: Unique device identifier
-            - mac_address: Device MAC address
-            - device_name: Device name (friendly or Deco client name)
-            - status: Device status (online/offline)
-            - friendly_name: User-defined device name
-            - vendor_name: Device vendor/manufacturer
-        - relationships: List of device-to-node connections:
-            - device_id: Connected device ID
-            - device_mac: Device MAC address
-            - node_id: Associated Deco node ID
-            - node_mac: Node MAC address (for visual connection line)
+        JSON with nodes, devices, relationships, totals, timestamp.
         - total_nodes: Total number of nodes
         - total_devices: Total number of devices
         - total_relationships: Total number of device-to-node relationships
@@ -800,6 +800,13 @@ async def get_topology() -> Dict[str, Any]:
     """
     if deco_service is None or correlation_service is None:
         raise HTTPException(status_code=500, detail="Services not initialized")
+
+    # 2026-03-13: Return cached response if fresh
+    global _topology_json_cache, _topology_json_cache_time
+    now = time.time()
+    if _topology_json_cache and (now - _topology_json_cache_time) < TOPOLOGY_ROUTE_CACHE_TTL:
+        logger.debug("Returning cached topology JSON")
+        return _topology_json_cache
 
     try:
         # Get all Deco nodes
@@ -924,6 +931,8 @@ async def get_topology() -> Dict[str, Any]:
                     "vendor_name": merged_device.get("vendor_name"),
                     "current_ip": merged_device.get("current_ip", ""),
                     "connection_type": client_to_node.get(device_mac.lower(), {}).get("connection_type", ""),
+                    # 2026-03-13: Include preferred_deco_node for pinned badge in topology cards
+                    "preferred_deco_node": merged_device.get("preferred_deco_node"),
                 })
         else:
             # Fallback: build devices directly from Deco local API client data
@@ -986,7 +995,12 @@ async def get_topology() -> Dict[str, Any]:
                     })
                     seen.add(rel_key)
 
-        return {
+        # 2026-03-13: Remap master/slave → primary/secondary for display
+        for node in nodes:
+            if "role" in node:
+                node["role"] = _remap_role(node["role"])
+
+        result = {
             "nodes": nodes,
             "devices": devices,
             "relationships": relationships,
@@ -995,6 +1009,12 @@ async def get_topology() -> Dict[str, Any]:
             "total_relationships": len(relationships),
             "timestamp": merged_result.get("timestamp"),
         }
+
+        # 2026-03-13: Cache the result
+        _topology_json_cache = result
+        _topology_json_cache_time = time.time()
+
+        return result
 
     except Exception as e:
         logger.error(f"Failed to fetch topology: {e}")
@@ -1006,7 +1026,16 @@ async def get_topology() -> Dict[str, Any]:
 # 2026-03-11: NetworkX-based topology graph rendered as SVG.
 @router.get("/topology-graph")
 async def get_topology_graph() -> Response:
-    """Generate an SVG network topology graph using NetworkX."""
+    """Generate an SVG network topology graph using NetworkX.
+    2026-03-13: Cached for 60s to avoid re-rendering matplotlib SVG on every page load.
+    """
+    # 2026-03-13: Return cached SVG if fresh
+    global _topology_svg_cache, _topology_svg_cache_time
+    now = time.time()
+    if _topology_svg_cache and (now - _topology_svg_cache_time) < TOPOLOGY_ROUTE_CACHE_TTL:
+        logger.debug("Returning cached topology SVG")
+        return Response(content=_topology_svg_cache, media_type="image/svg+xml")
+
     import io
     import base64
     import json as _json
@@ -1406,6 +1435,10 @@ async def get_topology_graph() -> Response:
         plt.close(fig)
         buf.seek(0)
         svg_data = buf.getvalue()
+
+        # 2026-03-13: Cache the SVG
+        _topology_svg_cache = svg_data
+        _topology_svg_cache_time = time.time()
 
         return Response(content=svg_data, media_type="image/svg+xml")
 
