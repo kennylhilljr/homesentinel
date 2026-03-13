@@ -220,7 +220,7 @@ function App() {
         const response = await fetch(buildUrl('/events/alerts?limit=10'));
         if (response.ok) {
           const data = await response.json();
-          setActiveAlerts(data);
+          setActiveAlerts(data.alerts || []);
         }
       } catch (error) { /* silent */ }
     };
