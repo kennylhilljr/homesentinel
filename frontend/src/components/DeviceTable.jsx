@@ -439,10 +439,11 @@ export default function DeviceTable({
                     const nodeInfo = clientNodeMap[mac];
                     const isDecoNode = decoNodeMacs.has(mac);
                     const meshValue = nodeInfo ? !!nodeInfo.client_mesh : false;
-                    const isPinned = !!device.preferred_deco_node;
-                    const pinnedNodeName = isPinned
-                      ? (decoNodesMap[device.preferred_deco_node] || device.preferred_deco_node)
+                    const normPref = device.preferred_deco_node
+                      ? device.preferred_deco_node.toLowerCase().replace(/-/g, ':')
                       : null;
+                    const isPinned = !!normPref;
+                    const pinnedNodeName = isPinned ? (decoNodesMap[normPref] || normPref) : null;
                     const currentNodeName = nodeInfo ? nodeInfo.node_name : null;
                     const isOnline = device.status === 'online';
                     const wireType = nodeInfo ? (nodeInfo.wire_type || '') : '';
@@ -579,7 +580,7 @@ export default function DeviceTable({
                             {isDecoNode ? (
                               <select
                                 className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
-                                value={isPinned ? device.preferred_deco_node : ''}
+                                value={normPref || ''}
                                 title={isPinned ? `Uplink pinned to ${pinnedNodeName}` : 'Auto uplink'}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
@@ -589,7 +590,7 @@ export default function DeviceTable({
                               >
                                 <option value="">{currentNodeName ? `${currentNodeName} (Auto)` : 'Auto'}</option>
                                 {Object.entries(decoNodesMap)
-                                  .filter(([nodeMac]) => nodeMac.toLowerCase().replace(/-/g, ':') !== mac)
+                                  .filter(([nodeMac]) => nodeMac !== mac)
                                   .map(([nodeMac, name]) => (
                                     <option key={nodeMac} value={nodeMac}>{name}</option>
                                   ))}
@@ -601,7 +602,7 @@ export default function DeviceTable({
                             ) : (
                               <select
                                 className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
-                                value={isPinned ? device.preferred_deco_node : ''}
+                                value={normPref || ''}
                                 title={isPinned ? `Pinned to ${pinnedNodeName}` : `Connected to ${currentNodeName} (auto)`}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {

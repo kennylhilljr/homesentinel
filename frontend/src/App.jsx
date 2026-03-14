@@ -8,6 +8,7 @@ import SettingsPage from './pages/SettingsPage';
 import AlexaDevicesPage from './pages/AlexaDevicesPage';
 import SmartHomePage from './pages/SmartHomePage';
 import SpeedInsightsPage from './pages/SpeedInsightsPage';
+import EventLogPage from './pages/EventLogPage';  // 2026-03-14: Event and alert log viewer
 import ErrorBoundary from './components/ErrorBoundary';
 // 2026-03-12: Extracted components
 import useDevicePolling from './hooks/useDevicePolling';
@@ -72,6 +73,10 @@ function App() {
   const handleDeviceUpdate = (updatedDevice) => {
     hookHandleDeviceUpdate(updatedDevice);
     setSelectedDevice(updatedDevice);
+  };
+
+  const handleDeviceDelete = (deviceId) => {
+    setDevices(prev => prev.filter(d => d.device_id !== deviceId));
   };
 
   // Handle Escape key to close detail card
@@ -162,6 +167,10 @@ function App() {
                 <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="3" r="2" fill="currentColor"/><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="13" r="2" fill="currentColor"/><path d="M8 5v3M6 10L3 11M10 10l3 1" stroke="currentColor" strokeWidth="1.2"/></svg>
                 Topology
               </button>
+              <button className={`nav-button ${currentPage === 'events' ? 'active' : ''}`} onClick={() => setCurrentPage('events')}>
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M2 3h12a1 1 0 011 1v9a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" strokeWidth="1.2"/><path d="M4 6h8M4 9h8M4 12h5" stroke="currentColor" strokeWidth="1"/></svg>
+                Events
+              </button>
             </div>
           </div>
           <div className="nav-group">
@@ -195,6 +204,9 @@ function App() {
       <main className="App-main" id="main-content">
         {/* Network Topology Page */}
         {currentPage === 'topology' && <DecoTopologyPage />}
+
+        {/* Event Log Page */}
+        {currentPage === 'events' && <EventLogPage />}
 
         {/* Alexa Devices Page */}
         {currentPage === 'alexa' && <AlexaDevicesPage />}
@@ -300,6 +312,7 @@ function App() {
             groups={deviceGroups}
             onClose={handleDetailCardClose}
             onUpdate={handleDeviceUpdate}
+            onDelete={handleDeviceDelete}
           />
         )}
 

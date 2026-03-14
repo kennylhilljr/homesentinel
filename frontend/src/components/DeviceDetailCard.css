@@ -397,6 +397,8 @@
 .detail-card-container .detail-card-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
   padding: 12px 20px 14px;
   border-top: 1px solid var(--border, #d4dde8);
   background: var(--surface-muted, #f3f6fa);
@@ -406,6 +408,45 @@
   padding: 9px 20px;
   font-size: 0.92rem;
   background: var(--brand, #0b5cab);
+}
+
+.detail-card-container .btn-delete {
+  padding: 9px 16px;
+  font-size: 0.92rem;
+  background: transparent;
+  color: #c0392b;
+  border: 1px solid #c0392b !important;
+  margin-right: auto;
+}
+
+.detail-card-container .btn-delete:hover {
+  background: #fdf0ee;
+}
+
+.detail-card-container .btn-delete-confirm {
+  padding: 9px 16px;
+  font-size: 0.92rem;
+  background: #c0392b;
+  color: #fff;
+}
+
+.detail-card-container .btn-delete-confirm:hover:not(:disabled) {
+  background: #a93226;
+}
+
+.detail-card-container .btn-cancel {
+  padding: 9px 16px;
+  font-size: 0.92rem;
+  background: var(--surface, #fff);
+  color: var(--text, #1a2533);
+  border: 1px solid var(--border, #d4dde8) !important;
+}
+
+.detail-card-container .delete-confirm-text {
+  font-size: 0.88rem;
+  color: #c0392b;
+  font-weight: 600;
+  margin-right: auto;
 }
 
 .detail-card-container::-webkit-scrollbar {

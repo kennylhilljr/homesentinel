@@ -7,10 +7,12 @@ import { buildUrl } from '../utils/apiConfig';
  * Modal/panel showing all device details with inline editing capability
  * Displays: ID, MAC, IP history, hostname, vendor, friendly name, device type, groups, status, timestamps, notes
  */
-function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
+function DeviceDetailCard({ device, groups, onClose, onUpdate, onDelete }) {
   const [editField, setEditField] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     friendly_name: device?.friendly_name || '',
     device_type: device?.device_type || '',
@@ -136,6 +138,25 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
     const closeBtn = containerRef.current?.querySelector('.detail-card-close');
     if (closeBtn) closeBtn.focus();
   }, []);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(buildUrl(`/devices/${device.device_id}`), { method: 'DELETE' });
+      if (response.ok) {
+        if (onDelete) onDelete(device.device_id);
+        onClose();
+      } else {
+        setError('Failed to delete device');
+        setConfirmDelete(false);
+      }
+    } catch {
+      setError('Failed to delete device');
+      setConfirmDelete(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   if (!device) {
     return null;
@@ -405,18 +426,25 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
               </div>
             )}
 
-            {device.ip_history && device.ip_history.length > 0 && (
-              <div className="detail-field">
-                <label className="detail-label">IP History</label>
-                <div className="ip-history-list">
-                  {device.ip_history.map((ip, idx) => (
-                    <div key={idx} className="ip-history-item">
-                      <span className="ip-value monospace">{ip}</span>
-                    </div>
-                  ))}
+            {(() => {
+              let ipHistory = device.ip_history;
+              if (typeof ipHistory === 'string') {
+                try { ipHistory = JSON.parse(ipHistory); } catch { ipHistory = []; }
+              }
+              if (!Array.isArray(ipHistory) || ipHistory.length === 0) return null;
+              return (
+                <div className="detail-field">
+                  <label className="detail-label">IP History</label>
+                  <div className="ip-history-list">
+                    {ipHistory.map((ip, idx) => (
+                      <div key={idx} className="ip-history-item">
+                        <span className="ip-value monospace">{typeof ip === 'object' ? ip.ip : ip}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </section>
 
           {/* Notes - Editable */}
@@ -469,9 +497,26 @@ function DeviceDetailCard({ device, groups, onClose, onUpdate }) {
 
         {/* Footer Actions */}
         <div className="detail-card-footer">
-          <button className="btn-close" onClick={onClose}>
-            Close
-          </button>
+          {confirmDelete ? (
+            <>
+              <span className="delete-confirm-text">Delete this device?</span>
+              <button className="btn-delete-confirm" onClick={handleDelete} disabled={isDeleting}>
+                {isDeleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+              <button className="btn-cancel" onClick={() => setConfirmDelete(false)} disabled={isDeleting}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn-delete" onClick={() => setConfirmDelete(true)}>
+                Delete
+              </button>
+              <button className="btn-close" onClick={onClose}>
+                Close
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
