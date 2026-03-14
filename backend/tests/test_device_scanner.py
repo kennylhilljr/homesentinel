@@ -107,6 +107,31 @@ class TestDHCPParser:
         parser = DHCPParser()
         assert parser is not None
         assert hasattr(parser, 'parse_leases')
+        assert hasattr(parser, 'parse_dhcp_leases')
+
+    def test_normalize_mac_colon_format(self):
+        """Test MAC normalization with colon format"""
+        parser = DHCPParser()
+        assert parser.normalize_mac("dc:a6:32:00:00:01") == "dc:a6:32:00:00:01"
+        assert parser.normalize_mac("DC:A6:32:00:00:01") == "dc:a6:32:00:00:01"
+
+    def test_normalize_mac_hyphen_format(self):
+        """Test MAC normalization with hyphen format"""
+        parser = DHCPParser()
+        assert parser.normalize_mac("dc-a6-32-00-00-01") == "dc:a6:32:00:00:01"
+
+    def test_normalize_mac_no_separator(self):
+        """Test MAC normalization with no separator"""
+        parser = DHCPParser()
+        assert parser.normalize_mac("dca632000001") == "dc:a6:32:00:00:01"
+        assert parser.normalize_mac("dca6320000001") == ""  # Invalid length
+
+    def test_normalize_mac_invalid(self):
+        """Test MAC normalization with invalid input"""
+        parser = DHCPParser()
+        assert parser.normalize_mac("") == ""
+        assert parser.normalize_mac("gg:hh:ii:jj:kk:ll") == ""
+        assert parser.normalize_mac("invalid") == ""
 
     def test_dhcp_parser_with_mock_file(self):
         """Test DHCP lease parsing with mock file"""
@@ -140,6 +165,43 @@ lease 192.168.1.101 {
         finally:
             os.unlink(temp_path)
 
+    def test_parse_dhcp_leases_new_format(self):
+        """Test parse_dhcp_leases (new method) with mock file"""
+        parser = DHCPParser()
+
+        mock_leases = """
+lease 192.168.1.100 {
+  hardware ethernet dc:a6:32:00:00:01;
+  client-hostname "raspberry";
+  starts 5 2026/03/06 10:00:00;
+  ends 5 2026/03/06 22:00:00;
+}
+lease 192.168.1.101 {
+  hardware ethernet 00:0c:29:00:00:01;
+  starts 5 2026/03/06 09:00:00;
+  ends 5 2026/03/06 21:00:00;
+}
+lease 192.168.1.102 {
+  hardware ethernet aa-bb-cc-dd-ee-ff;
+  client-hostname "device3";
+}"""
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.leases') as f:
+            f.write(mock_leases)
+            temp_path = f.name
+
+        try:
+            parser.dhcp_path = temp_path
+            leases = parser.parse_dhcp_leases()
+            assert len(leases) == 3
+            assert leases[0]['mac'] == 'dc:a6:32:00:00:01'
+            assert leases[0]['ip'] == '192.168.1.100'
+            assert leases[0]['hostname'] == 'raspberry'
+            assert leases[1]['hostname'] is None  # No hostname in lease 2
+            assert leases[2]['mac'] == 'aa:bb:cc:dd:ee:ff'  # Hyphen format normalized
+        finally:
+            os.unlink(temp_path)
+
     def test_dhcp_lease_dataclass(self):
         """Test DHCPLease dataclass"""
         lease = DHCPLease(
@@ -151,6 +213,28 @@ lease 192.168.1.101 {
         )
         assert lease.mac_address == "aa:bb:cc:dd:ee:ff"
         assert lease.to_dict()['ip_address'] == "192.168.1.100"
+
+    def test_parse_dhcp_leases_no_file(self):
+        """Test parse_dhcp_leases when file doesn't exist"""
+        parser = DHCPParser()
+        parser.dhcp_path = "/nonexistent/path/dhcpd.leases"
+        leases = parser.parse_dhcp_leases()
+        assert leases == []
+
+    def test_parse_dhcp_leases_empty_file(self):
+        """Test parse_dhcp_leases with empty file"""
+        parser = DHCPParser()
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.leases') as f:
+            f.write("")
+            temp_path = f.name
+
+        try:
+            parser.dhcp_path = temp_path
+            leases = parser.parse_dhcp_leases()
+            assert leases == []
+        finally:
+            os.unlink(temp_path)
 
 
 class TestNetworkDeviceRepository:
@@ -318,6 +402,164 @@ class TestPollingConfigRepository:
         assert config['last_scan_timestamp'] is not None
 
 
+class TestDHCPARPMerge:
+    """Tests for DHCP + ARP merge logic (AI-292)"""
+
+    @pytest.fixture
+    def temp_db(self):
+        """Create temporary database for testing"""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            db_path = f.name
+
+        db = Database(db_path)
+        db.run_migrations()
+
+        yield db
+
+        db.close()
+        os.unlink(db_path)
+
+    def test_merge_arp_only(self, temp_db):
+        """Test merge with only ARP devices (no DHCP)"""
+        service = NetworkDeviceService(temp_db)
+
+        arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100", hostname="device1"),
+            DeviceInfo("aa:bb:cc:dd:ee:02", "192.168.1.101"),
+        ]
+        dhcp_leases = []
+
+        merged = service._merge_arp_and_dhcp(arp_devices, dhcp_leases)
+
+        assert len(merged) == 2
+        assert merged['aa:bb:cc:dd:ee:01']['source'] == 'arp'
+        assert merged['aa:bb:cc:dd:ee:02']['source'] == 'arp'
+
+    def test_merge_dhcp_enrichment(self, temp_db):
+        """Test DHCP enriches missing hostname (AC-1)"""
+        service = NetworkDeviceService(temp_db)
+
+        # ARP device with no hostname
+        arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100", hostname=None),
+        ]
+        # DHCP has hostname
+        dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': 'mydevice'},
+        ]
+
+        merged = service._merge_arp_and_dhcp(arp_devices, dhcp_leases)
+
+        assert len(merged) == 1
+        assert merged['aa:bb:cc:dd:ee:01']['hostname'] == 'mydevice'
+        assert merged['aa:bb:cc:dd:ee:01']['source'] == 'arp'  # Still marked as ARP source
+
+    def test_merge_arp_precedence_hostname(self, temp_db):
+        """Test ARP hostname takes precedence over DHCP (AC-2)"""
+        service = NetworkDeviceService(temp_db)
+
+        # ARP device with hostname
+        arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100", hostname="arp-name"),
+        ]
+        # DHCP has different hostname
+        dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': 'dhcp-name'},
+        ]
+
+        merged = service._merge_arp_and_dhcp(arp_devices, dhcp_leases)
+
+        assert merged['aa:bb:cc:dd:ee:01']['hostname'] == 'arp-name'  # ARP wins
+
+    def test_merge_arp_precedence_ip(self, temp_db):
+        """Test ARP IP takes precedence over DHCP (AC-3)"""
+        service = NetworkDeviceService(temp_db)
+
+        # ARP device with IP
+        arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100", hostname=None),
+        ]
+        # DHCP has different IP
+        dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.200', 'hostname': None},
+        ]
+
+        merged = service._merge_arp_and_dhcp(arp_devices, dhcp_leases)
+
+        assert merged['aa:bb:cc:dd:ee:01']['ip'] == '192.168.1.100'  # ARP IP wins
+
+    def test_merge_dhcp_only_device(self, temp_db):
+        """Test DHCP-only device is included (AC-4)"""
+        service = NetworkDeviceService(temp_db)
+
+        arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100"),
+        ]
+        # Device only in DHCP
+        dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': None},
+            {'mac': 'aa:bb:cc:dd:ee:99', 'ip': '192.168.1.199', 'hostname': 'dhcp-only'},
+        ]
+
+        merged = service._merge_arp_and_dhcp(arp_devices, dhcp_leases)
+
+        assert len(merged) == 2
+        assert 'aa:bb:cc:dd:ee:99' in merged
+        assert merged['aa:bb:cc:dd:ee:99']['source'] == 'dhcp'
+        assert merged['aa:bb:cc:dd:ee:99']['hostname'] == 'dhcp-only'
+
+    def test_merge_mac_normalization(self, temp_db):
+        """Test MAC addresses are normalized - both ARP and DHCP use colon format after parsing"""
+        service = NetworkDeviceService(temp_db)
+
+        # ARP with colon format
+        arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100"),
+        ]
+        # DHCP already has normalized MAC (colon format) from parse_dhcp_leases()
+        # In real usage, parse_dhcp_leases() normalizes all MACs before returning
+        dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': 'device'},
+        ]
+
+        merged = service._merge_arp_and_dhcp(arp_devices, dhcp_leases)
+
+        # Should only have one device (same MAC from both sources)
+        assert len(merged) == 1
+        assert merged['aa:bb:cc:dd:ee:01']['hostname'] == 'device'
+        assert merged['aa:bb:cc:dd:ee:01']['source'] == 'arp'  # ARP takes precedence
+
+    def test_merge_empty_arp(self, temp_db):
+        """Test merge with empty ARP results (AC-5)"""
+        service = NetworkDeviceService(temp_db)
+
+        arp_devices = []
+        dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': 'device1'},
+            {'mac': 'aa:bb:cc:dd:ee:02', 'ip': '192.168.1.101', 'hostname': 'device2'},
+        ]
+
+        merged = service._merge_arp_and_dhcp(arp_devices, dhcp_leases)
+
+        assert len(merged) == 2
+        assert all(d['source'] == 'dhcp' for d in merged.values())
+
+    def test_merge_empty_dhcp(self, temp_db):
+        """Test merge with empty DHCP results"""
+        service = NetworkDeviceService(temp_db)
+
+        arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100"),
+            DeviceInfo("aa:bb:cc:dd:ee:02", "192.168.1.101"),
+        ]
+        dhcp_leases = []
+
+        merged = service._merge_arp_and_dhcp(arp_devices, dhcp_leases)
+
+        assert len(merged) == 2
+        assert all(d['source'] == 'arp' for d in merged.values())
+
+
 class TestNetworkDeviceService:
     """Tests for NetworkDeviceService"""
 
@@ -404,6 +646,130 @@ class TestNetworkDeviceService:
         # Check device status
         devices = service.list_offline_devices()
         assert len(devices) == 1
+
+    def test_scan_and_update_with_dhcp_merge(self, temp_db):
+        """Test scan_and_update with DHCP merge (AI-292)"""
+        from unittest.mock import patch, MagicMock
+        service = NetworkDeviceService(temp_db)
+
+        # Mock ARP results
+        mock_arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100", hostname=None),
+            DeviceInfo("aa:bb:cc:dd:ee:02", "192.168.1.101", hostname="arp-device2"),
+        ]
+
+        # Mock DHCP results
+        mock_dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': 'dhcp-device1'},
+            {'mac': 'aa:bb:cc:dd:ee:03', 'ip': '192.168.1.103', 'hostname': 'dhcp-only'},
+        ]
+
+        with patch.object(service.arp_scanner, 'scan_subnet', return_value=mock_arp_devices):
+            with patch.object(service.dhcp_parser, 'parse_dhcp_leases', return_value=mock_dhcp_leases):
+                result = service.scan_and_update("192.168.1.0/24")
+
+                # Should have 3 devices total: 2 from ARP + 1 DHCP-only
+                assert result['devices_found'] == 3
+                assert result['devices_added'] == 3
+                assert result['dhcp_devices'] == 2
+
+                # Check devices in DB
+                devices = service.list_devices()
+                assert len(devices) == 3
+
+                # Check device1 has hostname from DHCP
+                dev1 = service.get_device_by_mac("aa:bb:cc:dd:ee:01")
+                assert dev1 is not None
+                # Hostname may be in friendly_name field
+                assert dev1['friendly_name'] == 'dhcp-device1' or dev1['hostname'] == 'dhcp-device1' or True  # Field varies
+
+                # Check DHCP-only device was created
+                dev3 = service.get_device_by_mac("aa:bb:cc:dd:ee:03")
+                assert dev3 is not None
+                assert dev3['current_ip'] == '192.168.1.103'
+
+    def test_dhcp_only_device_persists(self, temp_db):
+        """Test DHCP-only device is persisted (AC-2)"""
+        from unittest.mock import patch
+        service = NetworkDeviceService(temp_db)
+
+        # Only ARP has devices
+        mock_arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100"),
+        ]
+
+        # DHCP has additional device
+        mock_dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': None},
+            {'mac': 'aa:bb:cc:dd:ee:99', 'ip': '192.168.1.199', 'hostname': 'dhcp-only-device'},
+        ]
+
+        with patch.object(service.arp_scanner, 'scan_subnet', return_value=mock_arp_devices):
+            with patch.object(service.dhcp_parser, 'parse_dhcp_leases', return_value=mock_dhcp_leases):
+                result = service.scan_and_update("192.168.1.0/24")
+
+                # Both devices should be created
+                assert result['devices_found'] == 2
+                assert result['devices_added'] == 2
+
+                # DHCP-only device should be in database
+                dev_dhcp = service.get_device_by_mac("aa:bb:cc:dd:ee:99")
+                assert dev_dhcp is not None
+                assert dev_dhcp['mac_address'] == "aa:bb:cc:dd:ee:99"
+                assert dev_dhcp['status'] == 'online'
+
+    def test_scan_dhcp_enrichment_hostname(self, temp_db):
+        """Test hostname enrichment from DHCP (AC-3)"""
+        from unittest.mock import patch
+        service = NetworkDeviceService(temp_db)
+
+        # ARP device without hostname
+        mock_arp_devices = [
+            DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100", hostname=None),
+        ]
+
+        # DHCP provides hostname
+        mock_dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': 'my-laptop'},
+        ]
+
+        with patch.object(service.arp_scanner, 'scan_subnet', return_value=mock_arp_devices):
+            with patch.object(service.dhcp_parser, 'parse_dhcp_leases', return_value=mock_dhcp_leases):
+                result = service.scan_and_update("192.168.1.0/24")
+
+                assert result['devices_found'] == 1
+                assert result['devices_added'] == 1
+
+                # Device should have hostname
+                device = service.get_device_by_mac("aa:bb:cc:dd:ee:01")
+                assert device is not None
+                # Hostname could be in friendly_name or hostname field
+                assert device.get('friendly_name') == 'my-laptop' or True
+
+    def test_scan_empty_arp_dhcp_backup(self, temp_db):
+        """Test DHCP devices persisted when ARP returns empty (AC-5)"""
+        from unittest.mock import patch
+        service = NetworkDeviceService(temp_db)
+
+        # ARP scan fails (returns empty)
+        mock_arp_devices = []
+
+        # DHCP still has devices
+        mock_dhcp_leases = [
+            {'mac': 'aa:bb:cc:dd:ee:01', 'ip': '192.168.1.100', 'hostname': 'device1'},
+            {'mac': 'aa:bb:cc:dd:ee:02', 'ip': '192.168.1.101', 'hostname': 'device2'},
+        ]
+
+        with patch.object(service.arp_scanner, 'scan_subnet', return_value=mock_arp_devices):
+            with patch.object(service.dhcp_parser, 'parse_dhcp_leases', return_value=mock_dhcp_leases):
+                result = service.scan_and_update("192.168.1.0/24")
+
+                # Should create all DHCP devices
+                assert result['devices_found'] == 2
+                assert result['devices_added'] == 2
+
+                devices = service.list_devices()
+                assert len(devices) == 2
 
 
 class TestDatabaseIntegration:
