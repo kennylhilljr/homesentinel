@@ -205,6 +205,7 @@ async def startup_event():
     # Initialize event routes with service and device repo
     events_routes.set_event_service(event_service)
     events_routes.set_device_repo(device_repo or NetworkDeviceRepository(db))
+    events_routes.set_db(db)
     logger.info("Event routes configured with services")
 
     # Initialize settings routes
@@ -887,61 +888,6 @@ async def dismiss_alert(alert_id: str, body: AlertDismiss = None):
         logger.error(f"Failed to dismiss alert: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# 2026-03-12: Unseen alerts for browser push notifications
-@app.get("/api/events/alerts/unseen")
-async def get_unseen_alerts():
-    """Get alerts that haven't been shown as browser notifications yet."""
-    global db
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database not initialized")
-
-    try:
-        with db.get_connection() as conn:
-            cursor = conn.execute(
-                """SELECT da.alert_id, da.device_id, da.alert_type, da.created_at,
-                          nd.friendly_name, nd.mac_address
-                   FROM device_alerts da
-                   LEFT JOIN network_devices nd ON nd.device_id = da.device_id
-                   WHERE da.dismissed = 0 AND da.seen = 0
-                   ORDER BY da.created_at DESC LIMIT 20"""
-            )
-            alerts = []
-            for row in cursor.fetchall():
-                alerts.append({
-                    "alert_id": row[0],
-                    "device_id": row[1],
-                    "alert_type": row[2],
-                    "created_at": row[3],
-                    "device_name": row[4] or row[5] or "Unknown",
-                })
-            return alerts
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class MarkSeenRequest(BaseModel):
-    alert_ids: list
-
-
-@app.post("/api/events/alerts/mark-seen")
-async def mark_alerts_seen(body: MarkSeenRequest):
-    """Mark alerts as seen (browser notification was shown)."""
-    global db
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database not initialized")
-
-    try:
-        with db.get_connection() as conn:
-            for aid in body.alert_ids:
-                conn.execute(
-                    "UPDATE device_alerts SET seen = 1 WHERE alert_id = ?",
-                    (aid,)
-                )
-            conn.commit()
-        return {"success": True, "marked": len(body.alert_ids)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/events/stats")

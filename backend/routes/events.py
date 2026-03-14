@@ -17,12 +17,19 @@ router = APIRouter(prefix="/api/events", tags=["events"])
 # Global service instances (injected from main.py)
 event_service = None
 device_repo = None
+db = None
 
 
 def set_event_service(service):
     """Set the event service (called from main.py)"""
     global event_service
     event_service = service
+
+
+def set_db(database):
+    """Set the database instance (called from main.py)"""
+    global db
+    db = database
 
 
 def set_device_repo(repo):
@@ -299,6 +306,58 @@ async def get_alerts(
     except Exception as e:
         logger.error(f"Error retrieving alerts: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve alerts: {str(e)}")
+
+
+# 2026-03-14: Moved from main.py — must be before /alerts/{device_id} to avoid shadowing
+@router.get("/alerts/unseen")
+async def get_unseen_alerts():
+    """Get alerts that haven't been shown as browser notifications yet."""
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.execute(
+                """SELECT da.alert_id, da.device_id, da.alert_type, da.created_at,
+                          nd.friendly_name, nd.mac_address
+                   FROM device_alerts da
+                   LEFT JOIN network_devices nd ON nd.device_id = da.device_id
+                   WHERE da.dismissed = 0 AND da.seen = 0
+                   ORDER BY da.created_at DESC LIMIT 20"""
+            )
+            alerts = []
+            for row in cursor.fetchall():
+                alerts.append({
+                    "alert_id": row[0],
+                    "device_id": row[1],
+                    "alert_type": row[2],
+                    "created_at": row[3],
+                    "device_name": row[4] or row[5] or "Unknown",
+                })
+            return alerts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class MarkSeenRequest(BaseModel):
+    alert_ids: list
+
+
+@router.post("/alerts/mark-seen")
+async def mark_alerts_seen(body: MarkSeenRequest):
+    """Mark alerts as seen (browser notification was shown)."""
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    try:
+        with db.get_connection() as conn:
+            for aid in body.alert_ids:
+                conn.execute(
+                    "UPDATE device_alerts SET seen = 1 WHERE alert_id = ?",
+                    (aid,)
+                )
+            conn.commit()
+        return {"success": True, "marked": len(body.alert_ids)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/alerts/{device_id}", response_model=AlertListResponse)

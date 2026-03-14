@@ -1017,7 +1017,8 @@ async def get_topology() -> Dict[str, Any]:
         return result
 
     except Exception as e:
-        logger.error(f"Failed to fetch topology: {e}")
+        import traceback
+        logger.error(f"Failed to fetch topology: {e}\n{traceback.format_exc()}")
         if "401" in str(e) or "Unauthorized" in str(e):
             raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
         raise HTTPException(status_code=500, detail=f"Failed to fetch topology: {str(e)}")

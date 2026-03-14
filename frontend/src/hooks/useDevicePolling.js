@@ -365,7 +365,7 @@ export default function useDevicePolling() {
         if (cbs) {
           if (cbs.fastPoll) {
             cbs.fastPoll();
-            fastIntervalRef.current = setInterval(cbs.fastPoll, 5000);
+            fastIntervalRef.current = setInterval(cbs.fastPoll, 15000);
           }
           if (cbs.slowPoll) {
             slowIntervalRef.current = setInterval(cbs.slowPoll, 30000);

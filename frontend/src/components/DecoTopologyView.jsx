@@ -72,8 +72,8 @@ function DecoTopologyView({ autoRefreshInterval = 30000 }) {
   const [graphLoading, setGraphLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
-  // 2026-03-13: Default auto-refresh off — topology data is cached 60s on backend anyway
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+  // 2026-03-14: Default auto-refresh on — backend caches 60s so requests are cheap
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [viewMode, setViewMode] = useState('graph'); // 'graph' or 'cards'
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);

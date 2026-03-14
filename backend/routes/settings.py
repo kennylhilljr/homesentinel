@@ -106,6 +106,7 @@ def load_deco_credentials_on_startup():
             deco_client.active_endpoint = local_ep
             deco_client.local_endpoint = local_ep
             deco_client.verify_ssl = False
+            deco_client.username = "admin"
         else:
             deco_client.use_cloud = True
             deco_client.active_endpoint = deco_client.cloud_endpoint
@@ -136,6 +137,8 @@ def load_deco_credentials_on_startup():
             deco_client.active_endpoint = local_ep
             deco_client.local_endpoint = local_ep
             deco_client.verify_ssl = False
+            # Local Deco API always uses "admin" as the username, not the cloud email
+            deco_client.username = "admin"
         else:
             deco_client.use_cloud = True
             deco_client.active_endpoint = deco_client.cloud_endpoint
@@ -220,6 +223,7 @@ async def save_deco_credentials(creds: DecoCredentials) -> Dict[str, Any]:
         deco_client.active_endpoint = local_ep
         deco_client.local_endpoint = local_ep
         deco_client.verify_ssl = False
+        deco_client.username = "admin"
     else:
         deco_client.use_cloud = True
         deco_client.active_endpoint = deco_client.cloud_endpoint
