@@ -53,11 +53,16 @@ class DecoService:
             for node in enriched_nodes:
                 if node["status"] != "online":
                     continue
-                raw_mac = (node.get("raw_data", {}).get("deviceMac", "") or "").strip()
+                raw = node.get("raw_data", {})
+                # 2026-03-14: cloud API uses "deviceMac" (no separators), local API uses "mac" (dashes)
+                raw_mac = (raw.get("deviceMac") or raw.get("mac") or "").strip()
                 if not raw_mac:
                     continue
-                # Deco MACs: uppercase no-separator (105A953D62E2) → lowercase colon-separated
-                normalized = ":".join(raw_mac[i:i+2] for i in range(0, len(raw_mac), 2)).lower()
+                # Normalize both formats to lowercase colon-separated
+                raw_mac_clean = raw_mac.replace("-", "").replace(":", "")
+                if len(raw_mac_clean) != 12:
+                    continue
+                normalized = ":".join(raw_mac_clean[i:i+2] for i in range(0, 12, 2)).lower()
                 device = mac_to_device.get(normalized)
                 if device and device.get("status") != "online":
                     self._device_repo.mark_online(device["device_id"])
