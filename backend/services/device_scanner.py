@@ -297,48 +297,134 @@ class ARPScanner:
 
 
 class DHCPParser:
-    """DHCP Lease Parser"""
+    """DHCP Lease Parser
 
-    DHCP_PATHS = {
-        'linux': '/var/lib/dhcp/dhcpd.leases',
-        'darwin': '/var/db/dhcpd_leases',
-        'win32': 'C:\\ProgramData\\ISC DHCP\\dhcpd.leases'
-    }
+    Parses ISC DHCP lease files to extract device information.
+    Supports Linux, macOS, and other Unix-like systems.
+    """
+
+    # List of DHCP lease file paths to try, in order of preference
+    DHCP_PATHS = [
+        '/var/lib/dhcp/dhclient.leases',      # Linux (dhclient)
+        '/var/db/dhcpd.leases',               # macOS
+        '/var/lib/dhcp/dhcpd.leases',         # Linux (ISC DHCP server)
+        '/var/lib/isc-dhcp-server/dhcpd.leases',  # Linux (ISC DHCP server alt)
+        '/var/lib/dhcpd/dhcpd.leases',        # Linux (dhcpd)
+        '/etc/dhcp/dhcpd.leases',             # Some systems
+    ]
 
     def __init__(self):
         self.dhcp_path = self._find_dhcp_file()
         if self.dhcp_path:
             logger.info(f"Found DHCP lease file: {self.dhcp_path}")
         else:
-            logger.warning("DHCP lease file not found")
+            logger.debug("DHCP lease file not found in standard locations")
 
     def _find_dhcp_file(self) -> Optional[str]:
-        """Find DHCP lease file for current OS"""
-        import sys
-        import platform
-
-        # Try OS-specific paths
-        if sys.platform.startswith('linux'):
-            paths = [
-                '/var/lib/dhcp/dhcpd.leases',
-                '/var/lib/isc-dhcp-server/dhcpd.leases',
-                '/var/lib/dhcpd/dhcpd.leases',
-            ]
-        elif sys.platform == 'darwin':
-            paths = ['/var/db/dhcpd_leases']
-        elif sys.platform == 'win32':
-            paths = ['C:\\ProgramData\\ISC DHCP\\dhcpd.leases']
-        else:
-            paths = []
-
-        for path in paths:
+        """Find DHCP lease file by trying standard paths"""
+        for path in self.DHCP_PATHS:
             if os.path.exists(path):
-                return path
-
+                try:
+                    # Verify file is readable
+                    with open(path, 'r') as f:
+                        f.read(1)
+                    return path
+                except (PermissionError, IOError):
+                    logger.debug(f"DHCP file found but not readable: {path}")
+                    continue
         return None
 
+    @staticmethod
+    def normalize_mac(mac_address: str) -> str:
+        """Normalize MAC address to AA:BB:CC:DD:EE:FF format
+
+        Handles various formats:
+        - aa:bb:cc:dd:ee:ff (standard)
+        - aa-bb-cc-dd-ee-ff (hyphen separated)
+        - aabbccddeeff (no separator)
+        """
+        if not mac_address:
+            return ""
+
+        # Remove common separators
+        mac_clean = mac_address.lower().replace("-", "").replace(":", "").replace(" ", "")
+
+        # Validate length (should be 12 hex characters)
+        if len(mac_clean) != 12 or not all(c in "0123456789abcdef" for c in mac_clean):
+            logger.debug(f"Invalid MAC address format: {mac_address}")
+            return ""
+
+        # Format as AA:BB:CC:DD:EE:FF
+        return ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+
+    def parse_dhcp_leases(self) -> List[Dict]:
+        """Parse DHCP lease file and extract device information
+
+        Returns a list of dicts with keys: mac, ip, hostname
+        Each dict represents a device discovered via DHCP leases.
+
+        Returns empty list if:
+        - No lease file found
+        - File cannot be read
+        - No valid leases parsed
+        """
+        leases = []
+
+        if not self.dhcp_path or not os.path.exists(self.dhcp_path):
+            logger.debug("DHCP lease file not accessible")
+            return leases
+
+        try:
+            with open(self.dhcp_path, 'r') as f:
+                content = f.read()
+
+            # Parse lease entries
+            # ISC DHCP format: lease 192.168.1.100 { hardware ethernet aa:bb:cc:dd:ee:ff; ... }
+            lease_pattern = r'lease\s+([\d.]+)\s*\{([^}]*)\}'
+
+            for match in re.finditer(lease_pattern, content):
+                ip = match.group(1)
+                lease_block = match.group(2)
+
+                # Extract MAC address (required)
+                # Matches: aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, aabbccddeeff
+                mac_match = re.search(r'hardware\s+ethernet\s+([\da-f:\-]+)', lease_block, re.IGNORECASE)
+                mac_raw = mac_match.group(1) if mac_match else None
+
+                if not mac_raw:
+                    logger.debug(f"Lease {ip} has no MAC address, skipping")
+                    continue
+
+                # Normalize MAC
+                mac = self.normalize_mac(mac_raw)
+                if not mac:
+                    logger.debug(f"Failed to normalize MAC {mac_raw} for lease {ip}")
+                    continue
+
+                # Extract hostname if present (optional)
+                hostname_match = re.search(r'client-hostname\s+"([^"]+)"', lease_block, re.IGNORECASE)
+                hostname = hostname_match.group(1) if hostname_match else None
+
+                lease_dict = {
+                    'mac': mac,
+                    'ip': ip,
+                    'hostname': hostname
+                }
+                leases.append(lease_dict)
+                logger.debug(f"Parsed DHCP lease: {ip} ({mac})" + (f" hostname={hostname}" if hostname else ""))
+
+        except PermissionError:
+            logger.warning(f"Permission denied reading DHCP file: {self.dhcp_path}")
+        except Exception as e:
+            logger.error(f"Error parsing DHCP leases: {e}")
+
+        return leases
+
     def parse_leases(self) -> List[DHCPLease]:
-        """Parse DHCP lease file"""
+        """Parse DHCP lease file (legacy method for backward compatibility)
+
+        Returns DHCPLease objects instead of dicts.
+        """
         leases = []
 
         if not self.dhcp_path or not os.path.exists(self.dhcp_path):
@@ -350,16 +436,13 @@ class DHCPParser:
                 content = f.read()
 
             # Parse lease entries
-            # Format varies by DHCP server, but typically:
-            # lease 192.168.1.100 { hardware ethernet aa:bb:cc:dd:ee:ff; ... }
-
             lease_pattern = r'lease\s+([\d.]+)\s*\{([^}]*)\}'
             for match in re.finditer(lease_pattern, content):
                 ip = match.group(1)
                 lease_block = match.group(2)
 
-                # Extract MAC address
-                mac_match = re.search(r'hardware\s+ethernet\s+([\da-f:]+)', lease_block)
+                # Extract MAC address (supports colon, hyphen, and no separator formats)
+                mac_match = re.search(r'hardware\s+ethernet\s+([\da-f:\-]+)', lease_block)
                 mac = mac_match.group(1).lower() if mac_match else None
 
                 if not mac:
@@ -491,13 +574,70 @@ class NetworkDeviceService:
         """Mark device as online"""
         return self.device_repo.mark_online(device_id)
 
-    def scan_and_update(self, subnet: str) -> dict:
-        """Scan subnet and update device database.
+    def _merge_arp_and_dhcp(self, arp_devices: List[DeviceInfo], dhcp_leases: List[Dict]) -> dict:
+        """Merge ARP scan results with DHCP lease data
 
-        # 2026-03-09: Now merges Deco client list as supplementary online source.
+        Precedence rules:
+        - ARP data takes priority (more current)
+        - DHCP enriches missing fields (hostname, IP if ARP has none)
+        - DHCP-only devices are included (devices in DHCP but not ARP)
+
+        Returns dict mapping normalized MAC -> {mac, ip, hostname, source}
+        """
+        merged = {}
+
+        # Start with ARP devices (higher priority)
+        for arp_dev in arp_devices:
+            mac_normalized = self.dhcp_parser.normalize_mac(arp_dev.mac_address)
+            if not mac_normalized:
+                logger.warning(f"Failed to normalize ARP MAC: {arp_dev.mac_address}")
+                continue
+
+            merged[mac_normalized] = {
+                'mac': mac_normalized,
+                'ip': arp_dev.ip_address,
+                'hostname': arp_dev.hostname,
+                'source': 'arp'
+            }
+
+        # Enrich with DHCP data
+        for dhcp_lease in dhcp_leases:
+            mac = dhcp_lease.get('mac', '')
+            if not mac:
+                continue
+
+            if mac in merged:
+                # Enhance ARP entry with DHCP hostname if ARP has none
+                if not merged[mac]['hostname'] and dhcp_lease.get('hostname'):
+                    merged[mac]['hostname'] = dhcp_lease['hostname']
+                    logger.debug(f"Enriched {mac} hostname from DHCP: {dhcp_lease['hostname']}")
+                # Keep ARP IP as primary (it's more current)
+            else:
+                # New device found only in DHCP
+                merged[mac] = {
+                    'mac': mac,
+                    'ip': dhcp_lease.get('ip', ''),
+                    'hostname': dhcp_lease.get('hostname'),
+                    'source': 'dhcp'
+                }
+                logger.info(f"New device from DHCP only: {mac} ({dhcp_lease.get('ip')})")
+
+        logger.info(f"Merged devices: {len(merged)} total ({len(arp_devices)} from ARP, "
+                    f"{sum(1 for d in merged.values() if d['source'] == 'dhcp')} DHCP-only)")
+
+        return merged
+
+    def scan_and_update(self, subnet: str) -> dict:
+        """Scan subnet and update device database with ARP + DHCP merge.
+
+        # 2026-03-14 (AI-292): Now merges DHCP lease data with ARP results.
+        # - ARP devices (more current) take priority
+        # - DHCP enriches missing hostnames
+        # - DHCP-only devices are persisted
+        # - All devices go through event detection
+
+        # 2026-03-09: Merges Deco client list as supplementary online source.
         # If either ARP scan or Deco says a device is online, it's online.
-        # This fixes the issue where nmap ping scan only finds ~12 responsive hosts
-        # while Deco (as DHCP server/gateway) sees 58+ connected clients.
         """
         start_time = datetime.utcnow()
         scan_results = {
@@ -506,42 +646,74 @@ class NetworkDeviceService:
             'devices_updated': 0,
             'devices_offline': 0,
             'deco_online': 0,
+            'dhcp_devices': 0,
             'timestamp': start_time.isoformat(),
             'scan_time_seconds': 0
         }
 
         try:
-            # Scan for devices via ARP/nmap
+            # ──────────────────────────────────────────────────────────────────
+            # Step 1: Scan for devices via ARP/nmap
+            # ──────────────────────────────────────────────────────────────────
             discovered_devices = self.arp_scanner.scan_subnet(subnet)
-            scan_results['devices_found'] = len(discovered_devices)
+
+            # ──────────────────────────────────────────────────────────────────
+            # Step 2: Parse DHCP leases
+            # ──────────────────────────────────────────────────────────────────
+            dhcp_leases = self.dhcp_parser.parse_dhcp_leases()
+            scan_results['dhcp_devices'] = len(dhcp_leases)
+
+            # ──────────────────────────────────────────────────────────────────
+            # Step 3: Merge ARP + DHCP data
+            # ──────────────────────────────────────────────────────────────────
+            merged_devices = self._merge_arp_and_dhcp(discovered_devices, dhcp_leases)
+            scan_results['devices_found'] = len(merged_devices)
 
             # Track which MACs are currently online
             online_macs = set()
 
-            # Update database with discovered devices
-            for device_info in discovered_devices:
-                existing = self.get_device_by_mac(device_info.mac_address)
+            # ──────────────────────────────────────────────────────────────────
+            # Step 4: Persist merged devices to database
+            # ──────────────────────────────────────────────────────────────────
+            for mac, merged_device_info in merged_devices.items():
+                mac_address = merged_device_info['mac']
+                ip_address = merged_device_info['ip']
+                hostname = merged_device_info['hostname']
+                source = merged_device_info['source']
+
+                existing = self.get_device_by_mac(mac_address)
                 if existing:
                     # Update existing device
-                    self.create_or_update_device(device_info.mac_address, device_info.ip_address)
+                    self.create_or_update_device(mac_address, ip_address)
+                    # Update hostname if we got new info from DHCP
+                    if hostname and hostname != existing.get('hostname'):
+                        self.device_repo.update_device_metadata(existing['device_id'], friendly_name=hostname)
                     scan_results['devices_updated'] += 1
                 else:
-                    # Create new device with vendor lookup
-                    device = self.create_or_update_device(device_info.mac_address, device_info.ip_address)
+                    # Create new device
+                    device = self.create_or_update_device(mac_address, ip_address)
+                    # Set hostname from DHCP if available
+                    if hostname:
+                        self.device_repo.update_device_metadata(device['device_id'], friendly_name=hostname)
                     # Auto-populate vendor from OUI database
-                    vendor = device_info.vendor or self.oui_service.lookup_vendor(device_info.mac_address)
+                    vendor = self.oui_service.lookup_vendor(mac_address)
                     if vendor and vendor != "Unknown Vendor":
                         self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor)
                     scan_results['devices_added'] += 1
 
                     # 2026-03-14: Record new_device event and alert for newly discovered devices
+                    device_desc = f"New device discovered ({source}): {mac_address}"
+                    if ip_address:
+                        device_desc += f" ({ip_address})"
+                    if hostname:
+                        device_desc += f" [{hostname}]"
                     self._record_device_event(
                         device['device_id'],
                         'new_device',
-                        f"New device discovered: {device_info.mac_address} ({device_info.ip_address})"
+                        device_desc
                     )
 
-                online_macs.add(device_info.mac_address)
+                online_macs.add(mac_address)
 
             # ── Deco client list supplement ──────────────────────────────────
             # The Deco router (DHCP server/gateway) knows every connected client.
