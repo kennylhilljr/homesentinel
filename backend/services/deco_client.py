@@ -438,14 +438,28 @@ class DecoClient:
         # Decrypt response
         try:
             resp_data = response.json()
-            if "data" in resp_data:
-                decrypted = json.loads(self._encryption.aes_decrypt(resp_data["data"]))
+            if "data" in resp_data and resp_data["data"]:
+                try:
+                    decrypted = json.loads(self._encryption.aes_decrypt(resp_data["data"]))
+                except Exception as decrypt_err:
+                    # 2026-03-14: Empty/invalid data → Deco returned 200 but session is stale
+                    # (Deco invalidates sessions when a new client authenticates)
+                    if _retry:
+                        raise APIConnectionError(f"AES decrypt failed after re-auth: {decrypt_err}")
+                    logger.warning("AES decrypt failed (stale session), re-authenticating...")
+                    self._local_logged = False
+                    self._stok = ""
+                    self._sysauth = ""
+                    self.authenticate()
+                    return self._local_encrypted_request(path, data, _retry=True)
                 # Check for error_code
                 if "error_code" in decrypted and decrypted["error_code"] != 0:
                     raise APIConnectionError(f"Local API error: {decrypted}")
                 return decrypted.get("result", decrypted)
             return resp_data
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, APIConnectionError):
+            raise
+        except Exception as e:
             raise APIConnectionError(f"Failed to decode local API response: {e}; Raw: {response.text}")
 
     def get_session_token(self) -> str:
