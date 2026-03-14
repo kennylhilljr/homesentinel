@@ -38,6 +38,7 @@ from routes import speedtest as speedtest_routes
 from routes import digest as digest_routes
 from routes import health as health_routes
 from routes import sse as sse_routes  # 2026-03-12: SSE push-based device updates
+from routes import events as events_routes  # Event and alert API endpoints
 from services.alarm_com_client import AlarmComClient
 from services.speedtest_service import SpeedTestService
 from services.speedtest_scheduler import SpeedTestScheduler
@@ -47,6 +48,7 @@ from services.alexa_client import AlexaClient
 from services.alexa_service import AlexaService
 from services.chester_client import ChesterClient
 from services.chester_service import ChesterService
+from services.retention_scheduler import RetentionScheduler
 import uuid
 from pydantic import BaseModel
 
@@ -79,10 +81,14 @@ app.add_middleware(APIKeyAuthMiddleware)
 _BACKEND_DIR = Path(__file__).resolve().parent
 _FRONTEND_BUILD = _BACKEND_DIR.parent / "frontend" / "build"
 
-if _FRONTEND_BUILD.is_dir():
-    # Serve static assets (JS, CSS, media) under /static
+if (_FRONTEND_BUILD / "static").is_dir():
+    # CRA build layout: build/static/
     app.mount("/static", StaticFiles(directory=str(_FRONTEND_BUILD / "static")), name="static")
-    logger.info(f"Serving React build from {_FRONTEND_BUILD}")
+    logger.info(f"Serving CRA build from {_FRONTEND_BUILD}")
+elif (_FRONTEND_BUILD / "assets").is_dir():
+    # Vite build layout: build/assets/
+    app.mount("/assets", StaticFiles(directory=str(_FRONTEND_BUILD / "assets")), name="static")
+    logger.info(f"Serving Vite build from {_FRONTEND_BUILD}")
 
 # Include routes
 app.include_router(deco_routes.router)
@@ -95,6 +101,7 @@ app.include_router(speedtest_routes.router)
 app.include_router(digest_routes.router)
 app.include_router(health_routes.router)
 app.include_router(sse_routes.router)  # 2026-03-12: SSE push-based device updates
+app.include_router(events_routes.router)  # Event and alert API endpoints
 
 # Pydantic models
 class DeviceUpdate(BaseModel):
@@ -153,12 +160,13 @@ chester_service = None
 alarm_com_client_instance = None
 speedtest_service = None
 speedtest_scheduler = None
+retention_scheduler = None  # 2026-03-14: Retention cleanup scheduler
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service, alarm_com_client_instance, speedtest_service, speedtest_scheduler
+    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service, alarm_com_client_instance, speedtest_service, speedtest_scheduler, retention_scheduler
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -189,6 +197,15 @@ async def startup_event():
     event_repo = DeviceEventRepository(db)
     alert_repo = DeviceAlertRepository(db)
     logger.info("Event service and repositories initialized")
+
+    # 2026-03-14: Wire event service into device scanner for event recording
+    device_service.set_event_service(event_service)
+    logger.info("Event service linked to device scanner for state transition detection")
+
+    # Initialize event routes with service and device repo
+    events_routes.set_event_service(event_service)
+    events_routes.set_device_repo(device_repo or NetworkDeviceRepository(db))
+    logger.info("Event routes configured with services")
 
     # Initialize settings routes
     settings_routes.set_db(db)
@@ -318,13 +335,28 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Failed to start speed test scheduler: {e}")
 
+    # 2026-03-14: Start retention cleanup scheduler (daily at 2 AM)
+    retention_days = int(os.getenv("RETENTION_DAYS", "90"))
+    retention_cleanup_hour = int(os.getenv("RETENTION_CLEANUP_HOUR", "2"))
+    retention_scheduler = RetentionScheduler(db, retention_days=retention_days, cleanup_hour=retention_cleanup_hour)
+    try:
+        await retention_scheduler.start()
+        logger.info(f"Retention scheduler started (daily cleanup at {retention_cleanup_hour:02d}:00, retention: {retention_days} days)")
+    except Exception as e:
+        logger.error(f"Failed to start retention scheduler: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global db, polling_manager, deco_client, chester_client, alarm_com_client_instance, speedtest_scheduler
+    global db, polling_manager, deco_client, chester_client, alarm_com_client_instance, speedtest_scheduler, retention_scheduler
 
     logger.info("Shutting down HomeSentinel Backend...")
+
+    # Stop retention scheduler
+    if retention_scheduler:
+        await retention_scheduler.stop()
+        logger.info("Retention scheduler stopped")
 
     # Stop speed test scheduler
     if speedtest_scheduler:
@@ -613,6 +645,25 @@ async def update_device(device_id: str, updates: DeviceUpdate):
 
     except Exception as e:
         logger.error(f"Failed to update device: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/devices/{device_id}")
+async def delete_device(device_id: str):
+    """Permanently delete a device from the database"""
+    global device_service
+    if device_service is None:
+        raise HTTPException(status_code=500, detail="Device service not initialized")
+
+    device = device_service.get_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    try:
+        device_service.device_repo.delete(device_id)
+        return {"success": True, "device_id": device_id}
+    except Exception as e:
+        logger.error(f"Failed to delete device {device_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -272,14 +272,10 @@
   border-color: #ffffff;
 }
 
+/* 2026-03-12: Settings sits outside nav-groups — align with button row */
 .nav-settings {
   align-self: flex-end;
-  opacity: 0.7;
-}
-
-.nav-settings:hover,
-.nav-settings.active {
-  opacity: 1;
+  margin-bottom: 0;
 }
 
 .App-main {

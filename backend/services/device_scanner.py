@@ -404,6 +404,7 @@ class NetworkDeviceService:
         self.arp_scanner = ARPScanner()
         self.dhcp_parser = DHCPParser()
         self._deco_client = None  # Set via set_deco_client() for Deco online status
+        self._event_service = None  # Set via set_event_service() for event creation
 
     def set_deco_client(self, deco_client):
         """Set the Deco client for supplementary online status detection.
@@ -413,12 +414,54 @@ class NetworkDeviceService:
         """
         self._deco_client = deco_client
 
+    def set_event_service(self, event_service):
+        """Set the event service for recording device state transitions.
+        2026-03-14: Enables event and alert creation when devices come online/offline.
+        """
+        self._event_service = event_service
+
     def create_or_update_device(self, mac_address: str, ip_address: Optional[str] = None) -> dict:
         """Create or update a network device"""
         # Generate device ID from MAC address
         device_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, mac_address))
 
         return self.device_repo.create_or_update(device_id, mac_address, ip_address)
+
+    def _record_device_event(self, device_id: str, event_type: str, description: str = None):
+        """Record a device event if event service is available.
+        2026-03-14: Creates events and alerts for device state transitions.
+        """
+        if not self._event_service:
+            return
+
+        try:
+            # Record the event
+            event_id = self._event_service.record_event(
+                device_id=device_id,
+                event_type=event_type,
+                description=description
+            )
+
+            # Create alert for certain event types
+            if event_type == 'new_device':
+                alert_type = 'new_device'
+                self._event_service.create_alert(
+                    device_id=device_id,
+                    event_id=event_id,
+                    alert_type=alert_type
+                )
+                logger.info(f"New device alert created: {device_id}")
+            elif event_type == 'disconnected':
+                alert_type = 'device_offline'
+                self._event_service.create_alert(
+                    device_id=device_id,
+                    event_id=event_id,
+                    alert_type=alert_type
+                )
+                logger.info(f"Device offline alert created: {device_id}")
+
+        except Exception as e:
+            logger.warning(f"Failed to record device event: {e}")
 
     def get_device(self, device_id: str) -> Optional[dict]:
         """Get device by ID"""
@@ -490,6 +533,13 @@ class NetworkDeviceService:
                     if vendor and vendor != "Unknown Vendor":
                         self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor)
                     scan_results['devices_added'] += 1
+
+                    # 2026-03-14: Record new_device event and alert for newly discovered devices
+                    self._record_device_event(
+                        device['device_id'],
+                        'new_device',
+                        f"New device discovered: {device_info.mac_address} ({device_info.ip_address})"
+                    )
 
                 online_macs.add(device_info.mac_address)
 
@@ -570,12 +620,36 @@ class NetworkDeviceService:
 
             scan_results['devices_found'] = len(online_macs)
 
-            # Mark devices as offline if not in scan results AND not in Deco
+            # 2026-03-14: Detect state transitions and create events
+            # Track devices that came online vs were already online
             all_online = self.list_online_devices()
+            devices_now_offline = []
+
             for device in all_online:
                 if device['mac_address'] not in online_macs:
+                    # Device was online but is now offline
                     self.mark_offline(device['device_id'])
+                    devices_now_offline.append(device)
                     scan_results['devices_offline'] += 1
+                    # Record disconnected event
+                    self._record_device_event(
+                        device['device_id'],
+                        'disconnected',
+                        f"Device went offline (was {device.get('friendly_name') or device.get('mac_address')})"
+                    )
+
+            # Also check for devices that just came online (were offline but in online_macs)
+            all_offline = self.list_offline_devices()
+            for device in all_offline:
+                if device['mac_address'] in online_macs:
+                    # Device was offline but is now online
+                    self.mark_online(device['device_id'])
+                    # Record connected event
+                    self._record_device_event(
+                        device['device_id'],
+                        'connected',
+                        f"Device came online (was {device.get('friendly_name') or device.get('mac_address')})"
+                    )
 
             # Update last scan timestamp
             self.config_repo.update_last_scan(datetime.utcnow())
