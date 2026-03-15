@@ -588,7 +588,7 @@ export default function DeviceTable({
                                   setPreferredDecoNode(device.device_id, val === '' ? null : val);
                                 }}
                               >
-                                <option value="">{currentNodeName ? `${currentNodeName} (Auto)` : 'Auto'}</option>
+                                <option value="">{currentNodeName || '—'}</option>
                                 {Object.entries(decoNodesMap)
                                   .filter(([nodeMac]) => nodeMac !== mac)
                                   .map(([nodeMac, name]) => (
@@ -610,7 +610,7 @@ export default function DeviceTable({
                                   setPreferredDecoNode(device.device_id, val === '' ? null : val);
                                 }}
                               >
-                                <option value="">{currentNodeName ? `${currentNodeName} (Auto)` : 'Auto'}</option>
+                                <option value="">{currentNodeName || '—'}</option>
                                 {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
                                   <option key={nodeMac} value={nodeMac}>{name}</option>
                                 ))}
