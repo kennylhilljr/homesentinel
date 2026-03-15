@@ -1456,8 +1456,9 @@
   font-weight: 700;
   white-space: nowrap;
   letter-spacing: 0.02em;
-  min-width: 52px;
+  width: 68px;
   text-align: center;
+  box-sizing: border-box;
 }
 
 .pref-badge.auto {
@@ -1507,8 +1508,9 @@ button.pref-badge:hover {
   font-weight: 700;
   white-space: nowrap;
   letter-spacing: 0.02em;
-  min-width: 52px;
+  width: 68px;
   text-align: center;
+  box-sizing: border-box;
   font-family: inherit;
   cursor: pointer;
   appearance: none;
@@ -1523,9 +1525,9 @@ button.pref-badge:hover {
 }
 
 .mesh-oval-btn.mesh-off {
-  background: transparent;
-  color: var(--text-muted, #6b7a8f);
-  border-color: var(--border, #d4dde8);
+  background: rgba(220, 53, 69, 0.1);
+  color: #c0392b;
+  border-color: #e57373;
 }
 
 .mesh-oval-btn:hover {
