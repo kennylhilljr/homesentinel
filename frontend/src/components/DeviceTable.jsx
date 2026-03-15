@@ -588,12 +588,10 @@ export default function DeviceTable({
                                   setPreferredDecoNode(device.device_id, val === '' ? null : val);
                                 }}
                               >
-                                <option value="">{currentNodeName || '—'}</option>
-                                {Object.entries(decoNodesMap)
-                                  .filter(([nodeMac]) => nodeMac !== mac)
-                                  .map(([nodeMac, name]) => (
-                                    <option key={nodeMac} value={nodeMac}>{name}</option>
-                                  ))}
+                                <option value="">Auto</option>
+                                {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
+                                  <option key={nodeMac} value={nodeMac}>{name}</option>
+                                ))}
                               </select>
                             ) : isWired ? (
                               <span className="deco-node-name" title="Wired connection \u2014 cannot change node">
@@ -610,7 +608,7 @@ export default function DeviceTable({
                                   setPreferredDecoNode(device.device_id, val === '' ? null : val);
                                 }}
                               >
-                                <option value="">{currentNodeName || '—'}</option>
+                                <option value="">Auto</option>
                                 {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
                                   <option key={nodeMac} value={nodeMac}>{name}</option>
                                 ))}
