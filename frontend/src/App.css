@@ -1484,6 +1484,8 @@
   background: #e0f7fa;
   color: #00695c;
   border: 1px solid #80cbc4;
+  width: auto;
+  min-width: 68px;
 }
 
 /* 2026-03-15: Make pref-badge work as a button without losing oval appearance */
