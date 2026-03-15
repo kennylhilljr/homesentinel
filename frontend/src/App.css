@@ -1485,6 +1485,121 @@
   border: 1px solid #80cbc4;
 }
 
+/* 2026-03-15: Node connection button — replaces dropdown, shows node name + state */
+.node-conn-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  white-space: nowrap;
+  cursor: default;
+  font-family: inherit;
+  line-height: 1.4;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.node-conn-btn {
+  cursor: pointer;
+}
+
+button.node-conn-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.node-conn-btn:not(:disabled):hover {
+  opacity: 0.85;
+}
+
+.node-state-label {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.node-conn-btn.auto {
+  border-color: #ce93d8;
+  color: var(--text, #e0e0e0);
+}
+.node-conn-btn.auto .node-state-label {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.node-conn-btn.pinned {
+  border-color: #ffcc80;
+  color: var(--text, #e0e0e0);
+}
+.node-conn-btn.pinned .node-state-label {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.node-conn-btn.wired {
+  border-color: #90caf9;
+  color: var(--text-muted, #6b7a8f);
+}
+.node-conn-btn.wired .node-state-label {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.node-conn-btn.mesh-node {
+  border-color: #80cbc4;
+  color: var(--text-muted, #6b7a8f);
+}
+.node-conn-btn.mesh-node .node-state-label {
+  background: #e0f7fa;
+  color: #00695c;
+}
+
+/* 2026-03-15: Mesh state button — replaces the slider toggle */
+.mesh-state-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.mesh-state-btn.on {
+  background: rgba(30, 139, 82, 0.12);
+  border-color: #1e8b52;
+  color: #1e8b52;
+}
+
+.mesh-state-btn.off {
+  background: transparent;
+  border-color: var(--border, #d4dde8);
+  color: var(--text-muted, #6b7a8f);
+}
+
+.mesh-state-btn:hover {
+  opacity: 0.8;
+}
+
 /* 2026-03-11: Wired/Wireless connection icon — sized for visibility */
 .conn-icon {
   flex-shrink: 0;

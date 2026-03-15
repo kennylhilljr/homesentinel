@@ -445,6 +445,7 @@ export default function DeviceTable({
                     const isPinned = !!normPref;
                     const pinnedNodeName = isPinned ? (decoNodesMap[normPref] || normPref) : null;
                     const currentNodeName = nodeInfo ? nodeInfo.node_name : null;
+                    const currentNodeMac = nodeInfo ? nodeInfo.node_mac.toLowerCase().replace(/-/g, ':') : null;
                     const isOnline = device.status === 'online';
                     const wireType = nodeInfo ? (nodeInfo.wire_type || '') : '';
                     const connType = nodeInfo ? (nodeInfo.connection_type || '') : '';
@@ -504,23 +505,6 @@ export default function DeviceTable({
                             <span className={`status-badge ${isOnline ? 'online' : 'offline'}`}>
                               {isOnline ? 'Online' : 'Offline'}
                             </span>
-                            {isDecoNode ? (
-                              <span className="pref-badge mesh-node" title="This device is a Deco mesh node">Mesh Node</span>
-                            ) : isWired ? (
-                              <span className="pref-badge wired" title="Wired (Ethernet) connection">Wired</span>
-                            ) : (
-                              <span
-                                className={`pref-badge ${isPinned ? 'pinned' : 'auto'}`}
-                                title={isPinned ? `Pinned to ${pinnedNodeName} \u2014 click to revert to Auto` : 'Auto \u2014 connects to nearest node'}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isPinned) setPreferredDecoNode(device.device_id, null);
-                                }}
-                                style={{ cursor: isPinned ? 'pointer' : 'default' }}
-                              >
-                                {isPinned ? 'Pinned' : 'Auto'}
-                              </span>
-                            )}
                           </div>
                         </td>
                         <td className="deco-node-cell">
@@ -576,58 +560,51 @@ export default function DeviceTable({
                             ) : (
                               <span style={{ width: 18 }} />
                             )}
-                            {/* Node dropdown */}
+                            {/* Node connection button — shows current node + Auto/Pinned/Wired/Mesh state */}
                             {isDecoNode ? (
-                              <select
-                                className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
-                                value={normPref || ''}
-                                title={isPinned ? `Uplink pinned to ${pinnedNodeName}` : 'Auto uplink'}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setPreferredDecoNode(device.device_id, val === '' ? null : val);
-                                }}
-                              >
-                                <option value="">Auto</option>
-                                {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
-                                  <option key={nodeMac} value={nodeMac}>{name}</option>
-                                ))}
-                              </select>
+                              <span className="node-conn-btn mesh-node" title={bhTitle || 'Deco mesh node'}>
+                                {currentNodeName || 'Mesh Node'}
+                                <span className="node-state-label">Mesh</span>
+                              </span>
                             ) : isWired ? (
-                              <span className="deco-node-name" title="Wired connection \u2014 cannot change node">
+                              <span className="node-conn-btn wired" title="Wired (Ethernet) \u2014 cannot change node">
                                 {currentNodeName || '\u2014'}
+                                <span className="node-state-label">Wired</span>
                               </span>
                             ) : (
-                              <select
-                                className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
-                                value={normPref || ''}
-                                title={isPinned ? `Pinned to ${pinnedNodeName}` : `Connected to ${currentNodeName} (auto)`}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setPreferredDecoNode(device.device_id, val === '' ? null : val);
+                              <button
+                                className={`node-conn-btn ${isPinned ? 'pinned' : 'auto'}`}
+                                title={isPinned
+                                  ? `Pinned to ${pinnedNodeName} \u2014 click to switch to Auto`
+                                  : currentNodeMac
+                                    ? `Connected to ${currentNodeName || '\u2014'} \u2014 click to pin`
+                                    : 'Auto \u2014 no node info yet'}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isPinned) {
+                                    setPreferredDecoNode(device.device_id, null);
+                                  } else if (currentNodeMac) {
+                                    setPreferredDecoNode(device.device_id, currentNodeMac);
+                                  }
+                                }}
+                                disabled={!isPinned && !currentNodeMac}
+                              >
+                                {isPinned ? (pinnedNodeName || '\u2014') : (currentNodeName || '\u2014')}
+                                <span className="node-state-label">{isPinned ? 'Pinned' : 'Auto'}</span>
+                              </button>
+                            )}
+                            {/* Mesh state button — replaces slider toggle (wireless non-Deco only) */}
+                            {!isDecoNode && !isWired && (
+                              <button
+                                className={`mesh-state-btn ${meshValue ? 'on' : 'off'}`}
+                                title={meshValue ? 'Mesh: ON \u2014 click to disable' : 'Mesh: OFF \u2014 click to enable'}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleClientMesh(device.mac_address, meshValue);
                                 }}
                               >
-                                <option value="">Auto</option>
-                                {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
-                                  <option key={nodeMac} value={nodeMac}>{name}</option>
-                                ))}
-                              </select>
-                            )}
-                            {/* Mesh steering toggle at end (non-Deco nodes only) */}
-                            {!isDecoNode && (
-                              <label
-                                className="mesh-toggle"
-                                title={meshValue ? 'Mesh: ON \u2014 click to disable' : 'Mesh: OFF \u2014 click to enable'}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={meshValue}
-                                  onChange={() => toggleClientMesh(device.mac_address, meshValue)}
-                                />
-                                <span className="mesh-slider"></span>
-                              </label>
+                                {meshValue ? 'Mesh' : 'Off'}
+                              </button>
                             )}
                           </div>
                         </td>
