@@ -429,13 +429,22 @@ class SpeedTestService:
         conn.commit()
 
     def get_insights(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Get recent insights, excluding expired ones."""
+        """Get the latest insight per type, excluding expired ones.
+        2026-03-15: Deduplicated by insight_type — previously all historical
+        daily snapshots were returned, causing duplicates in the UI.
+        """
         conn = self.db.connection
         now = datetime.utcnow().isoformat()
         rows = conn.execute(
-            """SELECT * FROM speed_insights
-               WHERE expires_at IS NULL OR expires_at > ?
-               ORDER BY created_at DESC LIMIT ?""",
+            """SELECT s.* FROM speed_insights s
+               INNER JOIN (
+                 SELECT insight_type, MAX(created_at) AS max_created
+                 FROM speed_insights
+                 WHERE expires_at IS NULL OR expires_at > ?
+                 GROUP BY insight_type
+               ) latest ON s.insight_type = latest.insight_type
+                        AND s.created_at = latest.max_created
+               ORDER BY s.created_at DESC LIMIT ?""",
             (now, limit),
         ).fetchall()
         results = []

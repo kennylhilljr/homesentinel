@@ -615,7 +615,7 @@ function SpeedInsightsPage() {
       {/* AI Insights */}
       {insights.length > 0 && (
         <div className="si-card si-insights">
-          <h3>AI-Driven Insights</h3>
+          <h3>Speed Insights</h3>
           <div className="si-insights-list">
             {insights.map((insight) => (
               <div key={insight.insight_id} className={`si-insight si-insight-${insight.insight_type}`}>
