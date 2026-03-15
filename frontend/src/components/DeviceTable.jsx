@@ -581,8 +581,15 @@ export default function DeviceTable({
                                   <circle cx="12" cy="20" r="1.5" fill={signalLevel !== 'none' ? (signalLevel === 'low' ? '#e53935' : signalLevel === 'medium' ? '#f9a825' : '#2e7d32') : '#ccc'}/>
                                 </svg>
                               )
+                            ) : isOnline ? (
+                              <svg className="conn-icon" viewBox="0 0 24 24" title="Wireless (no node info)">
+                                <path d="M1.3 8.7a16 16 0 0 1 21.4 0" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round"/>
+                                <path d="M5.3 12.7a10 10 0 0 1 13.4 0" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round"/>
+                                <path d="M9.3 16.7a4 4 0 0 1 5.4 0" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round"/>
+                                <circle cx="12" cy="20" r="1.5" fill="#555"/>
+                              </svg>
                             ) : (
-                              <span style={{ width: 18 }} />
+                              <span style={{ width: 22 }} />
                             )}
                             {/* Node dropdown */}
                             {isDecoNode ? (
