@@ -737,6 +737,12 @@ class NetworkDeviceService:
                 try:
                     deco_clients = self._deco_client.get_client_list_local()
                     for client in deco_clients:
+                        # 2026-03-15: Skip clients the Deco itself reports as offline.
+                        # The Deco keeps recently-disconnected clients in its table with
+                        # online=False. Without this check, they'd be kept "online" in
+                        # HomeSentinel until the Deco ages them out (can be many minutes).
+                        if not client.get("online", True):
+                            continue
                         client_mac_raw = client.get("mac", "") or client.get("macAddress", "")
                         client_ip = client.get("ip", "") or client.get("ipAddress", "")
                         if not client_mac_raw:
