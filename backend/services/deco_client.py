@@ -438,12 +438,21 @@ class DecoClient:
         # Decrypt response
         try:
             resp_data = response.json()
-            if "data" in resp_data and resp_data["data"]:
+            # 2026-03-14: Empty data field ("data": "") means session was invalidated by a
+            # competing client. Treat the same as AES decrypt failure — re-auth and retry.
+            if "data" in resp_data and not resp_data["data"]:
+                if _retry:
+                    raise APIConnectionError("Empty data field after re-auth (session conflict)")
+                logger.warning("Empty data field (stale session), re-authenticating...")
+                self._local_logged = False
+                self._stok = ""
+                self._sysauth = ""
+                self.authenticate()
+                return self._local_encrypted_request(path, data, _retry=True)
+            if "data" in resp_data:
                 try:
                     decrypted = json.loads(self._encryption.aes_decrypt(resp_data["data"]))
                 except Exception as decrypt_err:
-                    # 2026-03-14: Empty/invalid data → Deco returned 200 but session is stale
-                    # (Deco invalidates sessions when a new client authenticates)
                     if _retry:
                         raise APIConnectionError(f"AES decrypt failed after re-auth: {decrypt_err}")
                     logger.warning("AES decrypt failed (stale session), re-authenticating...")

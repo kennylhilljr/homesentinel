@@ -147,7 +147,12 @@ export default function useDevicePolling() {
               Object.keys(data.nodes).map(m => m.toLowerCase().replace(/-/g, ':'))
             );
             setDecoNodeMacs(nodeMacs);
-            setDecoNodesMap(data.nodes);
+            // 2026-03-14: Normalize keys to lowercase colon format to match normPref in DeviceTable
+            const normalizedNodes = {};
+            for (const [k, v] of Object.entries(data.nodes)) {
+              normalizedNodes[k.toLowerCase().replace(/-/g, ':')] = v;
+            }
+            setDecoNodesMap(normalizedNodes);
             // 2026-03-11: Store node details for backhaul signal icons
             if (data.node_details) {
               const normalized = {};

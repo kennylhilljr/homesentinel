@@ -98,32 +98,34 @@ class DecoService:
             return self._nodes_cache
 
         try:
-            logger.info("Fetching fresh node list from Deco API")
-            raw_nodes = self.deco_client.get_node_list()
-            raw_clients = []
-            try:
-                raw_clients = self.deco_client.get_client_list()
-            except Exception as e:
-                logger.warning(f"Failed to fetch Deco clients while enriching node data: {e}")
+            # 2026-03-14: Use get_topology_local() exclusively — it uses _local_api_lock
+            # and a fresh temp client, avoiding session races with the persistent deco_client.
+            # get_node_list() / get_client_list() called directly on the persistent client
+            # bypassed the lock and caused "Empty data field" session conflicts.
+            logger.info("Fetching fresh node list from Deco API (via topology local)")
+            topology = self.deco_client.get_topology_local()
+            raw_nodes = topology.get("nodes", [])
+            node_clients_map = topology.get("node_clients", {})
 
-            clients_by_node = self._build_node_client_index(raw_nodes, raw_clients)
-
-            # 2026-03-10: Cloud API often shows satellite nodes as offline (status=0)
-            # even when they're running fine on the mesh. Supplement with local API
-            # client list — if clients are connected through a node, it's online.
+            # Aggregate all clients across nodes into a flat list for compatibility
             local_clients = []
-            try:
-                local_clients = self.deco_client.get_client_list_local()
-            except Exception as e:
-                logger.debug(f"Local client list unavailable for node status fix: {e}")
+            for clients in node_clients_map.values():
+                local_clients.extend(clients)
 
-            # Build set of node MACs that have clients connected via local API
+            # Build clients_by_node index from the per-node topology data
+            clients_by_node = {}
+            for node in raw_nodes:
+                node_mac = node.get("mac", "")
+                if node_mac in node_clients_map:
+                    clients_by_node[node_mac] = [self._extract_client_details(c) for c in node_clients_map[node_mac]]
+
+            # Build set of node MACs that have clients connected (from topology local data)
             nodes_with_clients = set()
-            for c in local_clients:
-                if c.get("online"):
-                    owner_mac = (c.get("owner_mac") or c.get("connection", {}).get("node_mac") or "").upper().replace("-", ":")
-                    if owner_mac:
-                        nodes_with_clients.add(owner_mac)
+            for node_mac, clients in node_clients_map.items():
+                online_clients = [c for c in clients if c.get("online", True)]
+                if online_clients:
+                    # node_mac from topology is in AA-BB-CC-DD-EE-FF format
+                    nodes_with_clients.add(node_mac.upper().replace("-", ":"))
 
             # Enrich nodes with additional data
             enriched_nodes = []
@@ -131,18 +133,17 @@ class DecoService:
                 enriched_node = self._enrich_node_data(node, clients_by_node)
                 enriched_nodes.append(enriched_node)
 
-            # Fix offline nodes that actually have clients (cloud API lied)
+            # Mark nodes online if they have clients (local API is authoritative)
             for node in enriched_nodes:
                 if node["status"] == "offline":
                     node_mac = (node.get("raw_data", {}).get("deviceMac", "")
                                 or node.get("raw_data", {}).get("mac", "")).upper().replace("-", ":")
                     if node_mac in nodes_with_clients:
                         node["status"] = "online"
-                        logger.info(f"Node {node['node_name']} marked online (has clients via local API)")
+                        logger.info(f"Node {node['node_name']} marked online (has clients via topology)")
 
-            # If local API returned clients but we still have all-offline satellites,
-            # and there are enough clients to span multiple nodes, mark all as online.
-            # Rationale: a mesh with 59 clients can't have only 1 node working.
+            # If local API returned clients but all satellites offline, mark all online.
+            # Rationale: a mesh with many clients can't have only 1 node working.
             offline_satellites = [n for n in enriched_nodes if n["status"] == "offline"]
             if local_clients and len(local_clients) > 10 and len(offline_satellites) == len(enriched_nodes) - 1:
                 for node in offline_satellites:

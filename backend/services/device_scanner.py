@@ -487,6 +487,7 @@ class NetworkDeviceService:
         self.arp_scanner = ARPScanner()
         self.dhcp_parser = DHCPParser()
         self._deco_client = None  # Set via set_deco_client() for Deco online status
+        self._deco_node_macs_cache: set = set()  # 2026-03-14: Cache node MACs — reuse if API fails
         self._event_service = None  # Set via set_event_service() for event creation
 
     def set_deco_client(self, deco_client):
@@ -496,6 +497,19 @@ class NetworkDeviceService:
         # supplement the ARP scan — if either source says a device is on, it's on.
         """
         self._deco_client = deco_client
+        # 2026-03-14: Pre-populate node MAC cache via get_topology_local() which
+        # handles locking and fresh temp client — avoids session race at startup.
+        try:
+            topology = deco_client.get_topology_local()
+            for node in topology.get("nodes", []):
+                raw_mac = node.get("mac", "") or node.get("deviceMac", "")
+                mac_clean = raw_mac.lower().replace("-", "").replace(":", "")
+                if len(mac_clean) == 12:
+                    self._deco_node_macs_cache.add(":".join(mac_clean[i:i+2] for i in range(0, 12, 2)))
+            if self._deco_node_macs_cache:
+                logger.info(f"Pre-loaded {len(self._deco_node_macs_cache)} Deco node MACs into cache")
+        except Exception as e:
+            logger.debug(f"Could not pre-load Deco node MACs: {e}")
 
     def set_event_service(self, event_service):
         """Set the event service for recording device state transitions.
@@ -754,18 +768,26 @@ class NetworkDeviceService:
 
                 # 2026-03-10: Also mark Deco node MACs as online — they're routers, not clients,
                 # so they never appear in the client list but they are definitely online.
+                # 2026-03-14: Use get_topology_local() which already handles _local_api_lock +
+                # fresh temp client + 60s cache, avoiding yet another competing Deco session.
                 try:
-                    deco_nodes = self._deco_client.get_node_list()
-                    for node in deco_nodes:
-                        node_mac_raw = node.get("deviceMac", "") or node.get("mac", "")
+                    topology = self._deco_client.get_topology_local()
+                    fresh_macs = set()
+                    for node in topology.get("nodes", []):
+                        node_mac_raw = node.get("mac", "") or node.get("deviceMac", "")
                         if not node_mac_raw:
                             continue
                         mac_clean = node_mac_raw.lower().replace("-", "").replace(":", "").replace(" ", "")
                         if len(mac_clean) != 12:
                             continue
-                        normalized_mac = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
-                        online_macs.add(normalized_mac)
-                    logger.info(f"Deco node MACs added to online set: {len(deco_nodes)} nodes")
+                        fresh_macs.add(":".join(mac_clean[i:i+2] for i in range(0, 12, 2)))
+                    # Update persistent cache if we got a non-empty result
+                    if fresh_macs:
+                        self._deco_node_macs_cache = fresh_macs
+                    # Always add to online_macs — use cached MACs if topology returned nothing
+                    node_macs_to_use = fresh_macs or self._deco_node_macs_cache
+                    online_macs.update(node_macs_to_use)
+                    logger.info(f"Deco node MACs added to online set: {len(node_macs_to_use)} nodes")
                 except Exception as e:
                     logger.debug(f"Failed to fetch Deco node MACs for online set: {e}")
 
