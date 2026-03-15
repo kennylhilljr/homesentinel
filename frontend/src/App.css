@@ -1118,14 +1118,14 @@
 }
 
 .status {
-  text-align: center;
+  text-align: left;
 }
 
 /* 2026-03-11: Online/Offline + type badge side by side in Status column */
 .status-badges {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 5px;
   white-space: nowrap;
 }
