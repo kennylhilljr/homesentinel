@@ -23,6 +23,12 @@ function App() {
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [showDetailCard, setShowDetailCard] = useState(false);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  // Lazy-mount: track which pages have ever been visited so they stay in DOM once loaded
+  const [mountedPages, setMountedPages] = useState(new Set(['dashboard']));
+  const navigateTo = (page) => {
+    setCurrentPage(page);
+    setMountedPages(prev => { const s = new Set(prev); s.add(page); return s; });
+  };
   // 2026-03-12: Collapsible insights panel on dashboard
   const [showInsights, setShowInsights] = useState(false);
 
@@ -158,11 +164,11 @@ function App() {
           <div className="nav-group">
             <span className="nav-group-label">Network</span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>
+              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
                 <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M1 8l7-6 7 6v7H9v-4H7v4H1V8z" fill="currentColor"/></svg>
                 Dashboard{newDeviceCount > 0 && <span className="nav-count-badge">{newDeviceCount}</span>}
               </button>
-              <button className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`} onClick={() => setCurrentPage('topology')}>
+              <button className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`} onClick={() => navigateTo('topology')}>
                 <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="3" r="2" fill="currentColor"/><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="13" r="2" fill="currentColor"/><path d="M8 5v3M6 10L3 11M10 10l3 1" stroke="currentColor" strokeWidth="1.2"/></svg>
                 Topology
               </button>
@@ -171,11 +177,11 @@ function App() {
           <div className="nav-group">
             <span className="nav-group-label">Smart Home</span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`} onClick={() => setCurrentPage('alexa')}>
+              <button className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`} onClick={() => navigateTo('alexa')}>
                 <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
                 Alexa
               </button>
-              <button className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`} onClick={() => setCurrentPage('smart-home')}>
+              <button className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`} onClick={() => navigateTo('smart-home')}>
                 <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><rect x="2" y="7" width="5" height="7" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="12" rx="1" fill="currentColor"/></svg>
                 Controls
               </button>
@@ -184,39 +190,25 @@ function App() {
           <div className="nav-group">
             <span className="nav-group-label">Performance</span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`} onClick={() => setCurrentPage('speed-insights')}>
+              <button className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`} onClick={() => navigateTo('speed-insights')}>
                 <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M1 14l4-5 3 2 4-6 3 3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Speed
               </button>
             </div>
           </div>
-          <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => setCurrentPage('settings')}>
+          <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => navigateTo('settings')}>
             <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.5 1.5M11.6 11.6l1.5 1.5M13.1 2.9l-1.5 1.5M4.4 11.6l-1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
             Settings
           </button>
         </nav>
       </header>
       <main className="App-main" id="main-content">
-        {/* Network Topology Page */}
-        {currentPage === 'topology' && <DecoTopologyPage />}
-
-
-        {/* Alexa Devices Page */}
-        {currentPage === 'alexa' && <AlexaDevicesPage />}
-
-        {/* Smart Home Control Page */}
-        {currentPage === 'smart-home' && <SmartHomePage />}
-
-        {/* Speed Insights Page */}
-        {currentPage === 'speed-insights' && <SpeedInsightsPage />}
-
-        {/* Settings Page */}
-        {currentPage === 'settings' && (
-          <SettingsPage
-            theme={theme}
-            onThemeChange={setTheme}
-          />
-        )}
+        {/* Pages: lazy-mount on first visit, then stay in DOM hidden to avoid refetch on tab switch */}
+        {mountedPages.has('topology') && <div style={{ display: currentPage === 'topology' ? '' : 'none' }}><DecoTopologyPage /></div>}
+        {mountedPages.has('alexa') && <div style={{ display: currentPage === 'alexa' ? '' : 'none' }}><AlexaDevicesPage /></div>}
+        {mountedPages.has('smart-home') && <div style={{ display: currentPage === 'smart-home' ? '' : 'none' }}><SmartHomePage /></div>}
+        {mountedPages.has('speed-insights') && <div style={{ display: currentPage === 'speed-insights' ? '' : 'none' }}><SpeedInsightsPage /></div>}
+        {mountedPages.has('settings') && <div style={{ display: currentPage === 'settings' ? '' : 'none' }}><SettingsPage theme={theme} onThemeChange={setTheme} /></div>}
 
         {/* Dashboard Page */}
         {currentPage === 'dashboard' && (

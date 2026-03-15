@@ -54,6 +54,10 @@ export default function DeviceTable({
 
   // 2026-03-11: Set preferred Deco node for a device (null = auto, MAC = pinned)
   const setPreferredDecoNode = async (deviceId, nodeMAC) => {
+    // Optimistic update — flip immediately, server confirms in background
+    setDevices(prev => prev.map(d =>
+      d.device_id === deviceId ? { ...d, preferred_deco_node: nodeMAC } : d
+    ));
     try {
       const res = await fetch(buildUrl(`/devices/${deviceId}`), {
         method: 'PUT',
@@ -74,6 +78,11 @@ export default function DeviceTable({
   // 2026-03-10: Toggle mesh steering per client device
   const toggleClientMesh = async (macAddress, currentMeshValue) => {
     const newValue = !currentMeshValue;
+    const mac = macAddress.toLowerCase();
+    // Optimistic update — flip immediately, revert if Deco rejects
+    setClientNodeMap(prev =>
+      prev[mac] ? { ...prev, [mac]: { ...prev[mac], client_mesh: newValue } } : prev
+    );
     try {
       const response = await fetch(buildUrl('/deco/client-mesh'), {
         method: 'POST',
@@ -82,19 +91,22 @@ export default function DeviceTable({
       });
       if (response.ok) {
         const data = await response.json();
-        if (data.success) {
-          setClientNodeMap(prev => {
-            const mac = macAddress.toLowerCase();
-            if (prev[mac]) {
-              return { ...prev, [mac]: { ...prev[mac], client_mesh: newValue } };
-            }
-            return prev;
-          });
-        } else {
+        if (!data.success) {
+          // Deco rejected — revert
+          setClientNodeMap(prev =>
+            prev[mac] ? { ...prev, [mac]: { ...prev[mac], client_mesh: currentMeshValue } } : prev
+          );
           console.warn('Mesh toggle returned error_code:', data.error_code);
         }
+      } else {
+        setClientNodeMap(prev =>
+          prev[mac] ? { ...prev, [mac]: { ...prev[mac], client_mesh: currentMeshValue } } : prev
+        );
       }
     } catch (error) {
+      setClientNodeMap(prev =>
+        prev[mac] ? { ...prev, [mac]: { ...prev[mac], client_mesh: currentMeshValue } } : prev
+      );
       console.error('Failed to toggle client mesh:', error);
     }
   };
