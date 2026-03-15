@@ -1396,8 +1396,7 @@
 
 /* 2026-03-10: Deco node info + mesh toggle in dashboard */
 .deco-node-info {
-  display: grid;
-  grid-template-columns: auto minmax(100px, 1fr) auto;
+  display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -1409,37 +1408,38 @@
 
 .deco-node-name {
   font-size: inherit;
-  font-weight: inherit;
+  font-weight: 400;
+  font-family: inherit;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 130px;
+  flex-shrink: 0;
 }
 
 /* 2026-03-11: Deco connection preference dropdown — transparent to match row */
 .deco-pref-select {
   font-size: inherit;
+  font-weight: 400;
+  font-family: inherit;
   padding: 2px 4px;
-  border: 1px solid transparent;
+  border: 1px solid var(--border, #d4dde8);
   border-radius: 4px;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  width: 100%;
+  width: 130px;
+  flex-shrink: 0;
   -webkit-appearance: none;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23666'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 4px center;
   padding-right: 16px;
-}
-
-.deco-pref-select.row-online {
-  border-color: rgba(30, 139, 82, 0.3);
-}
-
-.deco-pref-select.row-offline {
-  border-color: rgba(220, 53, 69, 0.3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .deco-pref-select:focus {

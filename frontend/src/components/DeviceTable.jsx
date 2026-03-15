@@ -594,7 +594,7 @@ export default function DeviceTable({
                             {/* Node dropdown */}
                             {isDecoNode ? (
                               <select
-                                className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
+                                className="deco-pref-select"
                                 value={normPref || ''}
                                 title={isPinned ? `Uplink pinned to ${pinnedNodeName}` : 'Auto uplink'}
                                 onClick={(e) => e.stopPropagation()}
@@ -603,10 +603,12 @@ export default function DeviceTable({
                                   setPreferredDecoNode(device.device_id, val === '' ? null : val);
                                 }}
                               >
-                                <option value="">{currentNodeName || '\u2014'}</option>
-                                {Object.entries(decoNodesMap).map(([nodeMac, name]) => (
-                                  <option key={nodeMac} value={nodeMac}>{name}</option>
-                                ))}
+                                <option value="">{decoNodesMap[mac] || currentNodeName || '\u2014'}</option>
+                                {Object.entries(decoNodesMap)
+                                  .filter(([nodeMac]) => nodeMac !== mac)
+                                  .map(([nodeMac, name]) => (
+                                    <option key={nodeMac} value={nodeMac}>{name}</option>
+                                  ))}
                               </select>
                             ) : isWired ? (
                               <span className="deco-node-name" title="Wired connection \u2014 cannot change node">
@@ -614,9 +616,9 @@ export default function DeviceTable({
                               </span>
                             ) : (
                               <select
-                                className={`deco-pref-select ${isOnline ? 'row-online' : 'row-offline'}`}
+                                className="deco-pref-select"
                                 value={normPref || ''}
-                                title={isPinned ? `Pinned to ${pinnedNodeName}` : `Connected to ${currentNodeName} (auto)`}
+                                title={isPinned ? `Pinned to ${pinnedNodeName}` : `Connected to ${currentNodeName || '\u2014'} (auto)`}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   const val = e.target.value;
