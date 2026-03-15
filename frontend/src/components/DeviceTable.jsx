@@ -349,37 +349,37 @@ export default function DeviceTable({
           <table className="devices-table">
             <thead>
               <tr>
-                <th>
+                <th style={{ width: '18%' }}>
                   <button className="sort-button" onClick={() => requestSort('decoName')}>
                     Name <span className="sort-indicator">{getSortIndicator('decoName')}</span>
                   </button>
                 </th>
-                <th>
+                <th style={{ width: '16%' }}>
                   <button className="sort-button" onClick={() => requestSort('status')}>
                     Status <span className="sort-indicator">{getSortIndicator('status')}</span>
                   </button>
                 </th>
-                <th>
+                <th style={{ width: '24%' }}>
                   <button className="sort-button" onClick={() => requestSort('decoNode')}>
                     Deco Mesh Configuration <span className="sort-indicator">{getSortIndicator('decoNode')}</span>
                   </button>
                 </th>
-                <th>
+                <th style={{ width: '11%' }}>
                   <button className="sort-button" onClick={() => requestSort('ip')}>
                     IP Address <span className="sort-indicator">{getSortIndicator('ip')}</span>
                   </button>
                 </th>
-                <th>
+                <th style={{ width: '13%' }}>
                   <button className="sort-button" onClick={() => requestSort('mac')}>
                     MAC Address <span className="sort-indicator">{getSortIndicator('mac')}</span>
                   </button>
                 </th>
-                <th>
+                <th style={{ width: '11%' }}>
                   <button className="sort-button" onClick={() => requestSort('vendor')}>
                     Vendor <span className="sort-indicator">{getSortIndicator('vendor')}</span>
                   </button>
                 </th>
-                <th>
+                <th style={{ width: '7%' }}>
                   <button className="sort-button" onClick={() => requestSort('lastSeen')}>
                     Last Seen <span className="sort-indicator">{getSortIndicator('lastSeen')}</span>
                   </button>
@@ -432,7 +432,7 @@ export default function DeviceTable({
                     ) : (
                       <span
                         className="device-name-text"
-                        title="Double-click to rename"
+                        title={`${device.friendly_name || decoName || device.mac_address} — double-click to rename`}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           setInlineEditId(device.device_id);
@@ -661,10 +661,10 @@ export default function DeviceTable({
                       </>
                     );
                   })()}
-                  <td className="ip-address">{device.current_ip || 'N/A'}</td>
-                  <td className="mac-address">{device.mac_address}</td>
-                  <td className="vendor-name">{device.vendor_name || 'Unknown'}</td>
-                  <td className="timestamp">{formatDate(device.last_seen)}</td>
+                  <td className="ip-address" title={device.current_ip || 'N/A'}>{device.current_ip || 'N/A'}</td>
+                  <td className="mac-address" title={device.mac_address}>{device.mac_address}</td>
+                  <td className="vendor-name" title={device.vendor_name || 'Unknown'}>{device.vendor_name || 'Unknown'}</td>
+                  <td className="timestamp" title={formatDate(device.last_seen)}>{formatDate(device.last_seen)}</td>
                 </tr>
                 );
               })}
