@@ -39,6 +39,7 @@ from routes import digest as digest_routes
 from routes import health as health_routes
 from routes import sse as sse_routes  # 2026-03-12: SSE push-based device updates
 from routes import events as events_routes  # Event and alert API endpoints
+from routes import hiboost as hiboost_routes
 from services.alarm_com_client import AlarmComClient
 from services.speedtest_service import SpeedTestService
 from services.speedtest_scheduler import SpeedTestScheduler
@@ -102,6 +103,7 @@ app.include_router(digest_routes.router)
 app.include_router(health_routes.router)
 app.include_router(sse_routes.router)  # 2026-03-12: SSE push-based device updates
 app.include_router(events_routes.router)  # Event and alert API endpoints
+app.include_router(hiboost_routes.router)
 
 # Pydantic models
 class DeviceUpdate(BaseModel):
@@ -158,6 +160,9 @@ alexa_service_instance = None
 chester_client = None
 chester_service = None
 alarm_com_client_instance = None
+hiboost_client_instance = None
+hiboost_service_instance = None
+hiboost_scheduler = None
 speedtest_service = None
 speedtest_scheduler = None
 retention_scheduler = None  # 2026-03-14: Retention cleanup scheduler
@@ -166,7 +171,7 @@ retention_scheduler = None  # 2026-03-14: Retention cleanup scheduler
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on startup"""
-    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service, alarm_com_client_instance, speedtest_service, speedtest_scheduler, retention_scheduler
+    global db, device_service, search_service, event_service, polling_manager, group_repo, member_repo, event_repo, alert_repo, oui_service, deco_service, deco_client, correlation_service, device_repo, alexa_client_instance, alexa_service_instance, chester_client, chester_service, alarm_com_client_instance, hiboost_client_instance, hiboost_service_instance, hiboost_scheduler, speedtest_service, speedtest_scheduler, retention_scheduler
 
     logger.info("Starting HomeSentinel Backend...")
 
@@ -284,6 +289,24 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to initialize Alarm.com client: {e}")
 
+    # Initialize HiBoost Signal Booster client and service
+    try:
+        from services.hiboost_client import HiBoostClient
+        from services.hiboost_service import HiBoostService
+        from services.hiboost_scheduler import HiBoostScheduler
+        hiboost_client_instance = HiBoostClient()
+        hiboost_service_instance = HiBoostService(hiboost_client_instance)
+        hiboost_routes.set_hiboost_client(hiboost_client_instance)
+        hiboost_routes.set_hiboost_service(hiboost_service_instance)
+        hiboost_routes.set_db(db)
+        settings_routes.set_hiboost_client(hiboost_client_instance)
+        settings_routes.load_hiboost_credentials_on_startup()
+        hiboost_interval = int(os.getenv("HIBOOST_POLL_INTERVAL", "300"))
+        hiboost_scheduler = HiBoostScheduler(hiboost_service_instance, db, hiboost_interval)
+        logger.info(f"HiBoost service initialized (poll interval: {hiboost_interval}s)")
+    except Exception as e:
+        logger.warning(f"Failed to initialize HiBoost service: {e}")
+
     # 2026-03-11: Initialize speed test service and 30-min scheduler
     try:
         speedtest_service = SpeedTestService(
@@ -336,6 +359,14 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Failed to start speed test scheduler: {e}")
 
+    # Start HiBoost RF polling scheduler
+    if hiboost_scheduler:
+        try:
+            await hiboost_scheduler.start()
+            logger.info("HiBoost scheduler started")
+        except Exception as e:
+            logger.error(f"Failed to start HiBoost scheduler: {e}")
+
     # 2026-03-14: Start retention cleanup scheduler (daily at 2 AM)
     retention_days = int(os.getenv("RETENTION_DAYS", "90"))
     retention_cleanup_hour = int(os.getenv("RETENTION_CLEANUP_HOUR", "2"))
@@ -350,7 +381,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global db, polling_manager, deco_client, chester_client, alarm_com_client_instance, speedtest_scheduler, retention_scheduler
+    global db, polling_manager, deco_client, chester_client, alarm_com_client_instance, hiboost_client_instance, hiboost_scheduler, speedtest_scheduler, retention_scheduler
 
     logger.info("Shutting down HomeSentinel Backend...")
 
@@ -388,6 +419,16 @@ async def shutdown_event():
     if alarm_com_client_instance:
         await alarm_com_client_instance.close()
         logger.info("Alarm.com client closed")
+
+    # Stop HiBoost scheduler
+    if hiboost_scheduler:
+        await hiboost_scheduler.stop()
+        logger.info("HiBoost scheduler stopped")
+
+    # Close HiBoost client
+    if hiboost_client_instance:
+        hiboost_client_instance.close()
+        logger.info("HiBoost client closed")
 
     # Close database
     if db:

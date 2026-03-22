@@ -241,6 +241,7 @@
 .si-timerange {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .si-timerange-btn {
@@ -263,6 +264,86 @@
 
 .si-timerange-btn:hover:not(.active) {
   background: var(--bg-hover);
+}
+
+/* Custom range picker */
+.si-custom-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.si-custom-input {
+  width: 80px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.si-custom-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(11, 92, 171, 0.15);
+}
+
+.si-custom-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.si-custom-presets {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.si-custom-preset {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.si-custom-preset:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.si-custom-apply {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: none;
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.si-custom-apply:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.si-custom-apply:hover:not(:disabled) {
+  background: var(--brand-strong);
 }
 
 /* Insights */

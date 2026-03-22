@@ -19,6 +19,11 @@ function SpeedInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [testRunning, setTestRunning] = useState(false);
   const [historyHours, setHistoryHours] = useState(24);
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [customHours, setCustomHours] = useState('');
+  // HiBoost signal history
+  const [hiboostHistory, setHiboostHistory] = useState([]);
+  const [hiboostLoading, setHiboostLoading] = useState(false);
   // 2026-03-12: Live Chester cell info for carrier table
   const [chesterInfo, setChesterInfo] = useState(null);
   // 2026-03-12: Collapsible sections to reduce scroll depth
@@ -77,13 +82,27 @@ function SpeedInsightsPage() {
     } catch (e) { /* Chester may not be reachable */ }
   }, []);
 
+  const fetchHiboostHistory = useCallback(async () => {
+    setHiboostLoading(true);
+    try {
+      const resp = await fetch(buildUrl(`/hiboost/history?hours=${historyHours}`));
+      if (resp.ok) {
+        const data = await resp.json();
+        setHiboostHistory(data.data || []);
+      }
+    } catch (e) { /* HiBoost may not be configured */ }
+    finally { setHiboostLoading(false); }
+  }, [historyHours]);
+
   useEffect(() => {
     fetchAll();
     fetchChester();
+    fetchHiboostHistory();
     const interval = setInterval(fetchAll, 60000);
     const chesterInterval = setInterval(fetchChester, 30000);
-    return () => { clearInterval(interval); clearInterval(chesterInterval); };
-  }, [fetchAll, fetchChester]);
+    const hiboostInterval = setInterval(fetchHiboostHistory, 300000);
+    return () => { clearInterval(interval); clearInterval(chesterInterval); clearInterval(hiboostInterval); };
+  }, [fetchAll, fetchChester, fetchHiboostHistory]);
 
   const runTest = async () => {
     setTestRunning(true);
@@ -335,7 +354,7 @@ function SpeedInsightsPage() {
       {stats && stats.test_count > 0 && (
         <div className="si-stats-bar">
           <div className="si-stat">
-            <span className="si-stat-label">Tests ({historyHours}h)</span>
+            <span className="si-stat-label">Tests ({historyHours < 48 ? `${historyHours}h` : historyHours < 720 ? `${Math.round(historyHours / 24)}d` : historyHours < 8760 ? `${Math.round(historyHours / 720)}mo` : `${Math.round(historyHours / 8760)}y`})</span>
             <span className="si-stat-value">{stats.test_count}</span>
           </div>
           <div className="si-stat">
@@ -367,16 +386,56 @@ function SpeedInsightsPage() {
           <div className="si-card-header">
             <h3>Speed History</h3>
             <div className="si-timerange">
-              {[6, 12, 24, 48, 72, 168].map(h => (
-                <button
-                  key={h}
-                  className={`si-timerange-btn ${historyHours === h ? 'active' : ''}`}
-                  onClick={() => setHistoryHours(h)}
-                >
-                  {h < 48 ? `${h}h` : `${h / 24}d`}
-                </button>
-              ))}
+              {[6, 12, 24, 48, 72, 168, 720, 2160, 8760].map(h => {
+                let label;
+                if (h < 48) label = `${h}h`;
+                else if (h < 720) label = `${h / 24}d`;
+                else if (h < 8760) label = `${Math.round(h / 720)}mo`;
+                else label = `1y`;
+                return (
+                  <button
+                    key={h}
+                    className={`si-timerange-btn ${historyHours === h && !showCustomRange ? 'active' : ''}`}
+                    onClick={() => { setHistoryHours(h); setShowCustomRange(false); }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              <button
+                className={`si-timerange-btn ${showCustomRange ? 'active' : ''}`}
+                onClick={() => setShowCustomRange(!showCustomRange)}
+              >
+                Custom
+              </button>
             </div>
+            {showCustomRange && (
+              <div className="si-custom-range">
+                <input
+                  type="number"
+                  className="si-custom-input"
+                  value={customHours}
+                  onChange={(e) => setCustomHours(e.target.value)}
+                  placeholder="Hours"
+                  min="1"
+                />
+                <span className="si-custom-hint">hours</span>
+                <div className="si-custom-presets">
+                  {[{l:'2 weeks', h:336}, {l:'6 months', h:4380}, {l:'2 years', h:17520}].map(p => (
+                    <button key={p.h} className="si-custom-preset" onClick={() => { setCustomHours(p.h); setHistoryHours(p.h); }}>
+                      {p.l}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="si-custom-apply"
+                  disabled={!customHours || customHours < 1}
+                  onClick={() => { setHistoryHours(Number(customHours)); }}
+                >
+                  Apply
+                </button>
+              </div>
+            )}
           </div>
           <div role="img" aria-label={`Speed history chart showing download and upload speeds over ${historyHours} hours. ${chartData.length} data points.`}>
           <ResponsiveContainer width="100%" height={300}>
@@ -631,6 +690,58 @@ function SpeedInsightsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* HiBoost Signal History */}
+      {hiboostHistory.length > 0 && (
+        <div className="si-card">
+          <div className="si-card-header">
+            <h3>HiBoost Signal History</h3>
+            <span className="si-scheduler-badge">{hiboostHistory.length} readings</span>
+          </div>
+
+          {/* Output Power chart */}
+          <div style={{ marginBottom: 18 }}>
+            <h4 style={{ margin: '0 0 8px', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>Output Power (dBm)</h4>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={hiboostHistory} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 11 }} unit=" dBm" width={65} />
+                <Tooltip
+                  formatter={(val, name) => [`${val} dBm`, name.replace('_power', '')]}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.dateTime || ''}
+                />
+                <Legend formatter={(val) => val.replace('_power', '')} />
+                <Line type="monotone" dataKey="LTE700_power" name="LTE700_power" stroke="#22c55e" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="CELL800_power" name="CELL800_power" stroke="#ef4444" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="PCS1900_power" name="PCS1900_power" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="AWS2100_power" name="AWS2100_power" stroke="#a855f7" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Gain chart */}
+          <div>
+            <h4 style={{ margin: '0 0 8px', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>Gain (dB)</h4>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={hiboostHistory} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 11 }} unit=" dB" width={55} domain={[0, 'auto']} />
+                <Tooltip
+                  formatter={(val, name) => [`${val} dB`, name.replace('_gain', '')]}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.dateTime || ''}
+                />
+                <Legend formatter={(val) => val.replace('_gain', '')} />
+                <Line type="monotone" dataKey="LTE700_gain" name="LTE700_gain" stroke="#22c55e" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="CELL800_gain" name="CELL800_gain" stroke="#ef4444" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="PCS1900_gain" name="PCS1900_gain" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="AWS2100_gain" name="AWS2100_gain" stroke="#a855f7" strokeWidth={1.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}

@@ -23,6 +23,14 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
   const [cookieSaving, setCookieSaving] = useState(false);
   const [cookieResult, setCookieResult] = useState(null);
 
+  // HiBoost settings
+  const [hiboostAccount, setHiboostAccount] = useState('');
+  const [hiboostPassword, setHiboostPassword] = useState('');
+  const [hiboostStatus, setHiboostStatus] = useState(null);
+  const [hiboostSaving, setHiboostSaving] = useState(false);
+  const [hiboostTesting, setHiboostTesting] = useState(false);
+  const [hiboostResult, setHiboostResult] = useState(null);
+
   // Chester settings
   const [chesterHost, setChesterHost] = useState('192.168.12.1');
   const [chesterPort, setChesterPort] = useState(80);
@@ -38,6 +46,7 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
     fetchDecoStatus();
     fetchAlexaStatus();
     fetchChesterStatus();
+    fetchHiboostStatus();
   }, []);
 
   const fetchDecoStatus = async () => {
@@ -235,6 +244,56 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       setChesterResult({ success: false, message: `Error: ${err.message}` });
     } finally {
       setChesterTesting(false);
+    }
+  };
+
+  const fetchHiboostStatus = async () => {
+    try {
+      const response = await fetch(buildUrl('/settings/hiboost/status'));
+      if (response.ok) {
+        const data = await response.json();
+        setHiboostStatus(data);
+        if (data.account) setHiboostAccount(data.account);
+      }
+    } catch (err) {
+      console.error('Failed to fetch HiBoost status:', err);
+    }
+  };
+
+  const saveHiboost = async () => {
+    setHiboostSaving(true);
+    setHiboostResult(null);
+    try {
+      const response = await fetch(buildUrl('/settings/hiboost/credentials'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: hiboostAccount, password: hiboostPassword }),
+      });
+      const data = await response.json();
+      setHiboostResult(data);
+      await fetchHiboostStatus();
+    } catch (err) {
+      setHiboostResult({ success: false, message: `Error: ${err.message}` });
+    } finally {
+      setHiboostSaving(false);
+    }
+  };
+
+  const testHiboost = async () => {
+    setHiboostTesting(true);
+    setHiboostResult(null);
+    try {
+      const response = await fetch(buildUrl('/settings/hiboost/test'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: hiboostAccount, password: hiboostPassword }),
+      });
+      const data = await response.json();
+      setHiboostResult(data);
+    } catch (err) {
+      setHiboostResult({ success: false, message: `Error: ${err.message}` });
+    } finally {
+      setHiboostTesting(false);
     }
   };
 
@@ -488,6 +547,71 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
             disabled={cookieSaving || !alexaCookies.trim()}
           >
             {cookieSaving ? 'Saving...' : 'Save & Test Cookies'}
+          </button>
+        </div>
+      </div>
+
+      {/* HiBoost Settings */}
+      <div className="settings-section">
+        <h2>HiBoost Signal Booster</h2>
+        <p className="section-description">
+          Connect to your HiBoost signal booster via Signal Supervisor cloud API
+        </p>
+
+        {hiboostStatus && (
+          <div className={`status-banner ${hiboostStatus.configured ? 'connected' : 'disconnected'}`}>
+            <span className={`status-dot ${hiboostStatus.configured ? 'green' : 'red'}`} aria-hidden="true"></span>
+            {hiboostStatus.authenticated
+              ? 'Connected to Signal Supervisor'
+              : hiboostStatus.configured
+              ? 'Credentials saved'
+              : 'Not configured'}
+          </div>
+        )}
+
+        <div className="form-group">
+          <label htmlFor="hiboost-account">Account (Phone or Email)</label>
+          <input
+            id="hiboost-account"
+            type="text"
+            value={hiboostAccount}
+            onChange={(e) => setHiboostAccount(e.target.value)}
+            placeholder="Phone number or email"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="hiboost-password">Password</label>
+          <input
+            id="hiboost-password"
+            type="password"
+            value={hiboostPassword}
+            onChange={(e) => setHiboostPassword(e.target.value)}
+            placeholder="Enter password"
+          />
+        </div>
+
+        {hiboostResult && (
+          <div className={`test-result ${hiboostResult.success ? 'success' : 'failure'}`}>
+            {hiboostResult.success ? '\u2713' : '\u2717'} {hiboostResult.message}
+            {hiboostResult.device_count != null && ` (${hiboostResult.device_count} device${hiboostResult.device_count !== 1 ? 's' : ''})`}
+          </div>
+        )}
+
+        <div className="btn-row">
+          <button
+            className="btn btn-primary"
+            onClick={saveHiboost}
+            disabled={hiboostSaving || !hiboostAccount || !hiboostPassword}
+          >
+            {hiboostSaving ? 'Saving...' : 'Save Credentials'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={testHiboost}
+            disabled={hiboostTesting || !hiboostAccount || !hiboostPassword}
+          >
+            {hiboostTesting ? 'Testing...' : 'Test Connection'}
           </button>
         </div>
       </div>

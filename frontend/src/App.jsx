@@ -8,6 +8,7 @@ import SettingsPage from './pages/SettingsPage';
 import AlexaDevicesPage from './pages/AlexaDevicesPage';
 import SmartHomePage from './pages/SmartHomePage';
 import SpeedInsightsPage from './pages/SpeedInsightsPage';
+import HiBoostPage from './pages/HiBoostPage';
 import ErrorBoundary from './components/ErrorBoundary';
 // 2026-03-12: Extracted components
 import useDevicePolling from './hooks/useDevicePolling';
@@ -194,6 +195,10 @@ function App() {
                 <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M1 14l4-5 3 2 4-6 3 3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Speed
               </button>
+              <button className={`nav-button ${currentPage === 'hiboost' ? 'active' : ''}`} onClick={() => navigateTo('hiboost')}>
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M8 1v3M8 12v3M3 5l2 2M11 9l2 2M1 8h3M12 8h3M3 11l2-2M11 7l2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                HiBoost
+              </button>
             </div>
           </div>
           <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => navigateTo('settings')}>
@@ -208,6 +213,7 @@ function App() {
         {mountedPages.has('alexa') && <div style={{ display: currentPage === 'alexa' ? '' : 'none' }}><AlexaDevicesPage /></div>}
         {mountedPages.has('smart-home') && <div style={{ display: currentPage === 'smart-home' ? '' : 'none' }}><SmartHomePage /></div>}
         {mountedPages.has('speed-insights') && <div style={{ display: currentPage === 'speed-insights' ? '' : 'none' }}><SpeedInsightsPage /></div>}
+        {mountedPages.has('hiboost') && <div style={{ display: currentPage === 'hiboost' ? '' : 'none' }}><HiBoostPage /></div>}
         {mountedPages.has('settings') && <div style={{ display: currentPage === 'settings' ? '' : 'none' }}><SettingsPage theme={theme} onThemeChange={setTheme} /></div>}
 
         {/* Dashboard Page */}

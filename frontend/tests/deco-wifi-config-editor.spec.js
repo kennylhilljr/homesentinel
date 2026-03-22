@@ -430,7 +430,7 @@ test.describe('Deco WiFi Configuration Editor E2E Tests', () => {
   });
 
   test('Test 8: Band steering toggle works', async ({ page }) => {
-    await page.route(`${API_BASE}/deco/wifi-config`, (route) => {
+    await page.route(`${API_BASE}/deco/wifi-config`, async (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -446,23 +446,23 @@ test.describe('Deco WiFi Configuration Editor E2E Tests', () => {
           }),
         });
       } else if (route.request().method() === 'PUT') {
-        const body = await route.request().postDataJSON();
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            success: true,
-            message: 'WiFi configuration updated successfully',
-            updated_config: {
-              ssid: 'TestNetwork',
-              bands: ['2.4 GHz', '5 GHz'],
-              channel_2_4ghz: 'Auto',
-              channel_5ghz: 'Auto',
-              band_steering_enabled: body.band_steering || true,
-            },
-            timestamp: new Date().toISOString(),
-          }),
-        });
+       const body = await route.request().postDataJSON();
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: true,
+              message: 'WiFi configuration updated successfully',
+              updated_config: {
+                ssid: 'TestNetwork',
+                bands: ['2.4 GHz', '5 GHz'],
+                channel_2_4ghz: 'Auto',
+                channel_5ghz: 'Auto',
+                band_steering_enabled: body.band_steering_enabled ?? true,
+              },
+              timestamp: new Date().toISOString(),
+            }),
+          });
       }
     });
 

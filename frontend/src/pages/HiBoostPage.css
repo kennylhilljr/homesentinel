@@ -1,0 +1,458 @@
+/* HiBoost Signal Booster Page — uses site design tokens from App.css */
+
+.hiboost-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 10px;
+}
+
+.hiboost-loading,
+.hiboost-error {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+}
+
+.hiboost-error h3 {
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+/* Header */
+.hiboost-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.hiboost-header h2 {
+  font-size: 1.4rem;
+  margin: 0 0 4px 0;
+  color: var(--text);
+}
+
+.hiboost-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  align-items: center;
+}
+
+.hiboost-state {
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+.state-online {
+  background: rgba(30, 139, 82, 0.12);
+  color: var(--success);
+}
+
+.state-offline {
+  background: rgba(191, 47, 75, 0.12);
+  color: var(--danger);
+}
+
+/* Banner */
+.hiboost-banner {
+  padding: 8px 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+}
+
+.hiboost-banner-error {
+  background: #fde2e2;
+  color: #b91c1c;
+  border: 1px solid #f5a3a3;
+}
+
+/* Overview Gauges */
+.hiboost-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 700px) {
+  .hiboost-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.hiboost-gauge-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 10px 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.hiboost-gauge-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.hiboost-gauge-card.active {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(11, 92, 171, 0.15);
+}
+
+.hiboost-gauge-card.disabled {
+  opacity: 0.45;
+}
+
+.gauge-ring {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  margin: 0 auto 8px;
+}
+
+.gauge-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.gauge-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.gauge-number {
+  font-size: 1.6rem;
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+  font-weight: 800;
+  display: block;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.gauge-unit {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.gauge-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.gauge-meta {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.gauge-status.ok { color: var(--success); }
+.gauge-status.alert { color: var(--danger); }
+
+/* Band Tabs */
+.hiboost-band-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.band-tab {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.band-tab:hover {
+  color: var(--text);
+}
+
+.band-tab.active {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+
+/* Band Detail */
+.hiboost-band-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+
+.band-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.band-row-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.band-label {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Indicator dot */
+.band-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.indicator-ok {
+  background: var(--success);
+  box-shadow: 0 0 4px rgba(30, 139, 82, 0.4);
+}
+
+.indicator-alert {
+  background: var(--danger);
+  box-shadow: 0 0 4px rgba(191, 47, 75, 0.4);
+}
+
+/* Toggle Switch */
+.hiboost-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.hiboost-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--border);
+  border-radius: 24px;
+  transition: 0.3s;
+}
+
+.switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  border-radius: 50%;
+  transition: 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.hiboost-switch input:checked + .switch-slider {
+  background-color: var(--success);
+}
+
+.hiboost-switch input:checked + .switch-slider:before {
+  transform: translateX(20px);
+}
+
+/* Band Data Table */
+.band-table {
+  margin-top: 4px;
+}
+
+.band-table-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.band-table-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--surface-muted);
+  align-items: center;
+}
+
+.band-table-row:last-child {
+  border-bottom: none;
+}
+
+.band-value {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.band-value-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* MGC Input */
+.mgc-input {
+  width: 54px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.mgc-input:focus {
+  border-color: var(--brand);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(11, 92, 171, 0.15);
+}
+
+.mgc-unit {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.mgc-save-row {
+  justify-content: center;
+  border-bottom: none;
+  padding-top: 4px;
+}
+
+.mgc-save-btn {
+  font-size: 0.78rem;
+  padding: 6px 18px;
+}
+
+/* Connection Info */
+.hiboost-connection {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+
+.hiboost-connection h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: var(--text);
+}
+
+.connection-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.connection-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.connection-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.connection-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.text-green { color: var(--success); }
+.text-red { color: var(--danger); }
+
+/* Buttons */
+.hiboost-btn {
+  padding: 8px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.hiboost-btn:hover:not(:disabled) {
+  background: var(--surface-muted);
+  box-shadow: var(--shadow-sm);
+}
+
+.hiboost-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hiboost-btn-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.hiboost-btn-primary:hover:not(:disabled) {
+  background: var(--brand-strong);
+}
+
+.hiboost-btn-refresh {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  border-radius: 12px;
+}
+
+.hiboost-btn-refresh:hover:not(:disabled) {
+  background: var(--brand-strong);
+}

@@ -1,6 +1,6 @@
 """
 Settings API Routes
-Endpoints for managing Deco/Alexa/Chester credentials
+Endpoints for managing Deco/Alexa/Chester/HiBoost credentials
 """
 
 from fastapi import APIRouter, HTTPException
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 db = None
 deco_client = None
 chester_client = None
+hiboost_client = None
 
 
 class DecoCredentials(BaseModel):
@@ -36,6 +37,11 @@ class ChesterCredentials(BaseModel):
     verify_ssl: bool = False
 
 
+class HiBoostCredentials(BaseModel):
+    account: str
+    password: str
+
+
 def set_db(database):
     global db
     db = database
@@ -49,6 +55,11 @@ def set_deco_client(client):
 def set_chester_client(client):
     global chester_client
     chester_client = client
+
+
+def set_hiboost_client(client):
+    global hiboost_client
+    hiboost_client = client
 
 
 # 2026-03-12: Extracted _get_setting/_set_setting to utils.py for reuse
@@ -386,5 +397,90 @@ async def test_chester_connection(creds: ChesterCredentials) -> Dict[str, Any]:
             "message": f"Connection failed: {e}",
             "endpoint": test_client.base_url,
         }
+    finally:
+        test_client.close()
+
+
+# ── HiBoost Settings ─────────────────────────────────────────────────────────
+
+def load_hiboost_credentials_on_startup():
+    """Load HiBoost credentials — env vars take priority over DB."""
+    if hiboost_client is None:
+        return
+
+    env_account = os.getenv("HIBOOST_ACCOUNT", "")
+    env_password = os.getenv("HIBOOST_PASSWORD", "")
+
+    if env_account and env_password:
+        hiboost_client.set_credentials(account=env_account, password=env_password)
+        logger.info("Loaded HiBoost credentials from environment")
+        return
+
+    if db is None:
+        return
+    try:
+        with db.get_connection() as conn:
+            creds = load_encrypted_setting(conn, "hiboost_credentials")
+    except Exception as e:
+        logger.warning(f"Failed to load HiBoost credentials: {e}")
+        return
+    if not creds:
+        return
+
+    try:
+        hiboost_client.set_credentials(
+            account=creds.get("account", ""),
+            password=creds.get("password", ""),
+        )
+        logger.info("Loaded HiBoost credentials from database (encrypted)")
+    except Exception as e:
+        logger.warning(f"Failed to load HiBoost credentials: {e}")
+
+
+@router.post("/hiboost/credentials")
+async def save_hiboost_credentials(creds: HiBoostCredentials) -> Dict[str, Any]:
+    """Save HiBoost Signal Supervisor credentials."""
+    if hiboost_client is None:
+        raise HTTPException(status_code=500, detail="HiBoost client not initialized")
+
+    creds_data = {"account": creds.account, "password": creds.password}
+    with db.get_connection() as conn:
+        store_encrypted_setting(conn, "hiboost_credentials", creds_data)
+
+    hiboost_client.set_credentials(account=creds.account, password=creds.password)
+
+    return {"success": True, "message": "HiBoost credentials saved"}
+
+
+@router.get("/hiboost/status")
+async def get_hiboost_settings_status() -> Dict[str, Any]:
+    """Get HiBoost connection status (without exposing password)."""
+    if hiboost_client is None:
+        return {"configured": False, "authenticated": False, "account": None}
+
+    has_credentials = bool(hiboost_client.account and hiboost_client.password)
+    return {
+        "configured": has_credentials,
+        "authenticated": not hiboost_client._needs_login() if has_credentials else False,
+        "account": hiboost_client.account if has_credentials else None,
+    }
+
+
+@router.post("/hiboost/test")
+async def test_hiboost_connection(creds: HiBoostCredentials) -> Dict[str, Any]:
+    """Test HiBoost Signal Supervisor connection with provided credentials."""
+    from services.hiboost_client import HiBoostClient
+
+    test_client = HiBoostClient(account=creds.account, password=creds.password)
+    try:
+        result = test_client.test_connection()
+        return {
+            "success": True,
+            "message": "Connection successful",
+            "device_count": result.get("device_count", 0),
+            "online": result.get("online", 0),
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Connection failed: {e}"}
     finally:
         test_client.close()
