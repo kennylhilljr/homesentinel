@@ -62,7 +62,7 @@ app = FastAPI(
 # 2026-03-12: CORS — default to localhost only. Wildcard "*" is dangerous because it allows
 # any website to make authenticated cross-origin requests to this API, potentially leaking
 # device data or triggering actions. Override via CORS_ORIGINS env var if needed.
-ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://localhost:8443").split(",")
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:2026,https://localhost:8443").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

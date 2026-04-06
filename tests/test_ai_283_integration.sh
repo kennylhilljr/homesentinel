@@ -5,7 +5,7 @@
 set -e
 
 BACKEND_URL="https://localhost:8443"
-FRONTEND_URL="http://localhost:3000"
+FRONTEND_URL="http://localhost:2026"
 
 echo "=========================================="
 echo "AI-283 Integration Tests"

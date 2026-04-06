@@ -30,7 +30,7 @@ services:
       dockerfile: Dockerfile
     container_name: homesentinel-frontend
     ports:
-      - "3000:3000"
+      - "2026:2026"
     environment:
       - REACT_APP_API_URL=https://backend:8443
       - REACT_APP_WS_URL=wss://backend:8443
@@ -43,7 +43,7 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "curl", "-f", "http://localhost:2026"]
       interval: 10s
       timeout: 5s
       retries: 5

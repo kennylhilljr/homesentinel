@@ -9,7 +9,7 @@ const { test, expect } = require('@playwright/test');
 test.describe('Deco Network Topology', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to application
-    await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:2026', { waitUntil: 'networkidle' });
 
     // Wait for app to load
     await page.waitForSelector('.App-header');

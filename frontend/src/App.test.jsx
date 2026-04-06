@@ -196,7 +196,7 @@ describe('App Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/https:\/\/localhost:8443/i)).toBeInTheDocument();
-      expect(screen.getByText(/http:\/\/localhost:3000/i)).toBeInTheDocument();
+      expect(screen.getByText(/http:\/\/localhost:2026/i)).toBeInTheDocument();
     });
   });
 

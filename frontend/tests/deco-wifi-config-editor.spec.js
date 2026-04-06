@@ -7,7 +7,7 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Deco WiFi Configuration Editor E2E Tests', () => {
   const API_BASE = process.env.API_BASE || 'http://localhost:8000/api';
-  const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+  const APP_URL = process.env.APP_URL || 'http://localhost:2026';
 
   test.beforeEach(async ({ page }) => {
     // Mock the WiFi config API endpoint

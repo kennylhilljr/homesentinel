@@ -53,7 +53,7 @@ This will:
 - Install Python dependencies
 - Install Node.js dependencies
 - Start the backend server (HTTPS on localhost:8443)
-- Start the frontend dev server (localhost:3000)
+- Start the frontend dev server (localhost:2026)
 
 ### Manual Setup (if preferred)
 
@@ -80,7 +80,7 @@ npm install
 
 # Start dev server
 npm start
-# Dev server runs on http://localhost:3000
+# Dev server runs on http://localhost:2026
 ```
 
 ## Architecture Overview
@@ -90,7 +90,7 @@ npm start
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   Web Dashboard                      │
-│              (React - localhost:3000)                │
+│              (React - localhost:2026)                │
 └────────────────┬────────────────────────────────────┘
                  │
                  │ REST API / WebSocket
@@ -230,7 +230,7 @@ To stop the running services:
 ## Troubleshooting
 
 ### Port Already in Use
-- Frontend (3000): `lsof -ti:3000 | xargs kill -9`
+- Frontend (2026): `lsof -ti:2026 | xargs kill -9`
 - Backend (8443): `lsof -ti:8443 | xargs kill -9`
 
 ### Certificate Issues

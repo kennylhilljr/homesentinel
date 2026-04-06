@@ -176,19 +176,19 @@ class TestAPIIntegration:
 class TestCrossOriginRequests:
     """Test suite for cross-origin request handling"""
 
-    def test_cors_localhost_3000(self, client):
-        """Test CORS allows localhost:3000"""
+    def test_cors_localhost_2026(self, client):
+        """Test CORS allows localhost:2026"""
         response = client.get(
             "/api/health",
-            headers={"Origin": "http://localhost:3000"}
+            headers={"Origin": "http://localhost:2026"}
         )
         assert response.status_code == 200
 
-    def test_cors_https_localhost_3000(self, client):
-        """Test CORS allows https://localhost:3000"""
+    def test_cors_https_localhost_2026(self, client):
+        """Test CORS allows https://localhost:2026"""
         response = client.get(
             "/api/health",
-            headers={"Origin": "https://localhost:3000"}
+            headers={"Origin": "https://localhost:2026"}
         )
         assert response.status_code == 200
 

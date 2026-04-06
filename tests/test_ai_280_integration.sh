@@ -54,7 +54,7 @@ check_backend() {
 check_frontend() {
     log "Checking frontend health..."
     for i in {1..30}; do
-        if curl -s http://localhost:3000 > /dev/null 2>&1; then
+        if curl -s http://localhost:2026 > /dev/null 2>&1; then
             success "Frontend is running"
             return 0
         fi
@@ -194,7 +194,7 @@ test_online_offline_devices() {
 # Test frontend
 test_frontend_load() {
     log "Testing frontend loads..."
-    response=$(curl -s http://localhost:3000)
+    response=$(curl -s http://localhost:2026)
     if echo "$response" | grep -q "HomeSentinel"; then
         success "Frontend loads successfully"
     else
@@ -206,7 +206,7 @@ test_frontend_load() {
 test_frontend_api_calls() {
     log "Testing frontend can call API..."
     # Just verify the frontend HTML contains references to the API endpoints
-    response=$(curl -s http://localhost:3000)
+    response=$(curl -s http://localhost:2026)
     if echo "$response" | grep -q "api/devices"; then
         success "Frontend references API endpoints"
     else

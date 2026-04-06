@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 BACKEND_URL="https://localhost:8443"
-FRONTEND_URL="http://localhost:3000"
+FRONTEND_URL="http://localhost:2026"
 BACKEND_PID=""
 FRONTEND_PID=""
 TEST_TIMEOUT=60
@@ -166,13 +166,13 @@ test_cors() {
     echo -e "${BLUE}Testing CORS configuration...${NC}"
 
     # Test that backend accepts requests from frontend
-    response=$(curl -s -k -H "Origin: http://localhost:3000" "$BACKEND_URL/api/health")
+    response=$(curl -s -k -H "Origin: http://localhost:2026" "$BACKEND_URL/api/health")
 
     if [ ! -z "$response" ]; then
-        test_result "CORS allows requests from localhost:3000" 0
+        test_result "CORS allows requests from localhost:2026" 0
         return 0
     else
-        test_result "CORS allows requests from localhost:3000" 1
+        test_result "CORS allows requests from localhost:2026" 1
         return 1
     fi
 }
@@ -197,7 +197,7 @@ test_frontend_backend_communication() {
     echo -e "${BLUE}Testing frontend-backend communication...${NC}"
 
     # Make a request from frontend context to backend
-    response=$(curl -s -k -H "Origin: http://localhost:3000" "$BACKEND_URL/api/health")
+    response=$(curl -s -k -H "Origin: http://localhost:2026" "$BACKEND_URL/api/health")
 
     if echo "$response" | grep -q "healthy"; then
         test_result "Frontend can reach backend API" 0

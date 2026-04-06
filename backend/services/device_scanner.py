@@ -753,13 +753,24 @@ class NetworkDeviceService:
                             continue
                         normalized_mac = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
 
+                        # Extract Deco client name (e.g., "Living room Echo")
+                        deco_name = client.get("name", "")
+                        # Skip generic/unhelpful names
+                        if deco_name in ("network device", "iot_device", ""):
+                            deco_name = ""
+
                         if normalized_mac not in online_macs:
                             # Device is on Deco but not found by ARP scan — mark it online
                             existing = self.get_device_by_mac(normalized_mac)
                             if existing:
                                 self.create_or_update_device(normalized_mac, client_ip or existing.get('current_ip'))
+                                # Sync Deco name if device has no friendly_name yet
+                                if deco_name and not existing.get('friendly_name'):
+                                    self.device_repo.update_device_metadata(existing['device_id'], friendly_name=deco_name)
                             else:
                                 device = self.create_or_update_device(normalized_mac, client_ip)
+                                if deco_name:
+                                    self.device_repo.update_device_metadata(device['device_id'], friendly_name=deco_name)
                                 vendor = self.oui_service.lookup_vendor(normalized_mac)
                                 if vendor and vendor != "Unknown Vendor":
                                     self.device_repo.update_device_metadata(device['device_id'], vendor_name=vendor)
@@ -767,6 +778,12 @@ class NetworkDeviceService:
 
                             online_macs.add(normalized_mac)
                             scan_results['deco_online'] += 1
+                        else:
+                            # Device was found by ARP scan — still sync Deco name if missing
+                            if deco_name:
+                                existing = self.get_device_by_mac(normalized_mac)
+                                if existing and not existing.get('friendly_name'):
+                                    self.device_repo.update_device_metadata(existing['device_id'], friendly_name=deco_name)
 
                     logger.info(f"Deco supplement: {scan_results['deco_online']} additional devices marked online")
                 except Exception as e:

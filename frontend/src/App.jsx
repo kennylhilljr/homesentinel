@@ -311,7 +311,7 @@ function App() {
           <h3>Welcome to HomeSentinel</h3>
           <p>This is the home network monitoring dashboard. The system is currently discovering devices on your network.</p>
           <p><strong>Backend:</strong> https://localhost:8443</p>
-          <p><strong>Frontend:</strong> http://localhost:3000</p>
+          <p><strong>Frontend:</strong> http://localhost:2026</p>
           <p><strong>Features:</strong> OUI vendor lookup, device metadata, device grouping, and Deco mesh monitoring</p>
         </div>
           </>

@@ -21,12 +21,12 @@ BACKEND_PID=$!
 sleep 2
 
 # Start frontend
-echo "Starting frontend dev server (localhost:3000)..."
+echo "Starting frontend dev server (localhost:2026)..."
 cd frontend && npm start &
 FRONTEND_PID=$!
 
 echo "Both servers are starting..."
-echo "Frontend: http://localhost:3000"
+echo "Frontend: http://localhost:2026"
 echo "Backend: https://localhost:8443"
 echo ""
 echo "Press Ctrl+C to stop all services"
