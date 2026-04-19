@@ -3,6 +3,7 @@ Device Scanner Service for HomeSentinel
 Implements ARP scanning, DHCP parsing, and device management
 """
 
+import base64
 import subprocess
 import re
 import logging
@@ -811,6 +812,30 @@ class NetworkDeviceService:
                     node_macs_to_use = fresh_macs or self._deco_node_macs_cache
                     online_macs.update(node_macs_to_use)
                     logger.info(f"Deco node MACs added to online set: {len(node_macs_to_use)} nodes")
+
+                    # Sync Deco node names to network_devices.friendly_name
+                    for node in topology.get("nodes", []):
+                        node_mac_raw = node.get("mac", "") or node.get("deviceMac", "")
+                        if not node_mac_raw:
+                            continue
+                        mac_clean = node_mac_raw.lower().replace("-", "").replace(":", "").replace(" ", "")
+                        if len(mac_clean) != 12:
+                            continue
+                        normalized = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
+                        # Decode base64 nickname (custom_nickname or nickname)
+                        raw_nick = node.get("custom_nickname") or node.get("nickname") or ""
+                        try:
+                            node_name = base64.b64decode(raw_nick).decode("utf-8") if raw_nick else ""
+                        except Exception:
+                            node_name = raw_nick  # already decoded
+                        if not node_name:
+                            continue
+                        existing = self.get_device_by_mac(normalized)
+                        if existing and not existing.get("friendly_name"):
+                            self.device_repo.update_device_metadata(
+                                existing["device_id"], friendly_name=node_name
+                            )
+                            logger.info(f"Synced Deco node name '{node_name}' to device {normalized}")
                 except Exception as e:
                     logger.debug(f"Failed to fetch Deco node MACs for online set: {e}")
 
