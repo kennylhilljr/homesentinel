@@ -45,6 +45,10 @@ logs/
 backend/certs/cert.pem
 backend/certs/key.pem
 
+# Credential encryption key (auto-generated, never commit)
+backend/.credential_key
+.credential_key
+
 # OS files
 .DS_Store
 Thumbs.db
