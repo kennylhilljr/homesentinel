@@ -97,8 +97,16 @@ def _enrich_event(event: dict) -> dict:
             if device:
                 event['device_name'] = device.get('friendly_name') or device.get('mac_address') or event['device_id']
                 event['device_mac'] = device.get('mac_address')
+            else:
+                event.setdefault('device_name', None)
+                event.setdefault('device_mac', None)
         except Exception as e:
             logger.warning(f"Failed to enrich event with device info: {e}")
+            event.setdefault('device_name', None)
+            event.setdefault('device_mac', None)
+    else:
+        event.setdefault('device_name', None)
+        event.setdefault('device_mac', None)
     return event
 
 
@@ -110,8 +118,16 @@ def _enrich_alert(alert: dict) -> dict:
             if device:
                 alert['device_name'] = device.get('friendly_name') or device.get('mac_address') or alert['device_id']
                 alert['device_mac'] = device.get('mac_address')
+            else:
+                alert.setdefault('device_name', None)
+                alert.setdefault('device_mac', None)
         except Exception as e:
             logger.warning(f"Failed to enrich alert with device info: {e}")
+            alert.setdefault('device_name', None)
+            alert.setdefault('device_mac', None)
+    else:
+        alert.setdefault('device_name', None)
+        alert.setdefault('device_mac', None)
     return alert
 
 

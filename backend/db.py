@@ -14,10 +14,9 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.getenv("DB_PATH", "./backend/homesentinel.db")
-
-# Get migrations path relative to this file
+# Get paths relative to this file so DB location is CWD-independent
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.getenv("DB_PATH", os.path.join(_SCRIPT_DIR, "homesentinel.db"))
 MIGRATIONS_PATH = os.path.join(_SCRIPT_DIR, "migrations")
 
 

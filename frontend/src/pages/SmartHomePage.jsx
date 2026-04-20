@@ -40,6 +40,7 @@ function SmartHomePage() {
       const data = await resp.json();
       setDevices(data.devices || []);
     } catch (err) {
+      setDevices([]);
       setError(err.message);
     } finally {
       setLoading(false);

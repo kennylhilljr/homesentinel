@@ -664,8 +664,8 @@ async def get_client_node_map() -> Dict[str, Any]:
                 nickname = node.get("nickname", "")
                 try:
                     nickname = base64.b64decode(nickname).decode("utf-8")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Base64 nickname decode failed: {e}")
                 # 2026-03-11: Prefer HomeSentinel friendly_name over Deco nickname
                 # (Deco nickname can get corrupted with client device names)
                 db_name = _get_node_friendly_name(node_mac)
@@ -841,8 +841,8 @@ async def get_topology() -> Dict[str, Any]:
                 nickname = node.get("nickname", "")
                 try:
                     nickname = base64.b64decode(nickname).decode("utf-8")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Base64 nickname decode failed: {e}")
                 # 2026-03-11: Prefer HomeSentinel friendly_name over Deco nickname
                 # (Deco nickname can get corrupted with client device names)
                 db_name = _get_node_friendly_name(node_mac)
@@ -941,8 +941,8 @@ async def get_topology() -> Dict[str, Any]:
                 dc_name = dc.get("name", "")
                 try:
                     dc_name = base64.b64decode(dc_name).decode("utf-8")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Base64 nickname decode failed: {e}")
                 devices.append({
                     "device_id": mac,
                     "mac_address": mac,
@@ -952,6 +952,7 @@ async def get_topology() -> Dict[str, Any]:
                     "vendor_name": "",
                     "current_ip": dc.get("ip", ""),
                     "connection_type": client_to_node.get(mac, {}).get("connection_type", ""),
+                    "preferred_deco_node": None,
                 })
 
         # Build relationships from per-node client mapping
@@ -965,8 +966,8 @@ async def get_topology() -> Dict[str, Any]:
                 dc_name = dc.get("name", "")
                 try:
                     dc_name = base64.b64decode(dc_name).decode("utf-8")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Base64 nickname decode failed: {e}")
                 devices.append({
                     "device_id": mac,
                     "mac_address": mac,
@@ -976,6 +977,7 @@ async def get_topology() -> Dict[str, Any]:
                     "vendor_name": "",
                     "current_ip": dc.get("ip", ""),
                     "connection_type": client_to_node[mac].get("connection_type", ""),
+                    "preferred_deco_node": None,
                 })
                 all_device_macs.add(mac)
 
@@ -1073,8 +1075,8 @@ async def get_topology_graph() -> Response:
                 nickname = node.get("nickname", "")
                 try:
                     nickname = base64.b64decode(nickname).decode("utf-8")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Base64 nickname decode failed: {e}")
                 # 2026-03-11: Prefer HomeSentinel friendly_name over Deco nickname
                 db_name = _get_node_friendly_name(node_mac)
                 node_mac_to_name[node_mac] = db_name or nickname or node.get("device_model", node_mac)
@@ -1231,8 +1233,8 @@ async def get_topology_graph() -> Response:
                 dc_name = c.get("name", "")
                 try:
                     dc_name = base64.b64decode(dc_name).decode("utf-8")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Base64 nickname decode failed: {e}")
                 # 2026-03-11: Prefer DB friendly_name for device labels too
                 db_dev_name = _get_node_friendly_name(raw_mac)
 

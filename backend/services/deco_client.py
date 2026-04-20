@@ -549,8 +549,8 @@ class DecoClient:
             decoded = base64.b64decode(alias).decode("utf-8")
             if decoded.isprintable():
                 return decoded
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Base64 alias decode failed: {e}")
         return alias
 
     def get_device_list(self) -> List[Dict[str, Any]]:

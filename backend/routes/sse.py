@@ -19,7 +19,11 @@ _subscribers: list = []  # list of asyncio.Queue
 
 def publish_event(event_type: str, data: dict):
     """Publish an event to all SSE subscribers. Called from polling/scan services."""
-    message = {"type": event_type, "data": data, "timestamp": time.time()}
+    message = {
+        "type": event_type,
+        "timestamp": time.time(),
+        "data": data if data is not None else {},
+    }
     dead = []
     for q in _subscribers:
         try:
@@ -34,12 +38,12 @@ def publish_event(event_type: str, data: dict):
 async def _event_generator(queue: asyncio.Queue):
     """Generate SSE events from a subscriber queue."""
     try:
-        # Send initial keepalive
-        yield f"event: connected\ndata: {json.dumps({'status': 'ok'})}\n\n"
+        # Send initial keepalive with consistent schema
+        yield f"event: connected\ndata: {json.dumps({'type': 'connected', 'timestamp': time.time(), 'data': {'status': 'ok'}})}\n\n"
         while True:
             try:
                 msg = await asyncio.wait_for(queue.get(), timeout=30.0)
-                yield f"event: {msg['type']}\ndata: {json.dumps(msg['data'])}\n\n"
+                yield f"event: {msg['type']}\ndata: {json.dumps({'type': msg['type'], 'timestamp': msg.get('timestamp', time.time()), 'data': msg.get('data', {})})}\n\n"
             except asyncio.TimeoutError:
                 # Send keepalive every 30s to prevent connection timeout
                 yield ": keepalive\n\n"

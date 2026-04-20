@@ -54,6 +54,9 @@ export default function DeviceTable({
 
   // 2026-03-11: Set preferred Deco node for a device (null = auto, MAC = pinned)
   const setPreferredDecoNode = async (deviceId, nodeMAC) => {
+    // Capture old value for rollback on failure
+    const oldDevice = devices.find(d => d.device_id === deviceId);
+    const oldValue = oldDevice ? oldDevice.preferred_deco_node : undefined;
     // Optimistic update — flip immediately, server confirms in background
     setDevices(prev => prev.map(d =>
       d.device_id === deviceId ? { ...d, preferred_deco_node: nodeMAC } : d
@@ -69,8 +72,17 @@ export default function DeviceTable({
         setDevices(prev => prev.map(d =>
           d.device_id === updated.device_id ? updated : d
         ));
+      } else {
+        // Rollback on non-ok response
+        setDevices(prev => prev.map(d =>
+          d.device_id === deviceId ? { ...d, preferred_deco_node: oldValue } : d
+        ));
       }
     } catch (e) {
+      // Rollback on error
+      setDevices(prev => prev.map(d =>
+        d.device_id === deviceId ? { ...d, preferred_deco_node: oldValue } : d
+      ));
       console.error('Failed to set preferred Deco node:', e);
     }
   };

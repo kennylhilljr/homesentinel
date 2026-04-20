@@ -48,6 +48,7 @@ function AlarmComPage() {
       const data = await resp.json();
       setDevices(data.devices || {});
     } catch (err) {
+      setDevices(null);
       setError(err.message);
     } finally {
       setLoading(false);

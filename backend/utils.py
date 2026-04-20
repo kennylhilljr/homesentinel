@@ -147,7 +147,8 @@ def load_encrypted_setting(conn, key: str) -> dict | None:
     try:
         decrypted = decrypt_credential(raw)
         return json.loads(decrypted)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Credential decryption failed for key '{key}': {type(e).__name__}: {e}")
         # Fallback: try parsing as plain JSON (backwards compat)
         try:
             return json.loads(raw)

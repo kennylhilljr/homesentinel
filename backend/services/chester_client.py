@@ -398,8 +398,8 @@ class ChesterClient:
         if self._session_id:
             try:
                 self.api_call("login", "logout")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Session cleanup failed: {e}")
             self._session_id = None
             self._session_expires_at = None
 

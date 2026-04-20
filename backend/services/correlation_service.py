@@ -196,6 +196,7 @@ class CorrelationService:
             "status": status,
             "first_seen": first_seen,
             "last_seen": last_seen,
+            "preferred_deco_node": lan_device.get("preferred_deco_node"),
             # Include raw Deco data for reference
             "_deco_raw": deco_client,
             "_lan_raw": lan_device,
