@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { buildUrl } from '../utils/apiConfig';
 import DeviceCard from './DeviceCard';
 import ViewModeToggle from './ViewModeToggle';
+import Badge from './Badge';
 
 export default function DeviceTable({
   devices,
@@ -23,6 +24,7 @@ export default function DeviceTable({
   chesterInfo,
   setDevices,
   onDeviceClick,
+  onScanningChange,
 }) {
   const [deviceViewMode, setDeviceViewMode] = useState('list');
   const [deviceQuery, setDeviceQuery] = useState('');
@@ -125,6 +127,7 @@ export default function DeviceTable({
 
   const triggerManualScan = async () => {
     setLoading(true);
+    onScanningChange?.(true);
     try {
       const response = await fetch(buildUrl('/devices/scan-now'), {
         method: 'POST',
@@ -137,6 +140,7 @@ export default function DeviceTable({
       console.error('Failed to trigger manual scan:', error);
     } finally {
       setLoading(false);
+      onScanningChange?.(false);
     }
   };
 
@@ -300,7 +304,9 @@ export default function DeviceTable({
             onClick={triggerManualScan}
             disabled={loading}
             className="scan-button"
+            aria-busy={loading}
           >
+            {loading && <span className="hs-spinner hs-spinner-sm" aria-hidden="true" style={{ marginRight: 6 }} />}
             {loading ? 'Scanning...' : 'Scan Now'}
           </button>
           {/* 2026-03-11: Download dashboard device list as CSV */}
@@ -338,8 +344,10 @@ export default function DeviceTable({
             className="btn-optimize"
             onClick={optimizeNetwork}
             disabled={optimizeLoading}
+            aria-busy={optimizeLoading}
             title="Optimize Deco mesh — re-evaluate channels, band steering, and client connections"
           >
+            {optimizeLoading && <span className="hs-spinner hs-spinner-sm" aria-hidden="true" style={{ marginRight: 6 }} />}
             {optimizeLoading ? 'Optimizing...' : 'Optimize Network'}
           </button>
         </div>
@@ -358,6 +366,7 @@ export default function DeviceTable({
             ))}
           </div>
         ) : (
+          <div className="devices-table-scroll">
           <table className="devices-table">
             <thead>
               <tr>
@@ -526,9 +535,9 @@ export default function DeviceTable({
                       <>
                         <td className="status">
                           <div className="status-badges">
-                            <span className={`status-badge ${isOnline ? 'online' : 'offline'}`}>
+                            <Badge variant={isOnline ? 'online' : 'offline'}>
                               {isOnline ? 'Online' : 'Offline'}
-                            </span>
+                            </Badge>
                             {isDecoNode ? (
                               <span className="pref-badge mesh-node" title="This device is a Deco mesh node">Mesh Node</span>
                             ) : isWired ? (
@@ -682,6 +691,7 @@ export default function DeviceTable({
               })}
             </tbody>
           </table>
+          </div>
         )
       ) : (
         <p className="no-devices">

@@ -19,6 +19,57 @@
   font-size: 0.96rem;
 }
 
+/* 2026-05-07: Sticky section nav — pill row that highlights the section in view */
+.settings-section-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 6px;
+  margin: 0 -6px 18px;
+  background: color-mix(in srgb, var(--surface, #ffffff) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border, #d4dde8);
+}
+
+.settings-section-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted, #556277);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-section-tab:hover {
+  background: var(--surface-muted, #f3f6fa);
+  color: var(--text, #0f1a2a);
+}
+
+.settings-section-tab.active {
+  background: var(--brand, #0b5cab);
+  color: #fff;
+  border-color: var(--brand, #0b5cab);
+}
+
+@media (max-width: 768px) {
+  .settings-section-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-section-tab {
+    flex-shrink: 0;
+  }
+}
+
 .settings-section {
   background: linear-gradient(170deg, var(--surface, #ffffff), var(--surface-muted, #f3f6fa));
   border-radius: 16px;

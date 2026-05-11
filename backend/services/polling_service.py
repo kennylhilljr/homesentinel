@@ -5,6 +5,7 @@ Implements periodic ARP scanning and device updates with home network detection
 
 import asyncio
 import logging
+import re
 import subprocess
 import socket
 from datetime import datetime
@@ -13,47 +14,57 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# 2026-03-12: Home network detection — Option A (gateway) with Option B (SSID) fallback
 HOME_GATEWAY = os.getenv("HOME_GATEWAY_IP", "192.168.12.1")
-HOME_SSIDS = {"USVA42_Home", "USVA42_MLO"}
+# 2026-04-29: Local LAN gateway pings are typically <2ms. Bridged extenders
+# (TP-Link OneMesh remote, etc.) add ~5-8ms; VPN tunnels add 15ms+. The
+# threshold is set just above direct-LAN to flag any indirect path as away,
+# so background scans don't run when only a bridge makes the home subnet
+# reachable. Tune via HOME_LATENCY_MS env var if your home LAN runs hotter.
+HOME_LATENCY_MS = float(os.getenv("HOME_LATENCY_MS", "3"))
 
 
 def check_home_network() -> dict:
-    """Detect whether we're on the home network.
-    Option A: Try to reach the home gateway (Chester at 192.168.12.1).
-    Option B fallback: Check current SSID against known home SSIDs.
-    Returns dict with is_home, method, and detail.
-    """
-    # Option A: Gateway ping (fast — 1 second timeout)
-    try:
-        result = subprocess.run(
-            ["ping", "-c", "1", "-W", "1", HOME_GATEWAY],
-            capture_output=True, timeout=3
-        )
-        if result.returncode == 0:
-            return {"is_home": True, "method": "gateway", "detail": f"{HOME_GATEWAY} reachable"}
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
+    """Detect whether we're physically on the home network.
 
-    # Option B fallback: SSID check (macOS)
+    Pings the home gateway and gates is_home on round-trip latency: only a
+    sub-LAN-latency response counts as physically home. A reachable gateway
+    with bridged/tunneled latency is treated as away so background scans
+    don't run from a remote location.
+    """
     try:
+        # macOS ping: -W is in milliseconds (1000ms wait per packet).
+        # The outer subprocess timeout still bounds the call.
         result = subprocess.run(
-            ["/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-I"],
+            ["ping", "-c", "1", "-W", "1000", HOME_GATEWAY],
             capture_output=True, text=True, timeout=3
         )
         if result.returncode == 0:
-            for line in result.stdout.splitlines():
-                line = line.strip()
-                if line.startswith("SSID:"):
-                    ssid = line.split(":", 1)[1].strip()
-                    if ssid in HOME_SSIDS:
-                        return {"is_home": True, "method": "ssid", "detail": ssid}
-                    return {"is_home": False, "method": "ssid", "detail": ssid}
+            m = re.search(r"time[=<]([\d.]+)\s*ms", result.stdout)
+            if m:
+                rtt = float(m.group(1))
+                if rtt < HOME_LATENCY_MS:
+                    return {
+                        "is_home": True,
+                        "method": "gateway",
+                        "detail": f"{HOME_GATEWAY} {rtt:.1f}ms",
+                    }
+                return {
+                    "is_home": False,
+                    "method": "gateway",
+                    "detail": (
+                        f"{HOME_GATEWAY} reachable but {rtt:.1f}ms "
+                        f"(>{HOME_LATENCY_MS:.0f}ms — bridged/VPN)"
+                    ),
+                }
+            return {
+                "is_home": False,
+                "method": "gateway",
+                "detail": f"{HOME_GATEWAY} reachable but latency unparseable",
+            }
     except (subprocess.TimeoutExpired, FileNotFoundError):
         pass
 
-    # Neither method worked — assume away
-    return {"is_home": False, "method": "none", "detail": "gateway unreachable, SSID unknown"}
+    return {"is_home": False, "method": "none", "detail": f"{HOME_GATEWAY} unreachable"}
 
 
 class BackgroundPoller:

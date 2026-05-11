@@ -62,6 +62,23 @@
   gap: 16px;
 }
 
+/* 2026-05-07: Explicit tablet/mobile breakpoints — auto-fill alone reflows awkwardly between sizes */
+@media (max-width: 1024px) {
+  .smart-home-page .device-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .smart-home-page {
+    padding: 12px;
+  }
+
+  .smart-home-page .device-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .smart-home-page .device-card {
   background: var(--card-bg, #2a2a2a);
   border: 1px solid var(--border-color, #444);
@@ -74,11 +91,11 @@
 }
 
 .smart-home-page .device-card.light {
-  border-left: 3px solid #f5c542;
+  border-left: 3px solid var(--warning, #b26b00);
 }
 
 .smart-home-page .device-card.plug {
-  border-left: 3px solid #4a9eff;
+  border-left: 3px solid var(--brand, #0b5cab);
 }
 
 .smart-home-page .device-card.unavailable {
@@ -102,7 +119,7 @@
 }
 
 .smart-home-page .device-offline {
-  color: #e74c3c;
+  color: var(--danger, #bf2f4b);
   font-size: 11px;
   font-weight: 600;
   margin-top: 4px;
@@ -126,50 +143,51 @@
 }
 
 .smart-home-page .control-btn.on {
-  background: #27ae60;
+  background: var(--success, #1e8b52);
   color: #fff;
 }
 
 .smart-home-page .control-btn.on:hover:not(:disabled) {
-  background: #2ecc71;
+  background: color-mix(in srgb, var(--success, #1e8b52) 85%, #fff);
 }
 
 .smart-home-page .control-btn.off {
-  background: #c0392b;
+  background: var(--danger, #bf2f4b);
   color: #fff;
 }
 
 .smart-home-page .control-btn.off:hover:not(:disabled) {
-  background: #e74c3c;
+  background: color-mix(in srgb, var(--danger, #bf2f4b) 85%, #fff);
 }
 
 .smart-home-page .control-btn.identify {
-  background: #8e44ad;
+  background: #6d4196;
   color: #fff;
 }
 
 .smart-home-page .control-btn.identify:hover:not(:disabled) {
-  background: #9b59b6;
+  background: color-mix(in srgb, #6d4196 85%, #fff);
 }
 
 .smart-home-page .control-btn.candidates {
-  background: #2980b9;
+  background: var(--brand, #0b5cab);
   color: #fff;
 }
 
 .smart-home-page .control-btn.candidates:hover {
-  background: #3498db;
+  background: var(--brand-strong, #084785);
 }
 
 .smart-home-page .control-btn.dim {
-  background: var(--border-color, #444);
-  color: var(--text-primary, #e0e0e0);
+  background: var(--surface-muted, #f3f6fa);
+  color: var(--text, #0f1a2a);
+  border: 1px solid var(--border, #d4dde8);
   padding: 4px 10px;
   font-size: 11px;
 }
 
 .smart-home-page .control-btn.dim:hover:not(:disabled) {
-  background: #555;
+  background: var(--border, #d4dde8);
 }
 
 .smart-home-page .control-btn:disabled {
@@ -208,9 +226,9 @@
 }
 
 .smart-home-page .error-banner {
-  background: #c0392b22;
-  border: 1px solid #c0392b;
-  color: #e74c3c;
+  background: color-mix(in srgb, var(--danger, #bf2f4b) 12%, var(--surface, #fff));
+  border: 1px solid color-mix(in srgb, var(--danger, #bf2f4b) 35%, var(--border, #d4dde8));
+  color: var(--danger, #bf2f4b);
   padding: 12px 16px;
   border-radius: 6px;
   margin-bottom: 16px;
@@ -219,7 +237,7 @@
 .smart-home-page .link-btn {
   background: none;
   border: none;
-  color: var(--accent-color, #4a9eff);
+  color: var(--brand, #0b5cab);
   cursor: pointer;
   text-decoration: underline;
   margin-left: 8px;
@@ -235,17 +253,17 @@
 }
 
 .smart-home-page .identify-result.found {
-  background: #27ae6020;
-  border: 1px solid #27ae60;
+  background: color-mix(in srgb, var(--success, #1e8b52) 12%, var(--surface, #fff));
+  border: 1px solid color-mix(in srgb, var(--success, #1e8b52) 40%, var(--border, #d4dde8));
 }
 
 .smart-home-page .identify-result.none {
-  background: #f39c1220;
-  border: 1px solid #f39c12;
+  background: color-mix(in srgb, var(--warning, #b26b00) 12%, var(--surface, #fff));
+  border: 1px solid color-mix(in srgb, var(--warning, #b26b00) 40%, var(--border, #d4dde8));
 }
 
 .smart-home-page .identify-none {
-  color: #f39c12;
+  color: var(--warning, #b26b00);
 }
 
 .smart-home-page .match-label {
@@ -255,10 +273,10 @@
 }
 
 .smart-home-page .match-mac {
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 15px;
   font-weight: 700;
-  color: #2ecc71;
+  color: var(--success, #1e8b52);
   margin-bottom: 4px;
 }
 
@@ -270,25 +288,31 @@
 .smart-home-page .identify-progress {
   margin-top: 8px;
   padding: 8px 12px;
-  background: #8e44ad20;
-  border: 1px solid #8e44ad;
+  background: color-mix(in srgb, #6d4196 12%, var(--surface, #fff));
+  border: 1px solid color-mix(in srgb, #6d4196 40%, var(--border, #d4dde8));
   border-radius: 6px;
-  color: #b388d9;
+  color: #6d4196;
   font-size: 13px;
-  animation: pulse 1.5s ease-in-out infinite;
+  animation: smartHomePulse 1.5s ease-in-out infinite;
 }
 
-@keyframes pulse {
+@keyframes smartHomePulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smart-home-page .identify-progress {
+    animation: none;
+  }
 }
 
 /* Candidate MAC list */
 .smart-home-page .candidates-list {
   margin-top: 8px;
   padding: 10px 12px;
-  background: #2980b920;
-  border: 1px solid #2980b9;
+  background: color-mix(in srgb, var(--brand, #0b5cab) 10%, var(--surface, #fff));
+  border: 1px solid color-mix(in srgb, var(--brand, #0b5cab) 30%, var(--border, #d4dde8));
   border-radius: 6px;
   font-size: 12px;
 }
@@ -297,7 +321,7 @@
   display: flex;
   gap: 12px;
   padding: 4px 0;
-  border-bottom: 1px solid var(--border-color, #333);
+  border-bottom: 1px solid var(--border, #d4dde8);
   align-items: center;
 }
 
@@ -329,19 +353,19 @@
 }
 
 .smart-home-page .candidate-status.online {
-  color: #27ae60;
+  color: var(--success, #1e8b52);
 }
 
 .smart-home-page .candidate-status.offline {
-  color: #e74c3c;
+  color: var(--danger, #bf2f4b);
 }
 
 /* 2026-03-10: Two-step identify flow — prompt, confirm, results */
 .smart-home-page .identify-prompt {
   margin-top: 10px;
   padding: 14px;
-  background: #f39c1215;
-  border: 2px solid #f39c12;
+  background: color-mix(in srgb, var(--warning, #b26b00) 10%, var(--surface, #fff));
+  border: 2px solid var(--warning, #b26b00);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -365,14 +389,14 @@
 }
 
 .smart-home-page .control-btn.confirm-cut {
-  background: #e67e22;
+  background: var(--warning, #b26b00);
   color: #fff;
   font-size: 14px;
   padding: 8px 18px;
 }
 
 .smart-home-page .control-btn.confirm-cut:hover:not(:disabled) {
-  background: #f39c12;
+  background: color-mix(in srgb, var(--warning, #b26b00) 85%, #fff);
 }
 
 .smart-home-page .control-btn.confirm-cut.small {
@@ -381,12 +405,13 @@
 }
 
 .smart-home-page .control-btn.cancel-identify {
-  background: var(--border-color, #444);
+  background: var(--surface-muted, #f3f6fa);
   color: var(--text-muted, #556277);
+  border: 1px solid var(--border, #d4dde8);
 }
 
 .smart-home-page .control-btn.cancel-identify:hover:not(:disabled) {
-  background: #555;
+  background: var(--border, #d4dde8);
 }
 
 .smart-home-page .dropped-row {
@@ -394,7 +419,7 @@
   align-items: center;
   gap: 10px;
   padding: 6px 0;
-  border-bottom: 1px solid var(--border-color, #333);
+  border-bottom: 1px solid var(--border, #d4dde8);
 }
 
 .smart-home-page .dropped-row:last-child {
@@ -411,10 +436,10 @@
 .smart-home-page .power-reminder {
   margin-top: 10px;
   padding: 6px 10px;
-  background: #27ae6020;
-  border: 1px solid #27ae60;
+  background: color-mix(in srgb, var(--success, #1e8b52) 12%, var(--surface, #fff));
+  border: 1px solid color-mix(in srgb, var(--success, #1e8b52) 35%, var(--border, #d4dde8));
   border-radius: 4px;
-  color: #2ecc71;
+  color: var(--success, #1e8b52);
   font-size: 12px;
   font-weight: 600;
 }

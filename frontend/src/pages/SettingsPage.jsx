@@ -1,8 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { buildUrl } from '../utils/apiConfig';
+import { ToastContainer, useToasts } from '../components/Toast';
 import './SettingsPage.css';
 
+const SETTINGS_SECTIONS = [
+  { id: 'theme', label: 'Theme' },
+  { id: 'deco', label: 'Deco' },
+  { id: 'alexa', label: 'Alexa' },
+  { id: 'hiboost', label: 'HiBoost' },
+  { id: 'chester', label: 'Chester' },
+];
+
 function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
+  const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
+  const [activeSection, setActiveSection] = useState('theme');
   const [decoMode, setDecoMode] = useState('cloud');
   const [decoUsername, setDecoUsername] = useState('');
   const [decoPassword, setDecoPassword] = useState('');
@@ -47,6 +58,28 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
     fetchAlexaStatus();
     fetchChesterStatus();
     fetchHiboostStatus();
+  }, []);
+
+  // 2026-05-07: Highlight the active section in the sticky nav as the user scrolls
+  useEffect(() => {
+    const sectionEls = SETTINGS_SECTIONS
+      .map((s) => ({ id: s.id, el: document.getElementById(`settings-section-${s.id}`) }))
+      .filter((x) => x.el);
+    if (sectionEls.length === 0) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]) {
+          const match = sectionEls.find((s) => s.el === visible[0].target);
+          if (match) setActiveSection(match.id);
+        }
+      },
+      { rootMargin: '-30% 0px -50% 0px', threshold: [0, 0.25, 0.5, 1] }
+    );
+    sectionEls.forEach(({ el }) => observer.observe(el));
+    return () => observer.disconnect();
   }, []);
 
   const fetchDecoStatus = async () => {
@@ -113,11 +146,14 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       if (response.ok) {
         await fetchDecoStatus();
         setTestResult({ success: true, message: 'Credentials saved successfully.' });
+        pushToast('Deco credentials saved.', 'success');
       } else {
         setTestResult({ success: false, message: 'Failed to save credentials.' });
+        pushToast('Failed to save Deco credentials.', 'error');
       }
     } catch (err) {
       setTestResult({ success: false, message: `Error: ${err.message}` });
+      pushToast(`Deco save error: ${err.message}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -140,11 +176,17 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       if (response.ok) {
         const data = await response.json();
         setTestResult(data);
+        pushToast(
+          data.success ? 'Deco connection succeeded.' : `Deco test failed: ${data.message || 'unknown error'}`,
+          data.success ? 'success' : 'error'
+        );
       } else {
         setTestResult({ success: false, message: 'Test request failed.' });
+        pushToast('Deco test request failed.', 'error');
       }
     } catch (err) {
       setTestResult({ success: false, message: `Connection error: ${err.message}` });
+      pushToast(`Deco connection error: ${err.message}`, 'error');
     } finally {
       setTesting(false);
     }
@@ -162,8 +204,13 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       const data = await response.json();
       setCookieResult(data);
       await fetchAlexaStatus();
+      pushToast(
+        data.success ? 'Alexa cookies saved.' : `Cookie save failed: ${data.message || 'unknown error'}`,
+        data.success ? 'success' : 'error'
+      );
     } catch (err) {
       setCookieResult({ success: false, message: `Error: ${err.message}` });
+      pushToast(`Alexa cookie error: ${err.message}`, 'error');
     } finally {
       setCookieSaving(false);
     }
@@ -215,8 +262,13 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       const data = await response.json();
       setChesterResult(data);
       await fetchChesterStatus();
+      pushToast(
+        data.success ? 'Chester credentials saved.' : `Chester save failed: ${data.message || 'unknown error'}`,
+        data.success ? 'success' : 'error'
+      );
     } catch (err) {
       setChesterResult({ success: false, message: `Error: ${err.message}` });
+      pushToast(`Chester save error: ${err.message}`, 'error');
     } finally {
       setChesterSaving(false);
     }
@@ -240,8 +292,13 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       });
       const data = await response.json();
       setChesterResult(data);
+      pushToast(
+        data.success ? 'Chester connection succeeded.' : `Chester test failed: ${data.message || 'unknown error'}`,
+        data.success ? 'success' : 'error'
+      );
     } catch (err) {
       setChesterResult({ success: false, message: `Error: ${err.message}` });
+      pushToast(`Chester connection error: ${err.message}`, 'error');
     } finally {
       setChesterTesting(false);
     }
@@ -272,8 +329,13 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       const data = await response.json();
       setHiboostResult(data);
       await fetchHiboostStatus();
+      pushToast(
+        data.success ? 'HiBoost credentials saved.' : `HiBoost save failed: ${data.message || 'unknown error'}`,
+        data.success ? 'success' : 'error'
+      );
     } catch (err) {
       setHiboostResult({ success: false, message: `Error: ${err.message}` });
+      pushToast(`HiBoost save error: ${err.message}`, 'error');
     } finally {
       setHiboostSaving(false);
     }
@@ -290,10 +352,23 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       });
       const data = await response.json();
       setHiboostResult(data);
+      pushToast(
+        data.success ? 'HiBoost connection succeeded.' : `HiBoost test failed: ${data.message || 'unknown error'}`,
+        data.success ? 'success' : 'error'
+      );
     } catch (err) {
       setHiboostResult({ success: false, message: `Error: ${err.message}` });
+      pushToast(`HiBoost connection error: ${err.message}`, 'error');
     } finally {
       setHiboostTesting(false);
+    }
+  };
+
+  const scrollToSection = (id) => {
+    setActiveSection(id);
+    const el = document.getElementById(`settings-section-${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
@@ -302,7 +377,23 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       <h1>Settings</h1>
       <p>Configure integrations and credentials</p>
 
-      <div className="settings-section">
+      <nav className="settings-section-nav" aria-label="Settings sections">
+        {SETTINGS_SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`settings-section-tab ${activeSection === s.id ? 'active' : ''}`}
+            onClick={() => scrollToSection(s.id)}
+            aria-current={activeSection === s.id ? 'true' : undefined}
+          >
+            {s.label}
+          </button>
+        ))}
+      </nav>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      <div className="settings-section" id="settings-section-theme">
         <h2>Interface Theme</h2>
         <p className="section-description">Choose a professional color system for the dashboard.</p>
         <div className="theme-picker">
@@ -328,7 +419,7 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       </div>
 
       {/* Deco Settings */}
-      <div className="settings-section">
+      <div className="settings-section" id="settings-section-deco">
         <h2>TP-Link Deco</h2>
         <p className="section-description">Connect to your Deco mesh network via cloud or local API</p>
 
@@ -416,7 +507,7 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       </div>
 
       {/* Alexa Settings */}
-      <div className="settings-section">
+      <div className="settings-section" id="settings-section-alexa">
         <h2>Amazon Alexa</h2>
         <p className="section-description">Connect to Alexa Smart Home for device inventory and control</p>
 
@@ -552,7 +643,7 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       </div>
 
       {/* HiBoost Settings */}
-      <div className="settings-section">
+      <div className="settings-section" id="settings-section-hiboost">
         <h2>HiBoost Signal Booster</h2>
         <p className="section-description">
           Connect to your HiBoost signal booster via Signal Supervisor cloud API
@@ -617,7 +708,7 @@ function SettingsPage({ theme = 'blue-steel', onThemeChange = () => {} }) {
       </div>
 
       {/* Chester Settings */}
-      <div className="settings-section">
+      <div className="settings-section" id="settings-section-chester">
         <h2>Chester Router (ImmortalWrt/OpenWrt)</h2>
         <p className="section-description">
           Connect to your Chester router using OpenWrt ubus/rpcd API

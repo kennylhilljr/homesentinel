@@ -169,18 +169,39 @@ function HiBoostPage() {
           const power = band.output_power_dl;
           const gain = band.gain_dl;
           const isActive = band.rf_switch;
+          // 2026-05-07: Signal level drives a CSS class so theme tokens (--signal-good/medium/poor) apply
+          const signalLevel = !isActive
+            ? 'inactive'
+            : power >= 0
+              ? 'good'
+              : power >= -5
+                ? 'medium'
+                : 'poor';
+          const signalDescription = !isActive
+            ? 'inactive'
+            : power >= 0
+              ? 'good'
+              : power >= -5
+                ? 'fair'
+                : 'poor';
+          const ariaLabel = isActive
+            ? `${name} band: ${power} dBm output, signal ${signalDescription}, gain ${gain} dB, status ${band.rf_status ? 'normal' : 'alert'}`
+            : `${name} band: switched off`;
           return (
-            <div
+            <button
               key={name}
+              type="button"
               className={`hiboost-gauge-card ${activeBand === name ? 'active' : ''} ${!isActive ? 'disabled' : ''}`}
               onClick={() => setActiveBand(name)}
+              aria-pressed={activeBand === name}
+              aria-label={ariaLabel}
             >
               <div className="gauge-ring">
-                <svg viewBox="0 0 120 120" className="gauge-svg">
-                  <circle cx="60" cy="60" r="50" fill="none" stroke="#e8ecf1" strokeWidth="8" />
+                <svg viewBox="0 0 120 120" className="gauge-svg" role="img" aria-hidden="true">
+                  <circle cx="60" cy="60" r="50" fill="none" className="gauge-track" strokeWidth="8" />
                   <circle
                     cx="60" cy="60" r="50" fill="none"
-                    stroke={isActive ? (power >= 0 ? '#1e8b52' : power >= -5 ? '#b26b00' : '#bf2f4b') : '#ccc'}
+                    className={`gauge-arc gauge-arc-${signalLevel}`}
                     strokeWidth="8"
                     strokeDasharray={`${Math.max(0, Math.min(1, (power + 13) / 25)) * 220} 314`}
                     strokeLinecap="round"
@@ -199,7 +220,7 @@ function HiBoostPage() {
                   {band.rf_status ? 'Normal' : 'Alert'}
                 </span>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

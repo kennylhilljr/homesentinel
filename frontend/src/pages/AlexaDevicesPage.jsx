@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { buildUrl } from '../utils/apiConfig';
 import AlexaDeviceCard from '../components/AlexaDeviceCard';
 import ViewModeToggle from '../components/ViewModeToggle';
+import Badge from '../components/Badge';
 import './AlexaDevicesPage.css';
 
 function AlexaDevicesPage() {
@@ -206,9 +207,9 @@ function AlexaDevicesPage() {
                         </p>
                       </div>
                       <div className="summary-side">
-                        <span className={`power-chip ${isOnline ? 'on' : 'off'}`}>
+                        <Badge variant={isOnline ? 'online' : 'offline'}>
                           {isOnline ? 'Online' : 'Offline'}
-                        </span>
+                        </Badge>
                         <button
                           type="button"
                           className="list-controls-btn"

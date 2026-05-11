@@ -32,6 +32,8 @@ function App() {
   };
   // 2026-03-12: Collapsible insights panel on dashboard
   const [showInsights, setShowInsights] = useState(false);
+  // 2026-05-07: Lifted scan state so SystemStatusCard can show spinner alongside the Scan button
+  const [scanning, setScanning] = useState(false);
 
   // 2026-03-12: All data fetching and polling extracted to custom hook
   const {
@@ -161,48 +163,86 @@ function App() {
           </div>
         </div>
         {/* 2026-03-12: Nav consolidated into 3 groups — Network | Smart Home | Performance */}
-        <nav className="main-nav">
-          <div className="nav-group">
-            <span className="nav-group-label">Network</span>
+        {/* 2026-05-07: Group labels gain SVG icon + descriptive title for clearer category identity */}
+        <nav className="main-nav" aria-label="Primary navigation">
+          <div className="nav-group" role="group" aria-label="Network monitoring">
+            <span className="nav-group-label">
+              <svg className="nav-group-label-icon" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.2"/><circle cx="6" cy="6" r="1.5" fill="currentColor"/><path d="M1 6h10M6 1v10" stroke="currentColor" strokeWidth="0.8"/></svg>
+              Network
+            </span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
-                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M1 8l7-6 7 6v7H9v-4H7v4H1V8z" fill="currentColor"/></svg>
-                Dashboard{newDeviceCount > 0 && <span className="nav-count-badge">{newDeviceCount}</span>}
+              <button className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')} title="Network monitoring dashboard">
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M1 8l7-6 7 6v7H9v-4H7v4H1V8z" fill="currentColor"/></svg>
+                Dashboard{newDeviceCount > 0 && <span className="nav-count-badge" aria-label={`${newDeviceCount} new devices`}>{newDeviceCount}</span>}
               </button>
-              <button className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`} onClick={() => navigateTo('topology')}>
-                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="3" r="2" fill="currentColor"/><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="13" r="2" fill="currentColor"/><path d="M8 5v3M6 10L3 11M10 10l3 1" stroke="currentColor" strokeWidth="1.2"/></svg>
+              <button className={`nav-button ${currentPage === 'topology' ? 'active' : ''}`} onClick={() => navigateTo('topology')} title="Mesh topology view">
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="3" r="2" fill="currentColor"/><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="13" r="2" fill="currentColor"/><path d="M8 5v3M6 10L3 11M10 10l3 1" stroke="currentColor" strokeWidth="1.2"/></svg>
                 Topology
               </button>
             </div>
           </div>
-          <div className="nav-group">
-            <span className="nav-group-label">Smart Home</span>
+          <div className="nav-group" role="group" aria-label="Smart home devices">
+            <span className="nav-group-label">
+              <svg className="nav-group-label-icon" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M1 6l5-4 5 4v5H7V8H5v3H1z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+              Smart Home
+            </span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`} onClick={() => navigateTo('alexa')}>
-                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+              <button className={`nav-button ${currentPage === 'alexa' ? 'active' : ''}`} onClick={() => navigateTo('alexa')} title="Alexa devices">
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
                 Alexa
               </button>
-              <button className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`} onClick={() => navigateTo('smart-home')}>
-                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><rect x="2" y="7" width="5" height="7" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="12" rx="1" fill="currentColor"/></svg>
+              <button className={`nav-button ${currentPage === 'smart-home' ? 'active' : ''}`} onClick={() => navigateTo('smart-home')} title="Smart home controls">
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="7" width="5" height="7" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="12" rx="1" fill="currentColor"/></svg>
                 Controls
               </button>
             </div>
           </div>
-          <div className="nav-group">
-            <span className="nav-group-label">Performance</span>
+          <div className="nav-group" role="group" aria-label="Connection performance">
+            <span className="nav-group-label">
+              <svg className="nav-group-label-icon" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M1 10l3-4 2 1 3-4 2 2" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Performance
+            </span>
             <div className="nav-group-buttons">
-              <button className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`} onClick={() => navigateTo('speed-insights')}>
-                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M1 14l4-5 3 2 4-6 3 3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <button className={`nav-button ${currentPage === 'speed-insights' ? 'active' : ''}`} onClick={() => navigateTo('speed-insights')} title="Internet speed history">
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M1 14l4-5 3 2 4-6 3 3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Speed
               </button>
-              <button className={`nav-button ${currentPage === 'hiboost' ? 'active' : ''}`} onClick={() => navigateTo('hiboost')}>
-                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M8 1v3M8 12v3M3 5l2 2M11 9l2 2M1 8h3M12 8h3M3 11l2-2M11 7l2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+              <button className={`nav-button ${currentPage === 'hiboost' ? 'active' : ''}`} onClick={() => navigateTo('hiboost')} title="HiBoost cellular signal booster">
+                <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1v3M8 12v3M3 5l2 2M11 9l2 2M1 8h3M12 8h3M3 11l2-2M11 7l2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
                 HiBoost
               </button>
             </div>
           </div>
-          <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => navigateTo('settings')}>
-            <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.5 1.5M11.6 11.6l1.5 1.5M13.1 2.9l-1.5 1.5M4.4 11.6l-1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+          {/* 2026-05-07: Theme toggle — visible affordance so users discover light/dark variants */}
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={() => setTheme(t => t === 'deep-slate' ? 'blue-steel' : 'deep-slate')}
+            title={theme === 'deep-slate' ? 'Switch to Blue Steel theme' : 'Switch to Deep Slate theme'}
+            aria-label={theme === 'deep-slate' ? 'Switch to Blue Steel theme' : 'Switch to Deep Slate theme'}
+          >
+            {theme === 'deep-slate' ? (
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                <circle cx="8" cy="8" r="3.5" fill="currentColor" />
+                <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+                  <line x1="8" y1="1" x2="8" y2="2.5" />
+                  <line x1="8" y1="13.5" x2="8" y2="15" />
+                  <line x1="1" y1="8" x2="2.5" y2="8" />
+                  <line x1="13.5" y1="8" x2="15" y2="8" />
+                  <line x1="3" y1="3" x2="4.1" y2="4.1" />
+                  <line x1="11.9" y1="11.9" x2="13" y2="13" />
+                  <line x1="13" y1="3" x2="11.9" y2="4.1" />
+                  <line x1="4.1" y1="11.9" x2="3" y2="13" />
+                </g>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                <path d="M13 9.5A6 6 0 0 1 6.5 3a6 6 0 1 0 6.5 6.5z" fill="currentColor" />
+              </svg>
+            )}
+          </button>
+          <button className={`nav-button nav-settings ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => navigateTo('settings')} title="Settings">
+            <svg className="nav-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.5 1.5M11.6 11.6l1.5 1.5M13.1 2.9l-1.5 1.5M4.4 11.6l-1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
             Settings
           </button>
         </nav>
@@ -249,6 +289,7 @@ function App() {
             formatDate={formatDate}
             vendorNamesPresent={vendorNamesPresent}
             deviceCount={devices.length}
+            scanning={scanning}
           />
           <CellularCard chesterInfo={chesterInfo} />
           <SpeedTestCard
@@ -294,6 +335,7 @@ function App() {
           chesterInfo={chesterInfo}
           setDevices={setDevices}
           onDeviceClick={handleDeviceClick}
+          onScanningChange={setScanning}
         />
 
         {/* Detail Card */}

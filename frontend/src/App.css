@@ -109,6 +109,27 @@
   --hero-end: #1d4a72;
   --spot-a: rgba(11, 92, 171, 0.12);
   --spot-b: rgba(16, 111, 166, 0.12);
+  /* 2026-05-07: Signal-strength tokens — used by HiBoost gauges and other RF UI */
+  --signal-good: #1e8b52;
+  --signal-medium: #b26b00;
+  --signal-poor: #bf2f4b;
+  --signal-inactive: #c6d1de;
+  /* 2026-05-07: Metric-card gradient tokens — keep cards on-brand across themes */
+  --metric-default-start: #f8faff;
+  --metric-default-end: #eef3ff;
+  --metric-default-border: #dce6fd;
+  --metric-download-start: #e6f9ee;
+  --metric-download-end: #d1f5dd;
+  --metric-download-border: #a3e4c1;
+  --metric-upload-start: #e8eeff;
+  --metric-upload-end: #dce6fd;
+  --metric-upload-border: #b3c6f7;
+  --metric-ping-start: #fff5e6;
+  --metric-ping-end: #ffedcc;
+  --metric-ping-border: #f5d59a;
+  --metric-jitter-start: #f5f0ff;
+  --metric-jitter-end: #ede4ff;
+  --metric-jitter-border: #d4c4f7;
 }
 
 .App.theme-blue-steel {
@@ -149,6 +170,11 @@
   --hero-end: #3a4a5e;
   --spot-a: rgba(68, 88, 112, 0.16);
   --spot-b: rgba(84, 103, 124, 0.14);
+  /* 2026-05-07: Slate-tinted signal tokens */
+  --signal-good: #2f7a59;
+  --signal-medium: #8e6424;
+  --signal-poor: #9e3f50;
+  --signal-inactive: #b9c4d2;
 }
 
 .App {
@@ -240,7 +266,16 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: rgba(248, 250, 255, 0.45);
+  color: rgba(248, 250, 255, 0.55);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* 2026-05-07: Group label icon — small SVG to reinforce category identity */
+.nav-group-label-icon {
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
 .nav-group-buttons {
@@ -248,17 +283,69 @@
   gap: 4px;
 }
 
+/* 2026-05-07: Theme toggle button — sun/moon affordance in header nav */
+.theme-toggle-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8faff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-left: 4px;
+  align-self: flex-end;
+  margin-bottom: 0;
+}
+
+.theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
 .nav-button {
   background: rgba(255, 255, 255, 0.1);
   color: #f8faff;
   border: 1px solid rgba(255, 255, 255, 0.28);
-  backdrop-filter: blur(8px);
   padding: 8px 14px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+/* 2026-05-07: Guarded blur — skipped on engines without support or when user prefers reduced motion */
+@supports (backdrop-filter: blur(8px)) {
+  @media (prefers-reduced-motion: no-preference) {
+    .nav-button {
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+  }
+}
+
+/* 2026-05-07: Visible focus ring for keyboard users — applied across interactive surfaces */
+.nav-button:focus-visible,
+.scan-button:focus-visible,
+.btn-optimize:focus-visible,
+.sort-button:focus-visible,
+.theme-toggle-btn:focus-visible,
+.banner-close:focus-visible,
+.settings-section-tab:focus-visible,
+.devices-search-input:focus-visible,
+.devices-status-filter:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.devices-table .device-row:focus-visible,
+.sort-button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
 }
 
 .nav-button:hover {
@@ -595,6 +682,182 @@
 .status-card-compact p {
   font-size: 0.82rem;
   margin: 4px 0;
+}
+
+/* 2026-05-07: System Status card — strong primary status, grouped secondary metrics */
+.system-status .system-status-primary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 8px 0 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
+.system-status .system-status-primary.is-ok {
+  background: color-mix(in srgb, var(--success) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+  color: var(--success);
+}
+
+.system-status .system-status-primary.is-error {
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  color: var(--danger);
+}
+
+.system-status-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  flex-shrink: 0;
+}
+
+.system-status-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.system-status-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.system-status-value {
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.system-status-scanning {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.system-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.82rem;
+  padding: 3px 0;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.system-status-row:first-of-type {
+  border-top: none;
+}
+
+.system-status-row-label {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.system-status-row-value strong {
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.system-status-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* 2026-05-07: Reusable spinner — small ring-style animation */
+.hs-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: hsSpin 0.8s linear infinite;
+}
+
+.hs-spinner-sm {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+}
+
+@keyframes hsSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hs-spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+/* 2026-05-07: Reusable Badge component — single source of truth for pill labels */
+.hs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.hs-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.hs-badge-online {
+  background: #ddf8ea;
+  color: #0f9f65;
+  border-color: #a3e4c1;
+}
+
+.hs-badge-offline {
+  background: #ffe3ea;
+  color: #c0204d;
+  border-color: #f5a3b8;
+}
+
+.hs-badge-warning {
+  background: #fff4d6;
+  color: #92580a;
+  border-color: #f3d68a;
+}
+
+.hs-badge-new {
+  background: rgba(245, 158, 11, 0.14);
+  color: #92580a;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.hs-badge-default {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  border-color: var(--border);
 }
 
 @media (max-width: 1024px) {
@@ -1150,6 +1413,7 @@
 }
 
 /* 2026-03-12: "New" badge for recently discovered devices (first seen <24h) */
+/* 2026-05-07: Pulse capped to 3 cycles (~7.5s) so it doesn't run forever */
 .device-new-badge {
   display: inline-block;
   font-size: 0.58rem;
@@ -1162,12 +1426,18 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   vertical-align: middle;
-  animation: newBadgePulse 2.5s ease-in-out infinite;
+  animation: newBadgePulse 2.5s ease-in-out 3;
 }
 
 @keyframes newBadgePulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-new-badge {
+    animation: none;
+  }
 }
 
 /* 2026-03-12: Amber tint for new devices in table view */
@@ -1789,6 +2059,10 @@ button.pref-badge:hover {
   padding: 28px;
   max-width: 500px;
   width: 90%;
+  /* 2026-05-07: Cap height + scroll so modal stays inside viewport on mobile */
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: var(--shadow-md);
 }
 
@@ -1861,6 +2135,134 @@ button.pref-badge:hover {
 .btn-save:hover,
 .btn-cancel:hover {
   transform: translateY(-1px);
+}
+
+/* 2026-05-07: Generic form error state — invalid input + helper text */
+.App .form-group input[aria-invalid="true"],
+.App .form-group select[aria-invalid="true"],
+.App .form-group textarea[aria-invalid="true"],
+.settings-page .form-group input[aria-invalid="true"],
+.settings-page .form-group select[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.form-error {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+/* 2026-05-07: Toast container — fixed bottom-right, stacks multiple notifications */
+.hs-toast-container {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.hs-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+  animation: hsToastIn 0.2s ease-out;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  min-width: 240px;
+  max-width: 420px;
+}
+
+.hs-toast-success {
+  background: #e7f8ef;
+  border-color: #b7e7cb;
+  color: #0f8b58;
+}
+
+.hs-toast-error {
+  background: #fee8ed;
+  border-color: #f6bfd0;
+  color: #bd244e;
+}
+
+.hs-toast-info {
+  background: #dce6fd;
+  border-color: #b3c6f7;
+  color: #1e40af;
+}
+
+.hs-toast-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.hs-toast-message {
+  flex: 1;
+}
+
+.hs-toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.6;
+  padding: 2px 4px;
+}
+
+.hs-toast-close:hover {
+  opacity: 1;
+}
+
+@keyframes hsToastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hs-toast {
+    animation: none;
+  }
+}
+
+/* 2026-05-07: Mobile horizontal-scroll wrapper for the dense devices table */
+/* Fade-edge cue tells the user there's more content to scroll to on the right */
+.devices-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .devices-table-scroll {
+    background:
+      linear-gradient(to right, var(--surface), var(--surface) 30%, transparent),
+      linear-gradient(to right, transparent, var(--surface) 70%, var(--surface)) right,
+      linear-gradient(to right, rgba(15, 26, 42, 0.08), transparent 30%),
+      linear-gradient(to left, rgba(15, 26, 42, 0.08), transparent 30%) right;
+    background-size: 24px 100%, 24px 100%, 12px 100%, 12px 100%;
+    background-repeat: no-repeat;
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  .devices-table-scroll .devices-table {
+    min-width: 720px;
+  }
 }
 
 @media (max-width: 768px) {

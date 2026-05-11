@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import EventLog from '../components/EventLog';
+import './EventLogPage.css';
 
 /**
  * EventLogPage Component
  * Page for viewing device events and alerts
  * 2026-03-14: Productionized event and alert viewing interface
+ * 2026-05-07: Migrated inline styles to EventLogPage.css with design tokens
  */
 function EventLogPage() {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all devices for the filter dropdown
   useEffect(() => {
     const fetchDevices = async () => {
       try {
@@ -18,8 +19,8 @@ function EventLogPage() {
         const response = await fetch('/api/deco/clients-merged', {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+          },
         });
 
         if (response.ok) {
@@ -38,63 +39,36 @@ function EventLogPage() {
   }, []);
 
   return (
-    <div style={{
-      padding: '20px',
-      backgroundColor: '#0a0a0a',
-      minHeight: '100vh'
-    }}>
-      <div style={{
-        maxWidth: '1400px',
-        margin: '0 auto'
-      }}>
-        {/* Breadcrumb */}
-        <div style={{
-          marginBottom: '20px',
-          fontSize: '13px',
-          color: '#b0b0b0'
-        }}>
-          <a href="#" onClick={(e) => {
-            e.preventDefault();
-            // Navigate to dashboard (handled by parent App)
-          }} style={{ color: '#3b82f6', textDecoration: 'none' }}>
+    <div className="event-log-page">
+      <div className="event-log-page-inner">
+        <nav className="event-log-breadcrumb" aria-label="Breadcrumb">
+          <button
+            type="button"
+            className="event-log-breadcrumb-link"
+            onClick={() => {
+              // Navigate to dashboard (handled by parent App)
+            }}
+          >
             Dashboard
-          </a>
+          </button>
           {' > '}
-          <span>Events & Alerts</span>
+          <span aria-current="page">Events &amp; Alerts</span>
+        </nav>
+
+        <div className="event-log-header">
+          <h1>Events &amp; Alerts</h1>
+          <p>Monitor device connection/disconnection events and manage active alerts</p>
         </div>
 
-        {/* Page Header */}
-        <div style={{
-          marginBottom: '30px'
-        }}>
-          <h1 style={{
-            fontSize: '32px',
-            fontWeight: '700',
-            color: '#ffffff',
-            margin: '0 0 10px 0'
-          }}>
-            Events & Alerts
-          </h1>
-          <p style={{
-            fontSize: '14px',
-            color: '#b0b0b0',
-            margin: '0'
-          }}>
-            Monitor device connection/disconnection events and manage active alerts
-          </p>
-        </div>
-
-        {/* EventLog Component */}
         {loading ? (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '400px',
-            color: '#b0b0b0',
-            fontSize: '16px'
-          }}>
-            Loading devices...
+          <div
+            className="event-log-loading"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <span className="hs-spinner" aria-hidden="true" />
+            <span>Loading devices…</span>
           </div>
         ) : (
           <EventLog devices={devices} />

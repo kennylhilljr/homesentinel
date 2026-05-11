@@ -95,6 +95,9 @@
   text-align: center;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
 }
 
 .hiboost-gauge-card:hover {
@@ -103,12 +106,27 @@
 
 .hiboost-gauge-card.active {
   border-color: var(--brand);
-  box-shadow: 0 0 0 2px rgba(11, 92, 171, 0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 15%, transparent);
+}
+
+.hiboost-gauge-card:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .hiboost-gauge-card.disabled {
   opacity: 0.45;
 }
+
+/* 2026-05-07: Token-driven gauge stroke colors — adapt to active theme */
+.gauge-track {
+  stroke: var(--border, #e8ecf1);
+}
+
+.gauge-arc-good { stroke: var(--signal-good, #1e8b52); }
+.gauge-arc-medium { stroke: var(--signal-medium, #b26b00); }
+.gauge-arc-poor { stroke: var(--signal-poor, #bf2f4b); }
+.gauge-arc-inactive { stroke: var(--signal-inactive, #c6d1de); }
 
 .gauge-ring {
   position: relative;
