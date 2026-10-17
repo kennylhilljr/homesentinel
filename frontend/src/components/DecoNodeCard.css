@@ -1,0 +1,346 @@
+.deco-node-card {
+  background: linear-gradient(170deg, #ffffff, #f8fbff);
+  border: 1px solid var(--border, #d4dde8);
+  border-radius: 14px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-shadow: 0 8px 24px rgba(23, 32, 51, 0.08);
+}
+
+.deco-node-card:hover {
+  border-color: #c6d6fb;
+  box-shadow: 0 14px 34px rgba(23, 32, 51, 0.12);
+  transform: translateY(-2px);
+}
+
+.deco-node-card:focus-visible {
+  outline: 2px solid var(--brand, #0b5cab);
+  outline-offset: 2px;
+}
+
+.deco-node-card.online {
+  border-top: 4px solid var(--success, #1e8b52);
+}
+
+.deco-node-card.offline {
+  border-top: 4px solid var(--danger, #bf2f4b);
+  opacity: 0.85;
+}
+
+.node-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.node-info-primary {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-name {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--text, #0f1a2a);
+  word-break: break-word;
+}
+
+.node-id-small {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  color: var(--text-muted, #556277);
+  font-family: 'SFMono-Regular', Menlo, Monaco, monospace;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-badge.status-online {
+  background-color: #e7f8ef;
+  color: #0f9f65;
+  border: 1px solid #b7e7cb;
+}
+
+.status-badge.status-offline {
+  background-color: #fee8ed;
+  color: #bd244e;
+  border: 1px solid #f6bfd0;
+}
+
+.status-badge .status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-badge .status-dot.online {
+  background-color: var(--success, #1e8b52);
+}
+
+.status-badge .status-dot.offline {
+  background-color: var(--danger, #bf2f4b);
+  animation: none;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.node-card-content {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  margin-bottom: 12px;
+}
+
+.node-info-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.node-signal-column {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 120px;
+}
+
+.node-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.87rem;
+}
+
+.node-label {
+  color: var(--text-muted, #556277);
+  font-weight: 700;
+  min-width: 70px;
+}
+
+.node-value {
+  color: var(--text, #0f1a2a);
+  font-weight: 600;
+  text-align: right;
+}
+
+.node-value.firmware {
+  font-family: 'SFMono-Regular', Menlo, Monaco, monospace;
+  font-size: 0.77rem;
+  background-color: #ebf2ff;
+  padding: 3px 7px;
+  border-radius: 6px;
+  color: var(--brand-strong, #084785);
+}
+
+.node-value.clients {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.client-count {
+  background-color: #e6eeff;
+  color: var(--brand-strong, #084785);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.node-value.model {
+  background-color: #eef6ff;
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: #315491;
+  font-size: 0.8rem;
+}
+
+.signal-indicator-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100px;
+  height: 100px;
+}
+
+.signal-ring {
+  filter: drop-shadow(0 2px 4px rgba(20, 44, 90, 0.1));
+}
+
+.signal-progress {
+  transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+}
+
+.signal-text {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.signal-percentage {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text, #0f1a2a);
+  line-height: 1;
+}
+
+.signal-label {
+  font-size: 0.64rem;
+  color: var(--text-muted, #556277);
+  margin-top: 2px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.signal-excellent .signal-percentage,
+.signal-excellent .signal-label {
+  color: var(--success, #1e8b52);
+}
+
+.signal-good .signal-percentage,
+.signal-good .signal-label {
+  color: var(--brand, #0b5cab);
+}
+
+.signal-fair .signal-percentage,
+.signal-fair .signal-label {
+  color: #f1ab00;
+}
+
+.signal-poor .signal-percentage,
+.signal-poor .signal-label {
+  color: var(--danger, #bf2f4b);
+}
+
+.node-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #e2e9f7;
+  font-size: 0.72rem;
+  color: #6f7f98;
+}
+
+.footer-text {
+  font-style: italic;
+}
+
+.footer-timestamp {
+  color: #8a98ad;
+  font-size: 0.7rem;
+}
+
+.node-card.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: var(--text-muted, #556277);
+  animation: pulse 1.5s infinite;
+}
+
+@media (max-width: 768px) {
+  .deco-node-card {
+    padding: 16px;
+  }
+
+  .node-card-content {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .node-signal-column {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .node-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .node-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .node-label {
+    min-width: auto;
+  }
+
+  .node-value {
+    text-align: left;
+  }
+
+  .node-card-footer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .deco-node-card {
+    padding: 12px;
+  }
+
+  .node-name {
+    font-size: 1rem;
+  }
+
+  .signal-indicator-container {
+    width: 80px;
+    height: 80px;
+  }
+
+  .signal-percentage {
+    font-size: 0.86rem;
+  }
+
+  .signal-label {
+    font-size: 0.58rem;
+  }
+}

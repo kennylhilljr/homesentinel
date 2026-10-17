@@ -1,0 +1,116 @@
+{
+  "success": true,
+  "project_id": "b617d02d-876c-44da-8d46-4984a3b56872",
+  "project_name": "HomeSentinel",
+  "project_url": "https://linear.app/ai-cli-macz/project/homesentinel-06230996606e",
+  "team": "Ai-cli-macz",
+  "total_issues": 12,
+  "total_issues_planned": 36,
+  "meta_issue_key": null,
+  "issues_created": [
+    "AI-279",
+    "AI-280",
+    "AI-281",
+    "AI-282",
+    "AI-283",
+    "AI-284",
+    "AI-285",
+    "AI-286",
+    "AI-287",
+    "AI-288",
+    "AI-289",
+    "AI-290"
+  ],
+  "created_at": "2025-03-06T20:30:00Z",
+  "done": 12,
+  "in_progress": 0,
+  "todo": 0,
+  "last_verification_status": "pass",
+  "tickets_since_verification": 5,
+  "tickets_since_pm_review": 4,
+  "last_pm_review_at": "2026-03-07T01:36:00Z",
+  "current_ticket": null,
+  "completed_tickets": [
+    {
+      "key": "AI-279",
+      "title": "[SETUP] Project Scaffolding - Git, Backend Framework, Frontend",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/1",
+      "commit": "39dfee1",
+      "completed_at": "2026-03-07T00:20:00Z"
+    },
+    {
+      "key": "AI-280",
+      "title": "[NDM] LAN Device Discovery via ARP/DHCP",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/2",
+      "commit": "b114b88",
+      "completed_at": "2026-03-07T00:44:00Z"
+    },
+    {
+      "key": "AI-281",
+      "title": "[NDM] OUI Vendor Lookup & Device Registry",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/3",
+      "commit": "ec08ba5",
+      "completed_at": "2026-03-07T01:00:00Z"
+    },
+    {
+      "key": "AI-283",
+      "title": "[NDM] Device Detail Card & Dashboard",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/4",
+      "commit": "88fe591",
+      "completed_at": "2026-03-07T01:05:00Z"
+    },
+    {
+      "key": "AI-285",
+      "title": "[DECO] Authentication & Session Management",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/5",
+      "commit": "2af1ff82",
+      "completed_at": "2026-03-07T01:34:16Z"
+    },
+    {
+      "key": "AI-286",
+      "title": "[DECO] Node Status Display",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/6",
+      "commit": "dab870a",
+      "completed_at": "2026-03-07T01:59:19Z"
+    },
+    {
+      "key": "AI-282",
+      "title": "[NDM] Device Search & MAC/IP Correlation",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/6",
+      "commit": "f157416",
+      "completed_at": "2026-03-07T02:15:48Z"
+    },
+    {
+      "key": "AI-284",
+      "title": "[NDM] New Device Alerts & Event Log",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/6",
+      "commit": "e57cd43",
+      "completed_at": "2026-03-07T02:23:11Z"
+    },
+    {
+      "key": "AI-287",
+      "title": "[DECO] Merge Deco Clients with LAN Data",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/6",
+      "commit": "b4a7ad3",
+      "completed_at": "2026-03-07T02:30:16Z"
+    },
+    {
+      "key": "AI-290",
+      "title": "[DECO] Wi-Fi Configuration Editor",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/8",
+      "commit": "82c37121f7fcd852ca8ac5154377fd3af075e3b5",
+      "completed_at": "2026-03-07T04:39:00Z"
+    },
+    {
+      "key": "AI-289",
+      "title": "[DECO] Network Topology View",
+      "pr": "https://github.com/kennylhilljr/homesentinel/pull/9",
+      "commit": "b5c134a69d621db01d45d98edb8d63e065e05b95",
+      "completed_at": "2026-03-07T04:56:00Z"
+    }
+  ],
+  "git": {
+    "initial_commit": "6d3ba05c9dc9256b79346636047caecbcdb139d7",
+    "github_repo": "kennylhilljr/homesentinel"
+  }
+}

@@ -1,0 +1,371 @@
+.device-search-container {
+  padding: 20px 0;
+  margin-bottom: 30px;
+}
+
+.search-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.search-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 14px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  background-color: #fff;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.clear-button {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #999;
+  cursor: pointer;
+  padding: 0 8px;
+  transition: color 0.2s;
+}
+
+.clear-button:hover {
+  color: #666;
+}
+
+.search-filters {
+  display: flex;
+  gap: 10px;
+}
+
+.status-filter {
+  padding: 8px 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  background-color: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.status-filter:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.search-error {
+  background-color: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+
+.search-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #3498db;
+  padding: 15px;
+  font-size: 14px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ddd;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.search-results {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.results-header {
+  padding: 12px 16px;
+  background-color: #f5f5f5;
+  border-radius: 6px 6px 0 0;
+  font-size: 14px;
+  color: #666;
+  border-bottom: 1px solid #ddd;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 15px;
+}
+
+.search-result-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #fff;
+  transition: box-shadow 0.2s;
+}
+
+.search-result-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  cursor: pointer;
+  user-select: none;
+  background-color: #fafafa;
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s;
+}
+
+.card-header:hover {
+  background-color: #f5f5f5;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-indicator.status-online {
+  background-color: #27ae60;
+  box-shadow: 0 0 6px rgba(39, 174, 96, 0.5);
+}
+
+.status-indicator.status-offline {
+  background-color: #e74c3c;
+  box-shadow: 0 0 6px rgba(231, 76, 60, 0.5);
+}
+
+.device-info {
+  flex: 1;
+}
+
+.device-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.device-mac {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #999;
+  font-family: 'Courier New', monospace;
+}
+
+.card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.status-online {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-badge.status-offline {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.expand-icon {
+  font-size: 20px;
+  color: #999;
+  width: 24px;
+  text-align: center;
+  transition: color 0.2s;
+}
+
+.card-header:hover .expand-icon {
+  color: #666;
+}
+
+.card-details {
+  padding: 16px;
+  background-color: #fff;
+  border-top: 1px solid #eee;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h5 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #666;
+  flex: 0 0 140px;
+}
+
+.detail-value {
+  color: #333;
+  font-weight: 400;
+  flex: 1;
+  text-align: right;
+  word-break: break-all;
+}
+
+.detail-value.device-mono {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.ip-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ip-history-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  border-left: 3px solid #3498db;
+  font-size: 12px;
+}
+
+.ip-address {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: #333;
+  flex: 0 0 auto;
+  min-width: 120px;
+}
+
+.ip-seen-date {
+  color: #999;
+  font-size: 11px;
+  flex: 1;
+}
+
+.ip-current-badge {
+  background-color: #27ae60;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.no-history {
+  color: #999;
+  font-size: 12px;
+  padding: 8px;
+  font-style: italic;
+}
+
+.device-notes {
+  margin: 0;
+  padding: 8px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  border-left: 3px solid #f39c12;
+  font-size: 13px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.no-results {
+  padding: 30px;
+  text-align: center;
+  color: #999;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.search-hint {
+  padding: 20px;
+  text-align: center;
+  color: #999;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  font-size: 13px;
+  font-style: italic;
+}

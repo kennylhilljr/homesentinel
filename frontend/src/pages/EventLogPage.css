@@ -1,0 +1,79 @@
+/* 2026-05-07: Event Log page — token-driven layout (was inline-styled before) */
+.event-log-page {
+  padding: 20px;
+  min-height: 100vh;
+  background: transparent;
+  color: var(--text, #0f1a2a);
+}
+
+.event-log-page-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.event-log-breadcrumb {
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: var(--text-muted, #556277);
+}
+
+.event-log-breadcrumb a,
+.event-log-breadcrumb-link {
+  color: var(--brand, #0b5cab);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.event-log-breadcrumb a:hover,
+.event-log-breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.event-log-breadcrumb-link:focus-visible {
+  outline: 2px solid var(--brand, #0b5cab);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.event-log-header {
+  margin-bottom: 30px;
+}
+
+.event-log-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text, #0f1a2a);
+  margin: 0 0 10px 0;
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.event-log-header p {
+  font-size: 14px;
+  color: var(--text-muted, #556277);
+  margin: 0;
+}
+
+.event-log-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 400px;
+  color: var(--text-muted, #556277);
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .event-log-page {
+    padding: 12px;
+  }
+
+  .event-log-header h1 {
+    font-size: 24px;
+  }
+}

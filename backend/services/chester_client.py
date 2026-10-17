@@ -1,0 +1,717 @@
+"""
+Chester 5G Wireless Data Terminal API client for HomeSentinel.
+
+Uses the custom /api endpoint with JSON-RPC style requests.
+Password is base64-encoded before sending.
+Authentication returns a session ID (sid) used in subsequent requests.
+"""
+
+import base64
+import logging
+import os
+import re
+import shlex
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+
+class ChesterAuthError(Exception):
+    """Raised when Chester authentication fails."""
+
+
+class ChesterAPIError(Exception):
+    """Raised when Chester API requests fail."""
+
+
+# 2026-05-11: Chester /api modules to probe for native static-lease support.
+# Different OpenWRT-derived firmwares expose this differently; we try in order
+# and fall back to SSH/uci if none succeed.
+_STATIC_LEASE_API_CANDIDATES = (
+    ("dhcp", "set_static_lease"),
+    ("dhcp", "set_host"),
+    ("dhcp", "add_host"),
+    ("network", "set_dhcp_static"),
+    ("lan", "set_static_lease"),
+)
+
+
+class ChesterClient:
+    """Client for Chester 5G Wireless Data Terminal routers."""
+
+    TOKEN_REFRESH_MARGIN = 60
+
+    def __init__(
+        self,
+        host: str = "",
+        username: str = "",
+        password: str = "",
+        port: int = 0,
+        use_https: Optional[bool] = None,
+        verify_ssl: bool = False,
+        timeout: int = 10,
+    ):
+        env_host = os.getenv("CHESTER_HOST", "192.168.12.1")
+        env_port = int(os.getenv("CHESTER_PORT", "80"))
+        env_username = os.getenv("CHESTER_USERNAME", "admin")
+        env_password = os.getenv("CHESTER_PASSWORD", "")
+        env_use_https = os.getenv("CHESTER_USE_HTTPS", "false").lower() == "true"
+
+        self.host = host or env_host
+        self.username = username or env_username
+        self.password = password or env_password
+        self.port = port or env_port
+        self.use_https = use_https if use_https is not None else env_use_https
+        self.verify_ssl = verify_ssl
+        self.timeout = timeout
+
+        self._session = requests.Session()
+        self._session_id: Optional[str] = None
+        self._session_expires_at: Optional[datetime] = None
+        self._request_id: int = 0
+
+    @property
+    def base_url(self) -> str:
+        scheme = "https" if self.use_https else "http"
+        return f"{scheme}://{self.host}:{self.port}"
+
+    def set_credentials(
+        self,
+        host: str,
+        username: str,
+        password: str,
+        port: int = 80,
+        use_https: bool = False,
+        verify_ssl: bool = False,
+    ):
+        self.host = host
+        self.username = username
+        self.password = password
+        self.port = port
+        self.use_https = use_https
+        self.verify_ssl = verify_ssl
+        self._session_id = None
+        self._session_expires_at = None
+
+    def _needs_login(self) -> bool:
+        if not self._session_id or not self._session_expires_at:
+            return True
+        return datetime.utcnow() >= (self._session_expires_at - timedelta(seconds=self.TOKEN_REFRESH_MARGIN))
+
+    def _next_mid(self) -> int:
+        self._request_id += 1
+        return self._request_id
+
+    def authenticate(self) -> str:
+        if not self.username or not self.password:
+            raise ChesterAuthError("Missing Chester credentials")
+
+        encoded_password = base64.b64encode(self.password.encode()).decode()
+
+        # 2026-03-11: Chester firmware requires sid/version/mid in ALL requests,
+        # including login. Without these fields, the API returns errcode -1000.
+        payload = {
+            "module": "login",
+            "api": "login",
+            "sid": "000000000000000000000000000000",
+            "version": "1.0",
+            "mid": self._next_mid(),
+            "param": {
+                "username": self.username,
+                "password": encoded_password,
+            },
+        }
+
+        try:
+            resp = self._session.post(
+                f"{self.base_url}/api",
+                json=payload,
+                timeout=self.timeout,
+                verify=self.verify_ssl,
+                headers={"Content-Type": "application/json"},
+            )
+        except requests.RequestException as e:
+            raise ChesterAPIError(f"Connection failed: {e}") from e
+
+        if resp.status_code != 200:
+            raise ChesterAuthError(f"Authentication failed: HTTP {resp.status_code}")
+
+        data = resp.json()
+        errcode = data.get("errcode", -1)
+        if errcode != 0:
+            raise ChesterAuthError(f"Authentication failed: error code {errcode}")
+
+        # 2026-03-11: Session ID is in result.sid, not top-level sid
+        result = data.get("result", {})
+        sid = result.get("sid") or data.get("sid")
+        if not sid or sid == "000000000000000000000000000000":
+            raise ChesterAuthError("Authentication failed: no session ID returned")
+
+        self._session_id = sid
+        self._session_expires_at = datetime.utcnow() + timedelta(seconds=300)
+        logger.info(f"Chester authenticated, session: {sid[:8]}...")
+        return sid
+
+    def _get_session_id(self) -> str:
+        if self._needs_login():
+            return self.authenticate()
+        return self._session_id  # type: ignore[return-value]
+
+    def api_call(self, module: str, api: str, param: Optional[Dict[str, Any]] = None) -> Any:
+        sid = self._get_session_id()
+        payload: Dict[str, Any] = {
+            "module": module,
+            "api": api,
+            "sid": sid,
+            "version": "1.0",
+            "mid": self._next_mid(),
+        }
+        if param:
+            payload["param"] = param
+
+        try:
+            resp = self._session.post(
+                f"{self.base_url}/api",
+                json=payload,
+                timeout=self.timeout,
+                verify=self.verify_ssl,
+                headers={
+                    "Content-Type": "application/json",
+                    "token": sid,
+                },
+            )
+        except requests.RequestException as e:
+            raise ChesterAPIError(f"Request failed: {e}") from e
+
+        if resp.status_code != 200:
+            raise ChesterAPIError(f"API call failed: HTTP {resp.status_code}")
+
+        data = resp.json()
+        errcode = data.get("errcode", -1)
+        if errcode != 0 and errcode != 200:
+            raise ChesterAPIError(f"API call failed: {module}.{api} error code {errcode}")
+
+        return data.get("result", data)
+
+    def test_connection(self) -> Dict[str, Any]:
+        sid = self.authenticate()
+        info = self.api_call("system", "get_info")
+        return {
+            "success": True,
+            "session_id": sid,
+            "board": info if isinstance(info, dict) else {"raw": info},
+        }
+
+    def get_board_info(self) -> Dict[str, Any]:
+        return self.api_call("system", "get_info")
+
+    def get_interfaces(self) -> Dict[str, Any]:
+        return self.api_call("network", "get_wan")
+
+    def get_wireless_status(self) -> Dict[str, Any]:
+        return self.api_call("network", "get_wireless")
+
+    # 2026-03-11: Cellular/5G signal and system info endpoints
+
+    def get_lte_runtime(self) -> Dict[str, Any]:
+        """Get LTE/5G modem runtime data (signal, IPs, IMEI, ICCID, etc.)."""
+        return self.api_call("lte", "get_runtime")
+
+    def get_lte_config(self) -> Dict[str, Any]:
+        """Get LTE APN configuration."""
+        return self.api_call("lte", "get")
+
+    def get_lte_band(self) -> Dict[str, Any]:
+        """Get locked/available band configuration."""
+        return self.api_call("lte", "get_band")
+
+    def get_lte_mode(self) -> Dict[str, Any]:
+        """Get LTE/NR network mode preference."""
+        return self.api_call("lte", "get_mode")
+
+    def get_lte_traffic(self) -> Dict[str, Any]:
+        """Get LTE data usage/traffic stats."""
+        return self.api_call("lte", "get_traffic")
+
+    def get_dashboard(self) -> Dict[str, Any]:
+        """Get dashboard summary (WAN, LTE, WiFi status combined)."""
+        return self.api_call("dashboard", "web")
+
+    def get_system_info(self) -> Dict[str, Any]:
+        """Get full system info including cellular signal data.
+
+        Returns parsed fields matching the Chester web UI home page:
+        Device Model, System Version, Hardware Version, IMEI, ICCID,
+        IPv4/IPv6, DNS, Connection Time/Type, CellID, PCID, ARFCN,
+        BAND, RSRP, RSRQ, SINR, CA BAND, MCC, MNC.
+        """
+        board = self.get_board_info()
+        lte = self.get_lte_runtime()
+
+        info = lte.get("info", {})
+        status = lte.get("status", {})
+
+        # Parse cellular signal data from AT command output
+        parsed_signal = self._parse_lte_cell(info)
+
+        # Calculate connection time from uptime seconds
+        uptime_secs = status.get("uptime", 0)
+        hours = uptime_secs // 3600
+        minutes = (uptime_secs % 3600) // 60
+        seconds = uptime_secs % 60
+        connection_time = f"{hours}H{minutes}M{seconds}S"
+
+        return {
+            "device_model": board.get("name", ""),
+            "system_version": board.get("soft_version", ""),
+            "hardware_version": "V1.2",
+            "mac_address": board.get("mac", ""),
+            "cpu_percent": board.get("cpu_percent", 0),
+            "mem_percent": board.get("mem_percent", 0),
+            "imei": info.get("LTE_IMEI", ""),
+            "iccid": info.get("LTE_ICCID", ""),
+            "ipv4_addr": status.get("ipv4addr", ""),
+            "ipv4_dns1": status.get("ipv4dns1", ""),
+            "ipv4_dns2": status.get("ipv4dns2", ""),
+            "ipv4_gateway": status.get("ipv4gateway", ""),
+            "ipv4_mask": status.get("ipv4mask", ""),
+            "ipv6_addr": status.get("ipv6addr", ""),
+            "connection_time": connection_time,
+            "connection_time_seconds": uptime_secs,
+            "connection_type": parsed_signal.get("connection_type", info.get("LTE_TYPE", "")),
+            "cell_id": parsed_signal.get("cell_id", ""),
+            "pcid": parsed_signal.get("pcid", ""),
+            "arfcn": parsed_signal.get("arfcn", ""),
+            "band": parsed_signal.get("band", ""),
+            "rsrp": parsed_signal.get("rsrp", info.get("LTE_RSRP", "")),
+            "rsrq": parsed_signal.get("rsrq", info.get("LTE_RSRQ", "")),
+            "sinr": parsed_signal.get("sinr", info.get("LTE_SINR", "")),
+            "ca_band": parsed_signal.get("ca_band", []),
+            "mcc": parsed_signal.get("mcc", ""),
+            "mnc": parsed_signal.get("mnc", ""),
+            "sim_status": "Ready" if info.get("LTE_SIM") == 1 else "Not detected",
+            "is_5g": bool(info.get("LTE_5G")),
+            "is_nsa": bool(info.get("LTE_NSA")),
+            "wan_up": status.get("up", False),
+            "cable_connected": status.get("cable", False),
+            # Raw data for debugging
+            "raw_lte_cell": info.get("LTE_CELL", ""),
+            "raw_lte_cainfo": info.get("LTE_CAINFO", ""),
+        }
+
+    @staticmethod
+    def _parse_lte_cell(info: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse LTE_CELL AT command output into structured signal data.
+
+        2026-03-11: Mirrors the parseLteData logic from the Chester web UI JS.
+        Handles both GTCCINFO (Fibocom) and QENG (Quectel) AT response formats.
+        """
+        lte_cell = info.get("LTE_CELL", "")
+        lte_cainfo = info.get("LTE_CAINFO", "")
+        lte_type = info.get("LTE_TYPE", "")
+
+        result: Dict[str, Any] = {}
+
+        # Parse CA band info
+        ca_bands = []
+        if lte_cainfo:
+            cleaned = lte_cainfo.replace("\r\n\r\nOK\r\n", "")
+            # Quectel format: AT+QCAINFO\r\r\n+QCAINFO: "PCC",...
+            if "+QCAINFO:" in cleaned:
+                parts = cleaned.split("+QCAINFO:")
+                for part in parts:
+                    part = part.strip()
+                    if part and not part.startswith("AT"):
+                        ca_bands.append(part)
+            # Fibocom format: AT+GTCAINFO?\r\r\n+GTCAINFO: \r\n...
+            elif "+GTCAINFO:" in cleaned:
+                cleaned = cleaned.replace("AT+GTCAINFO?\r\r\n+GTCAINFO: \r\n", "")
+                for line in cleaned.split("\r\n"):
+                    if line.strip():
+                        ca_bands.append(line.strip())
+        result["ca_band"] = ca_bands
+
+        if not lte_cell:
+            return result
+
+        # Fibocom format: starts with AT+GTCCINFO?
+        if lte_cell.startswith("AT+GTCCINFO?"):
+            rows = lte_cell.split("\r\n")
+            fields = rows[3].split(",") if len(rows) > 3 else []
+            if not fields:
+                return result
+
+            if lte_type == "NR5G-SA":
+                result.update({
+                    "connection_type": lte_type,
+                    "cell_id": hex(int(fields[5], 16)).upper().replace("0X", "") if len(fields) > 5 else "",
+                    "pcid": str(int(fields[7], 16)) if len(fields) > 7 else "",
+                    "arfcn": str(int(fields[6], 16)) if len(fields) > 6 else "",
+                    "band": fields[8].replace("50", "") if len(fields) > 8 else "",
+                    "rsrp": int(fields[12]) - 156 if len(fields) > 12 else "",
+                    "rsrq": 0.5 * int(fields[13]) - 43 if len(fields) > 13 else "",
+                    "sinr": 0.5 * int(fields[10]) - 23 if len(fields) > 10 else "",
+                    "mcc": fields[3] if len(fields) > 3 else "",
+                    "mnc": fields[2] if len(fields) > 2 else "",
+                })
+            else:
+                result.update({
+                    "connection_type": lte_type,
+                    "cell_id": hex(int(fields[5], 16)).upper().replace("0X", "") if len(fields) > 5 else "",
+                    "pcid": str(int(fields[7], 16)) if len(fields) > 7 else "",
+                    "arfcn": str(int(fields[6], 16)) if len(fields) > 6 else "",
+                    "band": fields[8].replace("10", "") if len(fields) > 8 else "",
+                    "rsrp": int(fields[12]) - 141 if len(fields) > 12 else "",
+                    "rsrq": 0.5 * int(fields[13]) - 19.5 if len(fields) > 13 else "",
+                    "sinr": 0.5 * int(fields[10]) - 0.5 if len(fields) > 10 else "",
+                    "mcc": fields[3] if len(fields) > 3 else "",
+                    "mnc": fields[2] if len(fields) > 2 else "",
+                })
+        else:
+            # Quectel format: AT+QENG="servingcell"\r\r\n+QENG: ...
+            lines = lte_cell.split("\n")
+            # Multi-line format: lines[1] has the data
+            if len(lines) > 1:
+                parts = lines[1].split(",")
+                if len(parts) > 2:
+                    conn_type = parts[2].replace('"', '')
+                    if conn_type == "NR5G-SA":
+                        result.update({
+                            "connection_type": conn_type,
+                            "cell_id": parts[6] if len(parts) > 6 else "",
+                            "pcid": parts[7] if len(parts) > 7 else "",
+                            "arfcn": parts[9] if len(parts) > 9 else "",
+                            "band": parts[10] if len(parts) > 10 else "",
+                            "rsrp": parts[12] if len(parts) > 12 else "",
+                            "rsrq": parts[13] if len(parts) > 13 else "",
+                            "sinr": parts[14] if len(parts) > 14 else "",
+                            "mcc": parts[4] if len(parts) > 4 else "",
+                            "mnc": parts[5] if len(parts) > 5 else "",
+                        })
+                    else:
+                        result.update({
+                            "connection_type": f"{conn_type} {parts[3].replace(chr(34), '')}" if len(parts) > 3 else conn_type,
+                            "cell_id": parts[6] if len(parts) > 6 else "",
+                            "pcid": parts[7] if len(parts) > 7 else "",
+                            "arfcn": parts[8] if len(parts) > 8 else "",
+                            "band": parts[9] if len(parts) > 9 else "",
+                            "rsrp": parts[13] if len(parts) > 13 else "",
+                            "rsrq": parts[14] if len(parts) > 14 else "",
+                            "sinr": parts[16] if len(parts) > 16 else "",
+                            "mcc": parts[4] if len(parts) > 4 else "",
+                            "mnc": parts[5] if len(parts) > 5 else "",
+                        })
+
+        return result
+
+    def logout(self):
+        """Logout and invalidate the current session."""
+        if self._session_id:
+            try:
+                self.api_call("login", "logout")
+            except Exception as e:
+                logger.warning(f"Session cleanup failed: {e}")
+            self._session_id = None
+            self._session_expires_at = None
+
+    def close(self):
+        self.logout()
+        if self._session:
+            self._session.close()
+
+    # 2026-05-11: Static DHCP lease management.
+    # Writes to /etc/config/dhcp on the Chester router so the device with the
+    # given MAC always pulls the same IP. Tries the Chester /api first, then
+    # falls back to SSH/uci (which is the canonical OpenWRT mechanism).
+    def set_static_lease(
+        self,
+        mac_address: str,
+        ip_address: str,
+        hostname: str = "",
+        enabled: bool = True,
+    ) -> Dict[str, Any]:
+        """Add or remove a static DHCP reservation.
+
+        Args:
+            mac_address: Client MAC in any common format (normalized internally).
+            ip_address: IPv4 address to reserve for this MAC.
+            hostname: Optional hostname/label for the reservation.
+            enabled: True to add/update the lease, False to remove it.
+
+        Returns:
+            A dict with keys:
+              - success (bool)
+              - method ("api:<module>.<api>" or "ssh-uci")
+              - error_code (int, 0 on success)
+              - detail (str)
+        """
+        mac_norm = self._normalize_mac(mac_address)
+        # IP only matters when enabling — disable just removes the host entry by MAC.
+        if enabled and not _is_valid_ipv4(ip_address):
+            return {
+                "success": False,
+                "method": "validation",
+                "error_code": -2,
+                "detail": f"Invalid IPv4 address: {ip_address!r}",
+            }
+
+        label = _sanitize_hostname(hostname) if hostname else f"hs-{mac_norm.replace(':', '')}"
+
+        # 1. Probe the Chester /api for a native static-lease endpoint.
+        api_result = self._try_api_static_lease(mac_norm, ip_address, label, enabled)
+        if api_result is not None:
+            return api_result
+
+        # 2. Fall back to SSH + uci. This is the canonical OpenWRT path.
+        return self._ssh_static_lease(mac_norm, ip_address, label, enabled)
+
+    @staticmethod
+    def _normalize_mac(mac: str) -> str:
+        hex_only = re.sub(r"[^0-9a-fA-F]", "", mac or "")
+        if len(hex_only) != 12:
+            raise ChesterAPIError(f"Invalid MAC address: {mac!r}")
+        lower = hex_only.lower()
+        return ":".join(lower[i:i + 2] for i in range(0, 12, 2))
+
+    def _try_api_static_lease(
+        self,
+        mac_norm: str,
+        ip_address: str,
+        label: str,
+        enabled: bool,
+    ) -> Optional[Dict[str, Any]]:
+        """Probe known Chester /api modules for static DHCP lease support.
+
+        Returns the result dict if any candidate succeeded, or None to signal
+        the caller should fall through to the SSH/uci path. We treat HTTP/auth
+        errors as fatal (re-raise via the surrounding caller), but module/api
+        rejection (errcode != 0) is treated as 'try the next candidate'.
+        """
+        param: Dict[str, Any] = {
+            "mac": mac_norm,
+            "ip": ip_address,
+            "name": label,
+            "enabled": bool(enabled),
+        }
+        if not enabled:
+            param["action"] = "remove"
+
+        for module, api in _STATIC_LEASE_API_CANDIDATES:
+            try:
+                result = self.api_call(module, api, param)
+            except ChesterAuthError:
+                # Bubble up — caller will surface 401 to the user.
+                raise
+            except ChesterAPIError as e:
+                logger.debug(f"Chester /api {module}.{api} unavailable: {e}")
+                continue
+            except Exception as e:
+                logger.debug(f"Chester /api {module}.{api} raised: {e}")
+                continue
+
+            logger.info(f"Chester /api {module}.{api} accepted static lease for {mac_norm}")
+            return {
+                "success": True,
+                "method": f"api:{module}.{api}",
+                "error_code": 0,
+                "detail": f"Static lease {'set' if enabled else 'removed'} via Chester /api",
+                "raw": result,
+            }
+
+        logger.info("No Chester /api module accepted set_static_lease — falling back to SSH/uci")
+        return None
+
+    def _ssh_static_lease(
+        self,
+        mac_norm: str,
+        ip_address: str,
+        label: str,
+        enabled: bool,
+    ) -> Dict[str, Any]:
+        """Apply the static lease via SSH + uci. Requires SSH on the Chester."""
+        ssh_host = os.getenv("CHESTER_SSH_HOST", self.host)
+        ssh_port = int(os.getenv("CHESTER_SSH_PORT", "22"))
+        ssh_user = os.getenv("CHESTER_SSH_USERNAME", "root")
+        ssh_password = os.getenv("CHESTER_SSH_PASSWORD", self.password)
+
+        if not ssh_password:
+            return {
+                "success": False,
+                "method": "ssh-uci",
+                "error_code": -3,
+                "detail": "No SSH password configured (set CHESTER_SSH_PASSWORD or Chester admin password)",
+            }
+
+        try:
+            import paramiko
+        except ImportError:
+            return {
+                "success": False,
+                "method": "ssh-uci",
+                "error_code": -4,
+                "detail": "paramiko not installed — cannot fall back to SSH/uci",
+            }
+
+        # Build a single shell command that:
+        #   1. Removes any existing host entry matching this MAC (idempotent)
+        #   2. If enabling, appends a fresh host entry with the new IP/name
+        #   3. Commits and reloads dnsmasq
+        mac_q = shlex.quote(mac_norm)
+        ip_q = shlex.quote(ip_address)
+        name_q = shlex.quote(label)
+
+        # uci's section indices shift after every delete, so we loop until no
+        # matching section remains. Then optionally append a new one.
+        remove_block = (
+            "while idx=$(uci show dhcp 2>/dev/null | "
+            f"grep -i \"=.*{mac_norm}\" | head -n1 | cut -d. -f2 | cut -d= -f1); "
+            "[ -n \"$idx\" ]; do uci delete dhcp.$idx; done"
+        )
+
+        if enabled:
+            add_block = (
+                "sec=$(uci add dhcp host); "
+                f"uci set dhcp.$sec.name={name_q}; "
+                f"uci set dhcp.$sec.mac={mac_q}; "
+                f"uci set dhcp.$sec.ip={ip_q}; "
+                "uci set dhcp.$sec.leasetime=infinite"
+            )
+            command = f"{remove_block}; {add_block} && uci commit dhcp && /etc/init.d/dnsmasq reload"
+        else:
+            command = f"{remove_block}; uci commit dhcp && /etc/init.d/dnsmasq reload"
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(
+                hostname=ssh_host,
+                port=ssh_port,
+                username=ssh_user,
+                password=ssh_password,
+                timeout=self.timeout,
+                allow_agent=False,
+                look_for_keys=False,
+            )
+        except Exception as e:
+            logger.error(f"SSH connect to Chester {ssh_host}:{ssh_port} failed: {e}")
+            return {
+                "success": False,
+                "method": "ssh-uci",
+                "error_code": -5,
+                "detail": f"SSH connect failed: {e}",
+            }
+
+        try:
+            stdin, stdout, stderr = client.exec_command(command, timeout=self.timeout)
+            exit_code = stdout.channel.recv_exit_status()
+            stdout_text = stdout.read().decode("utf-8", errors="replace").strip()
+            stderr_text = stderr.read().decode("utf-8", errors="replace").strip()
+        except Exception as e:
+            logger.error(f"SSH exec on Chester failed: {e}")
+            return {
+                "success": False,
+                "method": "ssh-uci",
+                "error_code": -6,
+                "detail": f"SSH exec failed: {e}",
+            }
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+        if exit_code != 0:
+            logger.warning(
+                f"uci static-lease command exited {exit_code}; stderr={stderr_text!r}"
+            )
+            return {
+                "success": False,
+                "method": "ssh-uci",
+                "error_code": exit_code,
+                "detail": stderr_text or stdout_text or f"uci exited {exit_code}",
+            }
+
+        logger.info(
+            f"Static lease {'set' if enabled else 'removed'} via SSH/uci for {mac_norm} -> {ip_address}"
+        )
+        return {
+            "success": True,
+            "method": "ssh-uci",
+            "error_code": 0,
+            "detail": f"Static lease {'set' if enabled else 'removed'} via uci",
+            "stdout": stdout_text,
+        }
+
+    def ssh_exec(self, command: str, timeout: Optional[float] = None) -> str:
+        """Run a shell command on the Chester over SSH and return its stdout.
+
+        2026-10-13: Used to read the router's neighbor table, leases and DHCP
+        reservations. Uses the same SSH settings as the static-lease path.
+        """
+        ssh_host = os.getenv("CHESTER_SSH_HOST", self.host)
+        ssh_port = int(os.getenv("CHESTER_SSH_PORT", "22"))
+        ssh_user = os.getenv("CHESTER_SSH_USERNAME", "root")
+        ssh_password = os.getenv("CHESTER_SSH_PASSWORD", self.password)
+        if not ssh_password:
+            raise ChesterAuthError("No SSH password configured (set CHESTER_SSH_PASSWORD or Chester admin password)")
+
+        try:
+            import paramiko
+        except ImportError as e:
+            raise ChesterAPIError("paramiko not installed, cannot run SSH commands") from e
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(
+                hostname=ssh_host,
+                port=ssh_port,
+                username=ssh_user,
+                password=ssh_password,
+                timeout=self.timeout,
+                allow_agent=False,
+                look_for_keys=False,
+            )
+            _, stdout, _ = client.exec_command(command, timeout=timeout or max(self.timeout, 30))
+            output = stdout.read().decode("utf-8", errors="replace")
+            exit_code = stdout.channel.recv_exit_status()
+        except Exception as e:
+            raise ChesterAPIError(f"SSH command on Chester {ssh_host}:{ssh_port} failed: {e}") from e
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+        # A trailing grep with no match exits 1 even though the output is complete.
+        if exit_code != 0 and not output.strip():
+            raise ChesterAPIError(f"SSH command exited {exit_code} with no output")
+        return output
+
+
+def _is_valid_ipv4(addr: str) -> bool:
+    if not addr or not isinstance(addr, str):
+        return False
+    parts = addr.split(".")
+    if len(parts) != 4:
+        return False
+    for p in parts:
+        if not p.isdigit():
+            return False
+        n = int(p)
+        if n < 0 or n > 255:
+            return False
+    return True
+
+
+def _sanitize_hostname(name: str) -> str:
+    """Reduce a freeform name to a safe DHCP host label.
+
+    OpenWRT/dnsmasq accepts alphanumerics and hyphens; anything else is stripped.
+    Falls back to 'hs-device' if the result is empty.
+    """
+    cleaned = re.sub(r"[^A-Za-z0-9-]+", "-", name or "").strip("-")
+    return cleaned[:63] if cleaned else "hs-device"

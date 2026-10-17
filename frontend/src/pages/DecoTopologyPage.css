@@ -1,0 +1,16 @@
+.deco-topology-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .deco-topology-page {
+    padding: 10px;
+    gap: 15px;
+  }
+}

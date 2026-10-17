@@ -1,0 +1,9 @@
+-- 2026-03-12: Add indexes for frequently queried columns
+CREATE INDEX IF NOT EXISTS idx_device_events_device_id ON device_events(device_id);
+CREATE INDEX IF NOT EXISTS idx_device_events_event_type ON device_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_device_events_timestamp ON device_events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_device_alerts_dismissed ON device_alerts(dismissed);
+CREATE INDEX IF NOT EXISTS idx_device_alerts_device_id ON device_alerts(device_id);
+CREATE INDEX IF NOT EXISTS idx_network_devices_status ON network_devices(status);
+CREATE INDEX IF NOT EXISTS idx_network_devices_mac ON network_devices(mac_address);
+CREATE INDEX IF NOT EXISTS idx_speed_tests_timestamp ON speed_tests(timestamp);

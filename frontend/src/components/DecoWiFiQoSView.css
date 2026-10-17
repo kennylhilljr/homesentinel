@@ -1,0 +1,556 @@
+.wifi-qos-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+}
+
+/* Loading State */
+.view-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.spinner {
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.view-loading p {
+  color: #6b7280;
+  font-size: 16px;
+}
+
+/* Error State */
+.view-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background-color: #fee2e2;
+  border-radius: 50%;
+  color: #dc2626;
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.view-error h3 {
+  color: #dc2626;
+  margin: 0;
+  font-size: 20px;
+}
+
+.view-error p {
+  color: #6b7280;
+  margin: 0;
+  text-align: center;
+  max-width: 400px;
+}
+
+.retry-button {
+  padding: 10px 20px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.retry-button:hover {
+  background-color: #2563eb;
+}
+
+/* Sections */
+.section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.last-updated {
+  color: #6b7280;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.device-count {
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* WiFi Section */
+.wifi-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.config-card {
+  padding: 16px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.5px;
+}
+
+.card-value {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: #1f2937;
+  word-break: break-all;
+}
+
+.ssid-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #0f766e;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+/* Bands */
+.bands-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.band-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background-color: #dbeafe;
+  color: #1e40af;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Channels */
+.channels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.channel-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background-color: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+.channel-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.channel-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+/* Band Steering */
+.band-steering-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-badge.enabled {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.disabled {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+/* QoS Section */
+.qos-content {
+  width: 100%;
+}
+
+.no-devices {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+}
+
+/* QoS Table */
+.qos-table-container {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.qos-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.qos-table thead {
+  background-color: #f3f4f6;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.qos-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.qos-table tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.15s;
+}
+
+.qos-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.qos-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.qos-table td {
+  padding: 12px;
+}
+
+/* Table Columns */
+.col-device {
+  width: 20%;
+  min-width: 150px;
+}
+
+.col-mac {
+  width: 18%;
+  min-width: 140px;
+}
+
+.col-ip {
+  width: 15%;
+  min-width: 120px;
+}
+
+.col-priority {
+  width: 15%;
+  min-width: 100px;
+}
+
+.col-bandwidth {
+  width: 18%;
+  min-width: 130px;
+}
+
+.col-type {
+  width: 14%;
+  min-width: 110px;
+}
+
+/* Device Name */
+.device-name {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+/* MAC Address and IP */
+.mac-address,
+.ip-address {
+  display: block;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  color: #4b5563;
+  background-color: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+/* Priority Badge */
+.priority-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  min-width: 70px;
+}
+
+/* Bandwidth */
+.bandwidth-value {
+  color: #059669;
+  font-weight: 500;
+}
+
+.no-limit {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Connection Type */
+.connection-type {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.connection-type.wifi {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.connection-type.wired {
+  background-color: #d1d5db;
+  color: #374151;
+}
+
+/* Footer */
+.view-footer {
+  text-align: center;
+  padding: 16px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.footer-text {
+  margin: 4px 0;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .wifi-content {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+
+  .col-device {
+    width: 25%;
+    min-width: 120px;
+  }
+
+  .col-mac {
+    width: 20%;
+    min-width: 110px;
+  }
+
+  .col-ip {
+    width: 18%;
+    min-width: 100px;
+  }
+
+  .col-priority {
+    width: 15%;
+    min-width: 90px;
+  }
+
+  .col-bandwidth {
+    width: 15%;
+    min-width: 110px;
+  }
+
+  .col-type {
+    width: 12%;
+    min-width: 90px;
+  }
+
+  .mac-address,
+  .ip-address {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+}
+
+@media (max-width: 768px) {
+  .wifi-qos-view {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .section {
+    padding: 16px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .wifi-content {
+    grid-template-columns: 1fr;
+  }
+
+  .channels-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .qos-table {
+    font-size: 12px;
+  }
+
+  .qos-table th,
+  .qos-table td {
+    padding: 8px;
+  }
+
+  .col-device,
+  .col-mac,
+  .col-ip,
+  .col-priority,
+  .col-bandwidth,
+  .col-type {
+    width: auto;
+    min-width: 80px;
+  }
+
+  .mac-address,
+  .ip-address {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+
+  .priority-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    min-width: 60px;
+  }
+
+  .device-name {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .wifi-qos-view {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .section {
+    padding: 12px;
+  }
+
+  .section-title {
+    font-size: 16px;
+  }
+
+  .qos-table {
+    font-size: 11px;
+  }
+
+  .qos-table th,
+  .qos-table td {
+    padding: 6px;
+  }
+
+  .qos-table-container {
+    overflow-x: scroll;
+  }
+
+  .device-name {
+    font-size: 12px;
+  }
+
+  .band-badge,
+  .status-badge {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}
