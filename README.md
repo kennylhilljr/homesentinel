@@ -1,6 +1,6 @@
 # HomeSentinel
 
-![Python 3.9+](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)
+![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![React 18](https://img.shields.io/badge/React-18.2-61DAFB?logo=react&logoColor=black)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?logo=fastapi&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?logo=sqlite&logoColor=white)
@@ -201,7 +201,7 @@ erDiagram
 ## Technology Stack
 
 ### Backend
-- **Runtime**: Python 3.9+
+- **Runtime**: Python 3.10+
 - **Framework**: FastAPI 0.104 with HTTPS (self-signed certs)
 - **Database**: SQLite with WAL journal mode + write locking
 - **Auth**: API key middleware (`X-API-Key`), OAuth 2.0 (Alexa account linking)
@@ -218,13 +218,13 @@ erDiagram
 
 ### Infrastructure
 - **Containerization**: Docker Compose (backend + frontend)
-- **CI/CD**: GitHub Actions (Python 3.9/3.10/3.11 matrix)
+- **CI/CD**: GitHub Actions (backend tests on Python 3.10/3.11; frontend tests and build on Node 22)
 - **Cloud**: AWS Lambda (Alexa Smart Home Skill v3)
 - **HTTPS**: Auto-generated self-signed certificates
 
 ## Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - Node.js 18+ and npm
 - OpenSSL (for HTTPS certificate generation)
 - `speedtest` (Ookla CLI, firmware 2.4.0+) on the Chester router, plus SSH access to it (for speed tests)
@@ -418,7 +418,7 @@ homesentinel/
 │   ├── gen-cert.sh                # SSL certificate generation with SANs
 │   └── build-deploy.sh            # Production build and deploy
 ├── .github/workflows/
-│   └── python-package.yml         # CI: lint + test on Python 3.9-3.11
+│   └── ci.yml                     # CI: backend lint + tests, frontend tests + build
 ├── docker-compose.yml             # Backend + frontend containers
 ├── init.sh                        # One-command project setup
 ├── start-dev.sh                   # Development server launcher
@@ -481,8 +481,11 @@ See `.env.example` for integration-specific variables (Deco, Alexa, Chester, Ala
 ### Running Tests
 
 ```bash
-# Backend unit tests
-cd backend && pytest -v
+# Backend unit tests (what CI runs)
+cd backend && python -m pytest tests
+
+# Frontend unit tests (Vitest) and build (what CI runs)
+cd frontend && npm test && npm run build
 
 # Backend with coverage
 cd backend && pytest --cov=. --cov-report=term-missing
