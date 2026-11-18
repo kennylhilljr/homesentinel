@@ -100,6 +100,8 @@ def test_non_loopback_with_key_and_certs_starts_without_logging_key(tmp_path, ca
     client = TestClient(calls[0][0][0])
     assert client.get("/api/devices").status_code == 401
     assert client.get("/api/devices", headers={"X-API-Key": "wrong"}).status_code == 401
+    # The configured key gets past auth (the catch-all then answers 404 for an unknown API path).
+    assert client.get("/api/no-such-route", headers={"X-API-Key": KEY}).status_code == 404
 
 
 def test_insecure_override_starts_and_warns(tmp_path, calls, caplog, monkeypatch):
