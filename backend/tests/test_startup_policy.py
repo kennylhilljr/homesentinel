@@ -126,7 +126,7 @@ def test_whitespace_host_uses_default(tmp_path):
     assert config.host == "127.0.0.1"
 
 
-@pytest.mark.parametrize("port", ["abc", "0", "70000"])
+@pytest.mark.parametrize("port", ["abc", "-1", "70000"])
 def test_invalid_port_is_refused(tmp_path, port):
     with pytest.raises(StartupPolicyError, match="BACKEND_PORT"):
         resolve_startup_config({"BACKEND_PORT": port}, *_certs(tmp_path))

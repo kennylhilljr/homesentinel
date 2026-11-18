@@ -58,8 +58,8 @@ def resolve_startup_config(env: Mapping[str, str], cert_file: str, key_file: str
         port = int(raw_port)
     except ValueError:
         raise StartupPolicyError(f"BACKEND_PORT must be an integer, got {raw_port!r}") from None
-    if not 0 < port < 65536:
-        raise StartupPolicyError(f"BACKEND_PORT must be between 1 and 65535, got {port}")
+    if not 0 <= port <= 65535:
+        raise StartupPolicyError(f"BACKEND_PORT must be between 0 and 65535, got {port}")
 
     auth_enabled = bool((env.get("HOMESENTINEL_API_KEY") or "").strip())
     insecure_override = (env.get("HOMESENTINEL_ALLOW_INSECURE_BIND") or "").strip().lower() in _TRUTHY

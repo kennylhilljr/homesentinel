@@ -1028,11 +1028,15 @@ async def spa_catch_all(request: Request, path: str):
     raise HTTPException(status_code=404, detail="Not found")
 
 
-def run_server(env=None, cert_dir=None):
+def run_server(cert_dir=None):
     """Resolve bind/TLS/auth policy and start uvicorn, or exit if the policy refuses."""
+    from middleware import auth as auth_middleware
     from startup_policy import StartupPolicyError, describe_startup_config, resolve_startup_config
 
-    env = os.environ if env is None else env
+    # Judge auth by the key the middleware actually enforces, not a fresh env read,
+    # so the policy can never report auth=on for an app that runs without it.
+    env = dict(os.environ)
+    env["HOMESENTINEL_API_KEY"] = auth_middleware.HOMESENTINEL_API_KEY
     cert_dir = cert_dir or os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs")
     try:
         config = resolve_startup_config(
