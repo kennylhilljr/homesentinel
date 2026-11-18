@@ -482,7 +482,7 @@ See `.env.example` for integration-specific variables (Deco, Alexa, Chester, Ala
 
 ```bash
 # Backend unit tests (what CI runs)
-cd backend && python -m pytest tests
+cd backend && python -m pytest
 
 # Frontend unit tests (Vitest) and build (what CI runs)
 cd frontend && npm test && npm run build

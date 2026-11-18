@@ -7,6 +7,8 @@ import pytest
 # Skipped so that CI can gate new regressions. Tracked in #3: fix or delete each
 # test, then remove it from this set.
 KNOWN_STALE = {
+    "test_coverage_report.py::test_full_integration",
+    "test_integration_full.py::test_full_integration",
     "tests/test_chester_client.py::TestChesterClient::test_authenticate_success",
     "tests/test_chester_client.py::TestChesterClient::test_ubus_call_error_code",
     "tests/test_chester_client.py::TestChesterClient::test_ubus_call_success",

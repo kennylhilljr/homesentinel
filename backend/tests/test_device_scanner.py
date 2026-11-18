@@ -822,7 +822,9 @@ class TestErrorHandling:
         scanner.has_arp_scan = False
         scanner.has_nmap = False
 
-        devices = scanner.scan_subnet("192.168.1.0/24")
+        # Isolate from the host's real `arp -a` table (non-empty on CI runners).
+        with patch.object(scanner, "_read_arp_table", return_value={}):
+            devices = scanner.scan_subnet("192.168.1.0/24")
         assert devices == []
 
     def test_dhcp_parser_file_not_found(self):
