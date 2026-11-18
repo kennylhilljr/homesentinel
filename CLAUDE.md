@@ -141,9 +141,11 @@ React Frontend (:2026)
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BACKEND_PORT` | `8443` | HTTPS port |
+| `HOMESENTINEL_HOST` | `127.0.0.1` | Bind address (non-loopback needs API key + TLS) |
 | `NETWORK_SUBNET` | `192.168.12.0/24` | ARP scan subnet |
 | `POLLING_INTERVAL_SECONDS` | `60` | Device scan interval |
 | `HOMESENTINEL_API_KEY` | _(empty)_ | API key (empty = auth disabled) |
+| `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | `1` = allow insecure non-loopback bind |
 | `CREDENTIAL_KEY` | _(auto-gen)_ | Fernet encryption key |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa |
 | `SPEEDTEST_INTERVAL_SECONDS` | `1800` | Speed test interval |

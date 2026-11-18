@@ -1028,29 +1028,36 @@ async def spa_catch_all(request: Request, path: str):
     raise HTTPException(status_code=404, detail="Not found")
 
 
-if __name__ == "__main__":
-    # SSL certificate setup
-    cert_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs")
-    cert_file = f"{cert_dir}/cert.pem"
-    key_file = f"{cert_dir}/key.pem"
+def run_server(env=None, cert_dir=None):
+    """Resolve bind/TLS/auth policy and start uvicorn, or exit if the policy refuses."""
+    from startup_policy import StartupPolicyError, describe_startup_config, resolve_startup_config
 
-    # Use SSL if certificates exist
-    port = int(os.getenv("BACKEND_PORT", "8443"))
-    if os.path.exists(cert_file) and os.path.exists(key_file):
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=port,
-            ssl_certfile=cert_file,
-            ssl_keyfile=key_file,
-            log_level="info"
+    env = os.environ if env is None else env
+    cert_dir = cert_dir or os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs")
+    try:
+        config = resolve_startup_config(
+            env, os.path.join(cert_dir, "cert.pem"), os.path.join(cert_dir, "key.pem")
         )
-    else:
-        # Fall back to HTTP if no certificates
-        print("Warning: SSL certificates not found, running on HTTP")
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=port,
-            log_level="info"
+    except StartupPolicyError as e:
+        logger.error("Refusing to start: %s", e)
+        raise SystemExit(1)
+
+    logger.info(describe_startup_config(config))
+    if not config.tls_enabled:
+        logger.warning("SSL certificates not found, serving plain HTTP on %s", config.host)
+    if config.insecure_override and not config.loopback:
+        logger.warning(
+            "HOMESENTINEL_ALLOW_INSECURE_BIND is set: non-loopback bind may lack API key auth or TLS"
         )
+    uvicorn.run(
+        app,
+        host=config.host,
+        port=config.port,
+        ssl_certfile=config.ssl_certfile,
+        ssl_keyfile=config.ssl_keyfile,
+        log_level="info",
+    )
+
+
+if __name__ == "__main__":
+    run_server()

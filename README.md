@@ -299,10 +299,22 @@ npm start
 ### Docker
 
 ```bash
+bash scripts/gen-cert.sh                      # TLS certs in backend/certs/
+export HOMESENTINEL_API_KEY="$(openssl rand -hex 32)"
 docker compose up -d
 ```
 
-Backend runs on port 8443, frontend on port 2026.
+Backend runs on port 8443, frontend on port 2026. The compose file sets `HOMESENTINEL_HOST=0.0.0.0` so the backend is reachable from outside its container, so it requires `HOMESENTINEL_API_KEY` and certificates in `backend/certs/`; without them, compose or the backend refuses to start.
+
+### Bind address and exposure
+
+A direct run (`python backend/main.py`, `start-dev.sh`, the macOS launchd runtime) binds to `127.0.0.1` by default. The Vite frontend proxies `/api` to `https://localhost:8443`, so the dashboard keeps working.
+
+To expose the backend beyond localhost (LAN, ZeroTier, Alexa Lambda reaching port 8443 directly), set `HOMESENTINEL_HOST` (for example `0.0.0.0`) together with `HOMESENTINEL_API_KEY`, and generate certificates with `scripts/gen-cert.sh`. On a non-loopback bind, the backend refuses to start without an API key and does not fall back to plaintext HTTP when certificates are missing. `HOMESENTINEL_ALLOW_INSECURE_BIND=1` overrides both checks; avoid it outside isolated test networks.
+
+At startup the backend logs the effective modes, for example `HomeSentinel bind=127.0.0.1:8443 (loopback) tls=on auth=off insecure_override=no`. The API key is never logged.
+
+Note: the frontend dev server listens on `0.0.0.0:2026` and proxies `/api` to the backend, so set `HOMESENTINEL_API_KEY` if port 2026 is reachable from your LAN.
 
 ## Integration Setup
 
@@ -431,8 +443,10 @@ homesentinel/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BACKEND_PORT` | `8443` | Backend HTTPS port |
+| `HOMESENTINEL_HOST` | `127.0.0.1` | Backend bind address. Non-loopback values require `HOMESENTINEL_API_KEY` and TLS certs in `backend/certs/`, or startup is refused |
 | `CORS_ORIGINS` | `localhost:2026,localhost:8443` | Allowed CORS origins (comma-separated) |
-| `HOMESENTINEL_API_KEY` | _(empty)_ | API key for `X-API-Key` auth (empty = auth disabled) |
+| `HOMESENTINEL_API_KEY` | _(empty)_ | API key for `X-API-Key` auth (empty = auth disabled; required for non-loopback binds) |
+| `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | Set to `1` to allow a non-loopback bind without an API key or TLS (not recommended) |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa account linking |
 | `CREDENTIAL_KEY` | _(auto-generated)_ | Fernet key for credential encryption at rest |
 | `NETWORK_SUBNET` | `192.168.12.0/24` | Subnet for ARP scanning |

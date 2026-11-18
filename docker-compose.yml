@@ -10,7 +10,9 @@ services:
       - "8443:8443"
     environment:
       - BACKEND_PORT=8443
-      - BACKEND_HOST=0.0.0.0
+      # Explicit LAN exposure: a non-loopback bind requires an API key and TLS certs in ./backend/certs
+      - HOMESENTINEL_HOST=0.0.0.0
+      - HOMESENTINEL_API_KEY=${HOMESENTINEL_API_KEY:?Set HOMESENTINEL_API_KEY to expose HomeSentinel beyond localhost}
       - LOG_LEVEL=INFO
     volumes:
       - ./backend:/app
