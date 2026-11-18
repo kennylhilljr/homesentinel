@@ -3,15 +3,15 @@ import '@testing-library/jest-dom';
 import DecoWiFiQoSView from './DecoWiFiQoSView';
 
 // Mock apiConfig module
-jest.mock('../utils/apiConfig', () => ({
-  buildUrl: jest.fn((endpoint) => `/api${endpoint}`),
+vi.mock('../utils/apiConfig', () => ({
+  buildUrl: vi.fn((endpoint) => `/api${endpoint}`),
   __esModule: true,
 }));
 
 import * as apiConfig from '../utils/apiConfig';
 
 // Mock fetch
-global.fetch = jest.fn();
+global.fetch = vi.fn();
 
 describe('DecoWiFiQoSView Component', () => {
   const mockWiFiConfig = {
@@ -55,11 +55,11 @@ describe('DecoWiFiQoSView Component', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
   });
 
   test('test_wifi_qos_view_renders', async () => {
