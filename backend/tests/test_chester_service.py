@@ -46,14 +46,14 @@ class TestChesterService:
         # detected=True and passes board info and WAN data through.
         client = Mock()
         client.get_board_info.return_value = {"model": "Chester X1"}
-        client.api_call.return_value = {"interface": "cell0", "proto": "qmi", "up": True}
+        client.api_call.return_value = {"interface": "wan", "proto": "dhcp", "up": True}
 
         service = ChesterService(client)
         data = service.get_cellular_status()
 
         assert data["cellular"]["detected"] is True
         assert data["cellular"]["info"]["model"] == "Chester X1"
-        assert data["cellular"]["wan"]["proto"] == "qmi"
+        assert data["cellular"]["wan"]["proto"] == "dhcp"
         client.api_call.assert_called_once_with("network", "get_wan")
 
     def test_get_system_info_merges_client_data(self):
