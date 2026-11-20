@@ -336,20 +336,30 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('manual refresh updates last refresh time', async () => {
+      // Fake only Date so the "last updated" age is deterministic while
+      // timers (and userEvent) stay real.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
       const user = userEvent.setup();
-      render(<DecoNodesPage />);
+      const { rerender } = render(<DecoNodesPage />);
 
       // Before the first response lands nothing has been refreshed
       expect(screen.getByText('Last updated: Never')).toBeInTheDocument();
 
       await screen.findByText('Main Router');
-      expect(screen.getByText(/Last updated: \d+s ago/)).toBeInTheDocument();
+      expect(screen.getByText('Last updated: 0s ago')).toBeInTheDocument();
 
+      // Time passes: the timestamp ages
+      vi.setSystemTime(new Date('2026-01-01T00:00:30Z'));
+      rerender(<DecoNodesPage />);
+      expect(screen.getByText('Last updated: 30s ago')).toBeInTheDocument();
+
+      // A manual refresh resets it
       await user.click(screen.getByRole('button', { name: /Refresh/i }));
 
       await waitFor(() => {
         expect(callsTo('/api/deco/nodes/refresh')).toHaveLength(1);
-        expect(screen.getByText(/Last updated: \d+s ago/)).toBeInTheDocument();
+        expect(screen.getByText('Last updated: 0s ago')).toBeInTheDocument();
       });
     });
 
