@@ -17,7 +17,9 @@ from starlette.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 # 2026-03-12: Read API key from env var. If empty/unset, auth is disabled (backwards compat).
-HOMESENTINEL_API_KEY = os.getenv("HOMESENTINEL_API_KEY", "")
+# Stripped like startup_policy and the dashboard prompt do, so a whitespace-only key means
+# auth off everywhere and a key pasted with stray spaces still matches.
+HOMESENTINEL_API_KEY = os.getenv("HOMESENTINEL_API_KEY", "").strip()
 
 # EventSource cannot set headers, so the SSE stream authenticates with a short-lived,
 # single-use token issued by the key-protected POST /api/sse/token. The long-lived API

@@ -132,3 +132,19 @@ def test_real_app_exposes_auth_marker_to_cross_origin_dashboard(monkeypatch):
     assert response.headers[auth_middleware.AUTH_REQUIRED_HEADER] == "api-key"
     exposed = response.headers.get("access-control-expose-headers", "").lower()
     assert auth_middleware.AUTH_REQUIRED_HEADER.lower() in exposed
+
+
+@pytest.mark.parametrize("raw, expected", [("  k-123  ", "k-123"), ("   ", ""), ("", "")])
+def test_middleware_key_is_stripped_like_startup_policy(raw, expected):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    backend = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "HOMESENTINEL_API_KEY": raw}
+    out = subprocess.run(
+        [sys.executable, "-c", "from middleware import auth; print(repr(auth.HOMESENTINEL_API_KEY))"],
+        cwd=backend, env=env, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert out == repr(expected)
