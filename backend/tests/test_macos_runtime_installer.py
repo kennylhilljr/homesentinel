@@ -46,3 +46,14 @@ def test_service_control_script_is_allowlisted_and_never_accepts_a_pid():
     assert "launchctl kickstart" in controller
     assert "launchctl bootout" in controller
     assert "kill -9" not in controller
+
+
+def test_frontend_launch_agent_does_not_force_wildcard_host():
+    installer = (PROJECT_ROOT / "scripts" / "install-macos-runtime.sh").read_text()
+    assert "<string>0.0.0.0</string>" not in installer
+    assert "<string>--host</string>" not in installer
+
+
+def test_frontend_launch_agent_defaults_to_loopback():
+    installer = (PROJECT_ROOT / "scripts" / "install-macos-runtime.sh").read_text()
+    assert "<key>HOMESENTINEL_FRONTEND_HOST</key><string>${HOMESENTINEL_FRONTEND_HOST:-127.0.0.1}</string>" in installer

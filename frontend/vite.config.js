@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import svgr from 'vite-plugin-svgr';
+import { resolveDevServerHost } from './devServerHost.mjs';
 
 // 2026-03-12: Migrated from react-scripts (EOL) to Vite
 // 2026-05-10: Added vite-plugin-svgr so SVGs imported with ?react render as React components.
@@ -21,7 +22,7 @@ export default defineConfig({
   ],
   server: {
     port: 2026,
-    host: '0.0.0.0',
+    host: resolveDevServerHost(process.env),
     proxy: {
       '/api': {
         target: 'https://localhost:8443',

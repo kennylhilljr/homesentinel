@@ -22,6 +22,9 @@ HOMESENTINEL_API_KEY = os.getenv("HOMESENTINEL_API_KEY", "")
 # EventSource cannot set headers, so the SSE stream authenticates with a short-lived,
 # single-use token issued by the key-protected POST /api/sse/token. The long-lived API
 # key never appears in a URL.
+# Marks 401s from this middleware, so the dashboard can tell them apart from
+# integration (Deco, Alexa, ...) 401s that routes pass through.
+AUTH_REQUIRED_HEADER = "X-HomeSentinel-Auth"
 SSE_EVENTS_PATH = "/api/sse/events"
 SSE_TOKEN_TTL_SECONDS = 60
 _used_sse_tokens: dict = {}  # nonce -> expiry, kept until the token would have expired anyway
@@ -109,6 +112,7 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid or missing API key. Set X-API-Key header."},
+                headers={AUTH_REQUIRED_HEADER: "api-key"},
             )
 
         return await call_next(request)

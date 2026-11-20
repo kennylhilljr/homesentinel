@@ -49,7 +49,9 @@ def test_token_endpoint_requires_api_key(client):
 
 
 def test_events_without_key_or_token_is_401(client):
-    assert client.get("/api/sse/events").status_code == 401
+    response = client.get("/api/sse/events")
+    assert response.status_code == 401
+    assert response.headers[auth_middleware.AUTH_REQUIRED_HEADER] == "api-key"
 
 
 def test_events_with_header_key_still_works(client):

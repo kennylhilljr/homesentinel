@@ -147,6 +147,7 @@ React Frontend (:2026)
 | `POLLING_INTERVAL_SECONDS` | `60` | Device scan interval |
 | `HOMESENTINEL_API_KEY` | _(empty)_ | API key (empty = auth disabled) |
 | `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | `1` = allow insecure non-loopback bind |
+| `HOMESENTINEL_FRONTEND_HOST` | `127.0.0.1` | Vite dev server bind (non-loopback needs override) |
 | `CREDENTIAL_KEY` | _(auto-gen)_ | Fernet encryption key |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa |
 | `SPEEDTEST_INTERVAL_SECONDS` | `1800` | Speed test interval |

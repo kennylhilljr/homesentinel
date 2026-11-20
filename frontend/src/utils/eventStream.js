@@ -15,7 +15,7 @@ export async function getEventStreamUrl(path = '/sse/events') {
   const url = buildUrl(path);
   try {
     const response = await fetch(buildUrl('/sse/token'), { method: 'POST' });
-    if (response.status === 401) return null;
+    if (response.status === 401) return null; // key missing/wrong; the prompt handles it
     // Older backend without the token route (auth off): connect directly.
     if (!response.ok) return url;
     const { token } = await response.json();

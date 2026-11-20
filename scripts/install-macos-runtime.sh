@@ -77,12 +77,13 @@ cat > "$FRONTEND_PLIST" <<EOF
   <key>ProgramArguments</key><array>
     <string>$NODE_BIN</string>
     <string>$APP_ROOT/frontend/node_modules/vite/bin/vite.js</string>
-    <string>--host</string><string>0.0.0.0</string>
     <string>--port</string><string>2026</string>
   </array>
   <key>WorkingDirectory</key><string>$APP_ROOT/frontend</string>
   <key>EnvironmentVariables</key><dict>
     <key>NODE_ENV</key><string>production</string>
+    <key>HOMESENTINEL_FRONTEND_HOST</key><string>${HOMESENTINEL_FRONTEND_HOST:-127.0.0.1}</string>
+    <key>HOMESENTINEL_ALLOW_INSECURE_BIND</key><string>${HOMESENTINEL_ALLOW_INSECURE_BIND:-}</string>
     <key>PATH</key><string>$(dirname "$NODE_BIN"):/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
   </dict>
   <key>RunAtLoad</key><true/>

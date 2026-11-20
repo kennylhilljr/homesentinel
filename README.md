@@ -316,7 +316,7 @@ With an API key set, the dashboard asks for the key the first time an `/api` req
 
 At startup the backend logs the effective modes, for example `HomeSentinel bind=127.0.0.1:8443 (loopback) tls=on auth=off insecure_override=no`. The API key is never logged.
 
-Note: the frontend dev server listens on `0.0.0.0:2026` and proxies `/api` to the backend, so set `HOMESENTINEL_API_KEY` if port 2026 is reachable from your LAN.
+The Vite dev server (port 2026) serves plain HTTP and proxies `/api` to the backend, so it listens on `127.0.0.1` only (Docker publishes it on `127.0.0.1:2026`). A non-loopback `HOMESENTINEL_FRONTEND_HOST` is refused unless `HOMESENTINEL_ALLOW_INSECURE_BIND=1` is set. For LAN access, build the dashboard (`scripts/build-deploy.sh`) and open it from the backend over HTTPS on port 8443.
 
 ## Integration Setup
 
@@ -448,7 +448,8 @@ homesentinel/
 | `HOMESENTINEL_HOST` | `127.0.0.1` | Backend bind address. Non-loopback values require `HOMESENTINEL_API_KEY` and TLS certs in `backend/certs/`, or startup is refused |
 | `CORS_ORIGINS` | `localhost:2026,localhost:8443` | Allowed CORS origins (comma-separated) |
 | `HOMESENTINEL_API_KEY` | _(empty)_ | API key for `X-API-Key` auth (empty = auth disabled; required for non-loopback binds) |
-| `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | Set to `1` to allow a non-loopback bind without an API key or TLS (not recommended) |
+| `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | Set to `1` to allow a non-loopback backend or dev-server bind without the usual checks (not recommended) |
+| `HOMESENTINEL_FRONTEND_HOST` | `127.0.0.1` | Vite dev server bind address. Non-loopback values need `HOMESENTINEL_ALLOW_INSECURE_BIND=1` |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa account linking |
 | `CREDENTIAL_KEY` | _(auto-generated)_ | Fernet key for credential encryption at rest |
 | `NETWORK_SUBNET` | `192.168.12.0/24` | Subnet for ARP scanning |

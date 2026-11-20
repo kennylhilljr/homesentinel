@@ -3,9 +3,9 @@ import {
   AUTH_REQUIRED_EVENT, clearApiKey, getApiKey, installApiAuth, isApiRequest, setApiKey,
 } from './apiAuth';
 
-function fakeWindow(status = 200) {
+function fakeWindow(status = 200, headers = {}) {
   const target = new EventTarget();
-  target.fetch = vi.fn(() => Promise.resolve({ ok: status < 400, status }));
+  target.fetch = vi.fn(() => Promise.resolve({ ok: status < 400, status, headers: new Headers(headers) }));
   return target;
 }
 
@@ -92,9 +92,18 @@ describe('apiAuth', () => {
     expect(new Headers(original.mock.calls[0][1].headers).get('X-API-Key')).toBe('explicit');
   });
 
-  test('a 401 on an API request raises the auth-required event', async () => {
-    setApiKey('bad');
+  test('an integration 401 (no HomeSentinel auth marker) does not prompt', async () => {
     const target = fakeWindow(401);
+    installApiAuth(target);
+    const seen = [];
+    target.addEventListener(AUTH_REQUIRED_EVENT, (event) => seen.push(event.detail));
+    await target.fetch('/api/alexa/devices');
+    expect(seen).toEqual([]);
+  });
+
+  test('a HomeSentinel auth 401 raises the auth-required event', async () => {
+    setApiKey('bad');
+    const target = fakeWindow(401, { 'X-HomeSentinel-Auth': 'api-key' });
     installApiAuth(target);
     const seen = [];
     target.addEventListener(AUTH_REQUIRED_EVENT, (event) => seen.push(event.detail));

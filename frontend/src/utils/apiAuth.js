@@ -13,6 +13,12 @@ import { getApiUrl } from './apiConfig';
 
 const STORAGE_KEY = 'hs_api_key';
 export const AUTH_REQUIRED_EVENT = 'homesentinel:auth-required';
+export const AUTH_REQUIRED_HEADER = 'X-HomeSentinel-Auth';
+
+function isHomeSentinelAuthFailure(response) {
+  return Boolean(response.headers && typeof response.headers.get === 'function'
+    && response.headers.get(AUTH_REQUIRED_HEADER));
+}
 
 export function getApiKey() {
   try {
@@ -70,7 +76,9 @@ export function installApiAuth(target = window) {
     }
 
     const response = await originalFetch(input, nextInit);
-    if (response && response.status === 401) {
+    // Only HomeSentinel's own auth 401s (marked by the middleware) mean the key is
+    // missing or wrong; integrations such as Deco or Alexa can also answer 401.
+    if (response && response.status === 401 && isHomeSentinelAuthFailure(response)) {
       target.dispatchEvent(new CustomEvent(AUTH_REQUIRED_EVENT, { detail: { hadKey: Boolean(key) } }));
     }
     return response;
