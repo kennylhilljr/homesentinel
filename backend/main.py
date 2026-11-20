@@ -66,6 +66,7 @@ app = FastAPI(
 # Add this BEFORE CORSMiddleware so CORS ends up "last added" and runs first (correctly
 # handling OPTIONS preflight without auth blocking it).
 from middleware.auth import APIKeyAuthMiddleware
+from middleware import auth as auth_middleware_module
 app.add_middleware(APIKeyAuthMiddleware)
 
 # 2026-03-12: CORS — default to localhost only. Wildcard "*" is dangerous because it allows
@@ -78,6 +79,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets a cross-origin dashboard (CORS_ORIGINS + VITE_API_URL) tell auth 401s apart.
+    expose_headers=[auth_middleware_module.AUTH_REQUIRED_HEADER],
 )
 
 # 2026-03-11: Serve React production build from FastAPI

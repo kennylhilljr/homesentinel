@@ -120,3 +120,15 @@ def test_real_app_registers_token_route():
     routes = {(route.path, method) for route in main.app.routes for method in getattr(route, "methods", ())}
     assert ("/api/sse/token", "POST") in routes
     assert ("/api/sse/events", "GET") in routes
+
+
+def test_real_app_exposes_auth_marker_to_cross_origin_dashboard(monkeypatch):
+    import main
+
+    monkeypatch.setattr(auth_middleware, "HOMESENTINEL_API_KEY", KEY)
+    origin = main.ALLOWED_ORIGINS[0]
+    response = TestClient(main.app).post("/api/sse/token", headers={"Origin": origin})
+    assert response.status_code == 401
+    assert response.headers[auth_middleware.AUTH_REQUIRED_HEADER] == "api-key"
+    exposed = response.headers.get("access-control-expose-headers", "").lower()
+    assert auth_middleware.AUTH_REQUIRED_HEADER.lower() in exposed

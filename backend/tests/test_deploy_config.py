@@ -9,26 +9,10 @@ def _read(name):
     return (REPO_ROOT / name).read_text(encoding="utf-8")
 
 
-def _backend_environment():
-    """Active entries of services.backend.environment in docker-compose.yml (no yaml dependency)."""
-    lines = _read("docker-compose.yml").splitlines()
-    service = lines.index("  backend:")
-    env_start = lines.index("    environment:", service)
-    entries = []
-    for line in lines[env_start + 1:]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if not line.startswith("      "):
-            break  # next key of the backend service, or next service
-        entries.append(stripped)
-    return entries
-
-
 def test_compose_sets_host_and_requires_api_key():
-    backend = _backend_environment()
-    assert "- HOMESENTINEL_HOST=0.0.0.0" in backend
-    assert any(line.startswith("- HOMESENTINEL_API_KEY=${HOMESENTINEL_API_KEY:?") for line in backend)
+    backend = _service_list("backend", "environment")
+    assert "HOMESENTINEL_HOST=0.0.0.0" in backend
+    assert any(item.startswith("HOMESENTINEL_API_KEY=${HOMESENTINEL_API_KEY:?") for item in backend)
     assert "BACKEND_HOST" not in _read("docker-compose.yml")
 
 
