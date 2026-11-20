@@ -102,6 +102,23 @@ def test_put_wifi_config_returns_501_without_router_call(api_client, body):
     _assert_router_never_called(mock_client)
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [{}, {"content": "not json", "headers": {"Content-Type": "application/json"}}],
+    ids=["no-body", "malformed-json"],
+)
+def test_put_wifi_config_returns_501_for_missing_or_malformed_body(api_client, kwargs):
+    mock_client = Mock()
+    deco_routes.deco_service = DecoService(deco_client=mock_client)
+    mock_client.reset_mock()
+
+    response = TestClient(api_client).put("/api/deco/wifi-config", **kwargs)
+
+    assert response.status_code == 501
+    assert response.json() == {"detail": EXPECTED_MESSAGE}
+    _assert_router_never_called(mock_client)
+
+
 def test_put_wifi_config_returns_501_when_service_not_initialized(api_client):
     deco_routes.deco_service = None
 

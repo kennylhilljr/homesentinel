@@ -48,13 +48,6 @@ def _remap_role(role: str) -> str:
 
 
 # Request models
-class WiFiConfigUpdate(BaseModel):
-    """Request model for WiFi configuration update"""
-    ssid: Optional[str] = None
-    password: Optional[str] = None
-    band_steering: Optional[bool] = None
-
-
 class AlexaNameSyncRequest(BaseModel):
     """Request model for syncing names from Alexa links."""
     overwrite_existing: bool = False
@@ -536,12 +529,13 @@ async def get_wifi_config() -> Dict[str, Any]:
 
 
 @router.put("/wifi-config")
-async def update_wifi_config(config_update: WiFiConfigUpdate) -> Dict[str, Any]:
+async def update_wifi_config() -> Dict[str, Any]:
     """
     WiFi configuration changes (SSID, password, band steering) are not supported yet.
 
     The router write payload is unconfirmed, so this endpoint never contacts the
-    router and always responds with 501 Not Implemented.
+    router and always responds with 501 Not Implemented. The request body is not
+    parsed, so empty or malformed bodies get the same 501.
     """
     raise HTTPException(status_code=501, detail=WIFI_UPDATE_UNSUPPORTED_MESSAGE)
 
