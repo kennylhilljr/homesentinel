@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DecoNodesPage from '../DecoNodesPage';
 import * as apiConfig from '../../utils/apiConfig';
@@ -59,27 +59,68 @@ describe('DecoNodesPage Component', () => {
     cache_info: { ttl_seconds: 60, cached: false },
   };
 
+  const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+
+  /**
+   * Route fetch by URL. The page fetches /deco/nodes on load and on every
+   * auto-refresh tick, POSTs /deco/nodes/refresh on manual refresh, and also
+   * loads /devices for the fallback client list whenever node state changes.
+   * Each route may be a response, an Error (rejects), or a function returning either.
+   */
+  const mockApi = ({
+    nodes = ok(mockNodesData),
+    refresh = ok(mockNodesData),
+    devices = ok({ devices: [] }),
+  } = {}) => {
+    const routes = {
+      '/api/deco/nodes': nodes,
+      '/api/deco/nodes/refresh': refresh,
+      '/api/devices': devices,
+      '/api/deco/import-client-names': ok({ imported: 0, total_clients: 0 }),
+    };
+    global.fetch.mockImplementation(async (url) => {
+      let entry = routes[url];
+      if (typeof entry === 'function') entry = entry();
+      if (entry instanceof Error) throw entry;
+      return entry || { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) };
+    });
+  };
+
+  const callsTo = (url) => global.fetch.mock.calls.filter(([u]) => u === url);
+  const never = () => new Promise(() => {});
+
+  const renderLoaded = async () => {
+    const user = userEvent.setup();
+    const utils = render(<DecoNodesPage />);
+    expect(await screen.findByText('Main Router')).toBeInTheDocument();
+    return { user, ...utils };
+  };
+
+  const openNodeModal = async (nodeId = 'node1') => {
+    const { user, ...utils } = await renderLoaded();
+    await user.click(screen.getByTestId(`node-card-${nodeId}`));
+    const modal = await waitFor(() => {
+      const el = document.querySelector('.node-detail-modal');
+      expect(el).toBeInTheDocument();
+      return el;
+    });
+    return { user, modal, ...utils };
+  };
+
   beforeEach(() => {
-    // Clear all mocks before each test
     vi.clearAllMocks();
-    // Reset timers
-    vi.useFakeTimers();
-    // Mock fetch globally
     global.fetch = vi.fn();
+    mockApi();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.resetAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Component Rendering', () => {
     test('renders without errors', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -88,11 +129,6 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('renders page header with title', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -102,11 +138,6 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('renders refresh button', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -115,11 +146,6 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('renders auto-refresh toggle', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -130,11 +156,6 @@ describe('DecoNodesPage Component', () => {
 
   describe('Initial Load', () => {
     test('fetches nodes from API on initial load', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -143,18 +164,7 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('displays loading state while fetching', () => {
-      global.fetch.mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            // Simulate slow API response
-            setTimeout(() => {
-              resolve({
-                ok: true,
-                json: async () => mockNodesData,
-              });
-            }, 100);
-          })
-      );
+      mockApi({ nodes: never });
 
       render(<DecoNodesPage />);
 
@@ -163,11 +173,6 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('displays nodes list after fetch completes', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -179,7 +184,7 @@ describe('DecoNodesPage Component', () => {
 
   describe('Error Handling', () => {
     test('displays error state if fetch fails', async () => {
-      global.fetch.mockRejectedValueOnce(new Error('Network error'));
+      mockApi({ nodes: new Error('Network error') });
 
       render(<DecoNodesPage />);
 
@@ -189,24 +194,21 @@ describe('DecoNodesPage Component', () => {
       });
     });
 
-    // stale, see #3
-    test.skip('displays error message for API errors', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-      });
+    test('displays error message for API errors', async () => {
+      mockApi({ nodes: { ok: false, status: 401, statusText: 'Unauthorized' } });
 
       render(<DecoNodesPage />);
 
       await waitFor(() => {
         expect(screen.getByText('Error Loading Nodes')).toBeInTheDocument();
-        expect(screen.getByText(/authentication/i)).toBeInTheDocument();
+        expect(
+          screen.getByText('Not authenticated with Deco API. Please configure credentials.')
+        ).toBeInTheDocument();
       });
     });
 
     test('displays retry button in error state', async () => {
-      global.fetch.mockRejectedValueOnce(new Error('API error'));
+      mockApi({ nodes: new Error('API error') });
 
       render(<DecoNodesPage />);
 
@@ -218,10 +220,7 @@ describe('DecoNodesPage Component', () => {
 
   describe('Empty State', () => {
     test('displays empty state when no nodes returned', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ nodes: [], total: 0 }),
-      });
+      mockApi({ nodes: ok({ nodes: [], total: 0 }) });
 
       render(<DecoNodesPage />);
 
@@ -232,10 +231,7 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('displays try again button in empty state', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ nodes: [] }),
-      });
+      mockApi({ nodes: ok({ nodes: [] }) });
 
       render(<DecoNodesPage />);
 
@@ -248,11 +244,6 @@ describe('DecoNodesPage Component', () => {
 
   describe('Statistics Calculation', () => {
     test('calculates statistics correctly', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -264,11 +255,6 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('calculates online count correctly', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -277,11 +263,6 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('calculates total clients correctly', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -293,11 +274,6 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('calculates average signal strength correctly', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -309,15 +285,7 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('handles edge case with single node', async () => {
-      const singleNodeData = {
-        nodes: [mockNodesData.nodes[0]],
-        total: 1,
-      };
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => singleNodeData,
-      });
+      mockApi({ nodes: ok({ nodes: [mockNodesData.nodes[0]], total: 1 }) });
 
       render(<DecoNodesPage />);
 
@@ -329,21 +297,18 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('handles statistics with zero values', async () => {
-      const zeroStatsData = {
-        nodes: [
-          {
-            ...mockNodesData.nodes[0],
-            connected_clients: 0,
-            signal_strength: 0,
-            status: 'offline',
-          },
-        ],
-        total: 1,
-      };
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => zeroStatsData,
+      mockApi({
+        nodes: ok({
+          nodes: [
+            {
+              ...mockNodesData.nodes[0],
+              connected_clients: 0,
+              signal_strength: 0,
+              status: 'offline',
+            },
+          ],
+          total: 1,
+        }),
       });
 
       render(<DecoNodesPage />);
@@ -356,71 +321,50 @@ describe('DecoNodesPage Component', () => {
   });
 
   describe('Manual Refresh', () => {
-    // stale, see #3
-    test.skip('manual refresh button calls API', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('manual refresh button calls API', async () => {
+      const { user } = await renderLoaded();
+      expect(callsTo('/api/deco/nodes/refresh')).toHaveLength(0);
 
-      render(<DecoNodesPage />);
+      await user.click(screen.getByRole('button', { name: /Refresh/i }));
 
       await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
+        expect(callsTo('/api/deco/nodes/refresh')).toHaveLength(1);
       });
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
-      const refreshButton = screen.getByRole('button', { name: /Refresh/i });
-      await userEvent.click(refreshButton);
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledTimes(2);
-      });
+      // Initial GET only; manual refresh does not re-issue the cached GET
+      expect(callsTo('/api/deco/nodes')).toHaveLength(1);
+      expect(await screen.findByRole('button', { name: /^⟲\s*Refresh$/ })).not.toBeDisabled();
     });
 
-    // stale, see #3
-    test.skip('manual refresh updates last refresh time', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('manual refresh updates last refresh time', async () => {
+      // Fake only Date so the "last updated" age is deterministic while
+      // timers (and userEvent) stay real.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      const user = userEvent.setup();
+      const { rerender } = render(<DecoNodesPage />);
 
-      render(<DecoNodesPage />);
+      // Before the first response lands nothing has been refreshed
+      expect(screen.getByText('Last updated: Never')).toBeInTheDocument();
+
+      await screen.findByText('Main Router');
+      expect(screen.getByText('Last updated: 0s ago')).toBeInTheDocument();
+
+      // Time passes: the timestamp ages
+      vi.setSystemTime(new Date('2026-01-01T00:00:30Z'));
+      rerender(<DecoNodesPage />);
+      expect(screen.getByText('Last updated: 30s ago')).toBeInTheDocument();
+
+      // A manual refresh resets it
+      await user.click(screen.getByRole('button', { name: /Refresh/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/Last updated/)).toBeInTheDocument();
-      });
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
-      const refreshButton = screen.getByRole('button', { name: /Refresh/i });
-      await userEvent.click(refreshButton);
-
-      await waitFor(() => {
-        const lastUpdated = screen.getByText(/Last updated/);
-        expect(lastUpdated.textContent).toMatch(/ago|ago/);
+        expect(callsTo('/api/deco/nodes/refresh')).toHaveLength(1);
+        expect(screen.getByText('Last updated: 0s ago')).toBeInTheDocument();
       });
     });
 
     test('refresh button disabled while loading', async () => {
-      global.fetch.mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            setTimeout(() => {
-              resolve({
-                ok: true,
-                json: async () => mockNodesData,
-              });
-            }, 100);
-          })
-      );
+      mockApi({ nodes: never });
 
       render(<DecoNodesPage />);
 
@@ -428,40 +372,25 @@ describe('DecoNodesPage Component', () => {
       expect(refreshButton).toBeDisabled();
     });
 
-    // stale, see #3
-    test.skip('calls refresh endpoint on manual refresh', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
-      render(<DecoNodesPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-      });
+    test('calls refresh endpoint on manual refresh', async () => {
+      const { user } = await renderLoaded();
 
       global.fetch.mockClear();
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
 
-      const refreshButton = screen.getByRole('button', { name: /Refresh/i });
-      await userEvent.click(refreshButton);
+      await user.click(screen.getByRole('button', { name: /Refresh/i }));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/deco/nodes/refresh', expect.any(Object));
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/deco/nodes/refresh',
+          expect.objectContaining({ method: 'POST' })
+        );
       });
     });
   });
 
   describe('Auto-Refresh', () => {
     test('auto-refresh happens every 60 seconds', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+      vi.useFakeTimers();
 
       render(<DecoNodesPage />);
 
@@ -470,25 +399,17 @@ describe('DecoNodesPage Component', () => {
       });
 
       global.fetch.mockClear();
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockNodesData,
-      });
 
       // Advance time by 60 seconds
       vi.advanceTimersByTime(60000);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
+        expect(callsTo('/api/deco/nodes')).toHaveLength(1);
       });
     });
 
-    // stale, see #3
-    test.skip('auto-refresh respects the interval state', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('auto-refresh respects the interval state', async () => {
+      vi.useFakeTimers();
 
       render(<DecoNodesPage />);
 
@@ -496,196 +417,96 @@ describe('DecoNodesPage Component', () => {
         expect(screen.getByText('Main Router')).toBeInTheDocument();
       });
 
-      global.fetch.mockClear();
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
-      // Get the auto-refresh toggle
+      // Disable auto-refresh (toggling re-runs the effect, which does one immediate fetch)
       const autoRefreshCheckbox = screen.getByRole('checkbox', { name: /Auto-refresh/i });
+      fireEvent.click(autoRefreshCheckbox);
+      expect(autoRefreshCheckbox).not.toBeChecked();
 
-      // Disable auto-refresh
-      userEvent.click(autoRefreshCheckbox);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^⟲\s*Refresh$/ })).not.toBeDisabled();
+      });
 
       // Clear fetch calls from toggle interaction
       global.fetch.mockClear();
 
-      // Advance time - should not call fetch
-      vi.advanceTimersByTime(60000);
+      // Advance well past the interval - no node polling should happen
+      vi.advanceTimersByTime(180000);
 
-      // No additional fetch calls should be made
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(callsTo('/api/deco/nodes')).toHaveLength(0);
     });
 
-    // stale, see #3
-    test.skip('can toggle auto-refresh on and off', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
-      render(<DecoNodesPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-      });
+    test('can toggle auto-refresh on and off', async () => {
+      const { user } = await renderLoaded();
 
       const autoRefreshCheckbox = screen.getByRole('checkbox', { name: /Auto-refresh/i });
 
       // Should be enabled by default
       expect(autoRefreshCheckbox).toBeChecked();
+      expect(screen.getByText('Auto-refresh every 60s')).toBeInTheDocument();
 
       // Disable it
-      await userEvent.click(autoRefreshCheckbox);
+      await user.click(autoRefreshCheckbox);
       expect(autoRefreshCheckbox).not.toBeChecked();
 
       // Enable it again
-      await userEvent.click(autoRefreshCheckbox);
+      await user.click(autoRefreshCheckbox);
       expect(autoRefreshCheckbox).toBeChecked();
     });
   });
 
   describe('Node Detail Modal', () => {
-    // stale, see #3
-    test.skip('detail modal opens on node click', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('detail modal opens on node click', async () => {
+      const { modal } = await openNodeModal('node1');
 
-      render(<DecoNodesPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-      });
-
-      const nodeCard = screen.getByTestId('node-card-node1');
-      await userEvent.click(nodeCard);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Node Details/)).toBeInTheDocument();
-      });
+      // Modal header shows the node name and status
+      expect(within(modal).getByRole('heading', { name: 'Main Router' })).toBeInTheDocument();
+      expect(within(modal).getByText('● Online')).toBeInTheDocument();
     });
 
-    // stale, see #3
-    test.skip('detail modal displays full node information', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('detail modal displays full node information', async () => {
+      const { modal } = await openNodeModal('node1');
 
-      render(<DecoNodesPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-      });
-
-      const nodeCard = screen.getByTestId('node-card-node1');
-      await userEvent.click(nodeCard);
-
-      await waitFor(() => {
-        expect(screen.getByText('node1')).toBeInTheDocument();
-        expect(screen.getByText('1.5.8')).toBeInTheDocument(); // firmware
-        expect(screen.getByText(/Deco M32/)).toBeInTheDocument(); // model
-      });
+      expect(within(modal).getByText('node1')).toBeInTheDocument();
+      expect(within(modal).getByText('1.5.8')).toBeInTheDocument(); // firmware
+      expect(within(modal).getByText('Deco M32')).toBeInTheDocument(); // model
+      expect(within(modal).getByText('432000')).toBeInTheDocument(); // uptime seconds
+      expect(within(modal).getByText('Connected Clients').nextSibling).toHaveTextContent('5');
+      expect(within(modal).getByText('85%')).toBeInTheDocument(); // signal
     });
 
-    // stale, see #3
-    test.skip('detail modal closes on close button click', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('detail modal closes on close button click', async () => {
+      const { user } = await openNodeModal('node1');
 
-      render(<DecoNodesPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-      });
-
-      const nodeCard = screen.getByTestId('node-card-node1');
-      await userEvent.click(nodeCard);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Close modal')).toBeInTheDocument();
-      });
-
-      const closeButton = screen.getByLabelText('Close modal');
-      await userEvent.click(closeButton);
+      await user.click(screen.getByLabelText('Close modal'));
 
       await waitFor(() => {
         expect(screen.queryByLabelText('Close modal')).not.toBeInTheDocument();
       });
+      expect(document.querySelector('.node-detail-modal')).not.toBeInTheDocument();
     });
 
-    // stale, see #3
-    test.skip('detail modal closes on overlay click', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('detail modal closes on overlay click', async () => {
+      const { user, modal } = await openNodeModal('node1');
 
-      render(<DecoNodesPage />);
+      await user.click(modal.querySelector('.modal-overlay'));
 
       await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
+        expect(document.querySelector('.node-detail-modal')).not.toBeInTheDocument();
       });
-
-      const nodeCard = screen.getByTestId('node-card-node1');
-      await userEvent.click(nodeCard);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Close modal')).toBeInTheDocument();
-      });
-
-      // Find and click the modal overlay
-      const { container } = render(<DecoNodesPage />);
-      // Re-open modal
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
-      await userEvent.click(nodeCard);
-
-      const overlay = container.querySelector('.modal-overlay');
-      if (overlay) {
-        await userEvent.click(overlay);
-      }
     });
 
-    // stale, see #3
-    test.skip('node card click calls handler with correct node data', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('node card click calls handler with correct node data', async () => {
+      const { modal } = await openNodeModal('node2');
 
-      render(<DecoNodesPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-      });
-
-      const nodeCard = screen.getByTestId('node-card-node1');
-      await userEvent.click(nodeCard);
-
-      // Verify node details are shown
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-        expect(screen.getByText('node1')).toBeInTheDocument();
-      });
+      // Modal shows the clicked node, not the first one
+      expect(within(modal).getByRole('heading', { name: 'Satellite 1' })).toBeInTheDocument();
+      expect(within(modal).getByText('node2')).toBeInTheDocument();
+      expect(within(modal).queryByText('node1')).not.toBeInTheDocument();
     });
   });
 
   describe('Accessibility', () => {
     test('has proper ARIA labels on interactive elements', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -693,52 +514,29 @@ describe('DecoNodesPage Component', () => {
       });
     });
 
-    // stale, see #3
-    test.skip('modal has close button with aria-label', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
+    test('modal has close button with aria-label', async () => {
+      await openNodeModal('node1');
 
-      render(<DecoNodesPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-      });
-
-      const nodeCard = screen.getByTestId('node-card-node1');
-      await userEvent.click(nodeCard);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Close modal')).toBeInTheDocument();
-      });
+      expect(screen.getByRole('button', { name: 'Close modal' })).toBeInTheDocument();
     });
 
-    // stale, see #3
-    test.skip('buttons are keyboard accessible', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
-      render(<DecoNodesPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Main Router')).toBeInTheDocument();
-      });
+    test('buttons are keyboard accessible', async () => {
+      const { user } = await renderLoaded();
 
       const refreshButton = screen.getByRole('button', { name: /Refresh/i });
-      expect(refreshButton).toHaveProperty('type', 'button');
+      refreshButton.focus();
+      expect(refreshButton).toHaveFocus();
+
+      await user.keyboard('{Enter}');
+
+      await waitFor(() => {
+        expect(callsTo('/api/deco/nodes/refresh')).toHaveLength(1);
+      });
     });
   });
 
   describe('API Configuration', () => {
     test('uses buildUrl utility for API calls', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {
@@ -747,11 +545,6 @@ describe('DecoNodesPage Component', () => {
     });
 
     test('sends correct headers in API request', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockNodesData,
-      });
-
       render(<DecoNodesPage />);
 
       await waitFor(() => {

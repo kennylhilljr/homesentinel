@@ -30,12 +30,11 @@ describe('DecoNodeCard Component', () => {
       expect(screen.getByText('1.5.8')).toBeInTheDocument();
     });
 
-    // stale, see #3
-    test.skip('displays connected clients count', () => {
-      render(<DecoNodeCard node={mockNode} onClick={vi.fn()} />);
+    test('displays connected clients count', () => {
+      const { container } = render(<DecoNodeCard node={mockNode} onClick={vi.fn()} />);
 
-      expect(screen.getByText(/5/)).toBeInTheDocument();
-      expect(screen.getByText(/connected/)).toBeInTheDocument();
+      expect(container.querySelector('.client-count')).toHaveTextContent('5');
+      expect(container.querySelector('.node-value.clients')).toHaveTextContent('5 connected');
     });
 
     test('displays model name', () => {
@@ -84,12 +83,15 @@ describe('DecoNodeCard Component', () => {
       expect(screen.getByText(/1 hour/)).toBeInTheDocument();
     });
 
-    // stale, see #3
-    test.skip('handles zero uptime', () => {
+    test('handles zero uptime', () => {
+      // Zero/missing uptime is treated as unknown; sub-minute uptime shows "Just started"
       const newNode = { ...mockNode, uptime_seconds: 0 };
-      render(<DecoNodeCard node={newNode} onClick={vi.fn()} />);
+      const { container, rerender } = render(<DecoNodeCard node={newNode} onClick={vi.fn()} />);
 
-      expect(screen.getByText(/Just started/)).toBeInTheDocument();
+      expect(container.querySelector('.node-value.uptime')).toHaveTextContent('Unknown');
+
+      rerender(<DecoNodeCard node={{ ...mockNode, uptime_seconds: 30 }} onClick={vi.fn()} />);
+      expect(container.querySelector('.node-value.uptime')).toHaveTextContent('Just started');
     });
 
     test('handles negative uptime gracefully', () => {

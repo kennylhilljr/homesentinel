@@ -74,8 +74,7 @@ describe('DeviceCard Component', () => {
     expect(screen.getByText('tv')).toBeInTheDocument();
   });
 
-  // stale, see #3
-  test.skip('test_online_offline_indicator', () => {
+  test('test_online_offline_indicator', () => {
     const { container } = render(
       <DeviceCard
         device={mockDevice}
@@ -84,13 +83,15 @@ describe('DeviceCard Component', () => {
       />
     );
 
-    expect(screen.getByText('Online')).toBeInTheDocument();
+    // Status label is rendered both as a visible badge and as sr-only text
+    expect(container.querySelector('.status-badge-card')).toHaveTextContent('Online');
+    expect(container.querySelector('.sr-only')).toHaveTextContent('Online');
+    expect(container.querySelector('.status-indicator.status-online')).toBeInTheDocument();
     const deviceCard = container.querySelector('.device-card-online');
     expect(deviceCard).toBeInTheDocument();
   });
 
-  // stale, see #3
-  test.skip('test_offline_status_indicator', () => {
+  test('test_offline_status_indicator', () => {
     const offlineDevice = { ...mockDevice, status: 'offline' };
     const { container } = render(
       <DeviceCard
@@ -100,7 +101,10 @@ describe('DeviceCard Component', () => {
       />
     );
 
-    expect(screen.getByText('Offline')).toBeInTheDocument();
+    // Status label is rendered both as a visible badge and as sr-only text
+    expect(container.querySelector('.status-badge-card')).toHaveTextContent('Offline');
+    expect(container.querySelector('.sr-only')).toHaveTextContent('Offline');
+    expect(container.querySelector('.status-indicator.status-offline')).toBeInTheDocument();
     const deviceCard = container.querySelector('.device-card-offline');
     expect(deviceCard).toBeInTheDocument();
   });

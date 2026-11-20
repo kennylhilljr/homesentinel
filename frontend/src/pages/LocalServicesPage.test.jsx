@@ -22,15 +22,20 @@ describe('LocalServicesPage', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  // stale, see #3
-  test.skip('shows service health separately from process state and summary', async () => {
+  test('shows service health separately from process state and summary', async () => {
     render(<LocalServicesPage />);
     expect(await screen.findByRole('heading', { name: 'Local Services' })).toBeInTheDocument();
     expect(screen.getByText('HomeSentinel Backend')).toBeInTheDocument();
     const row = screen.getByText('HomeSentinel Backend').closest('tr');
     expect(within(row).getByText('Running')).toBeInTheDocument();
     expect(within(row).getByText('Degraded')).toBeInTheDocument();
-    expect(screen.getByText('Unexpected')).toBeInTheDocument();
+    // "Unexpected" appears both as a summary stat and as a tag on the unexpected service row
+    const summary = screen.getByRole('region', { name: 'Service overview' });
+    const unexpectedStat = within(summary).getByText('Unexpected').closest('article');
+    expect(unexpectedStat).toHaveTextContent('1');
+    const mysteryRow = screen.getByText('Unknown listener').closest('tr');
+    expect(within(mysteryRow).getByText('Unexpected')).toBeInTheDocument();
+    expect(within(row).queryByText('Unexpected')).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: /response time trend/i })).toBeInTheDocument();
   });
 
