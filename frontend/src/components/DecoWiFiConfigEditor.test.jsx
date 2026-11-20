@@ -22,6 +22,41 @@ describe('DecoWiFiConfigEditor Component', () => {
     },
   };
 
+  /**
+   * Stateful WiFi API mock: GET returns the current config, a successful PUT
+   * applies the change so the component's verification poll succeeds on the
+   * first check. `onPut` may return a custom response (or a promise of one).
+   */
+  const mockWiFiApi = ({ onPut } = {}) => {
+    let current = { ...mockWiFiConfig };
+    fetch.mockImplementation(async (url, opts = {}) => {
+      if (opts.method === 'PUT') {
+        if (onPut) return onPut(opts);
+        const body = JSON.parse(opts.body);
+        current = {
+          ...current,
+          ...(body.ssid ? { ssid: body.ssid } : {}),
+          band_steering_enabled: body.band_steering,
+        };
+        return { ok: true, json: async () => ({ success: true, updated_config: current }) };
+      }
+      return { ok: true, json: async () => current };
+    });
+    return () => current;
+  };
+
+  const submitSsidChange = async (newSsid = 'NewNetwork') => {
+    await screen.findByDisplayValue('TestNetwork');
+    fireEvent.change(screen.getByLabelText(/Network Name/i), { target: { value: newSsid } });
+    fireEvent.click(screen.getByRole('button', { name: /Update Configuration/i }));
+    await screen.findByText(/Confirm WiFi Configuration Changes/i);
+    fireEvent.click(
+      within(document.querySelector('.dialog-container')).getByRole('button', {
+        name: /Apply Changes/i,
+      })
+    );
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     fetch.mockResolvedValue({
@@ -91,13 +126,15 @@ describe('DecoWiFiConfigEditor Component', () => {
     });
   });
 
-  // stale, see #3
-  test.skip('test_form_renders_band_steering_toggle', async () => {
+  test('test_form_renders_band_steering_toggle', async () => {
     render(<DecoWiFiConfigEditor />);
 
-    await waitFor(() => {
-      expect(screen.getByLabelText('Band Steering')).toBeInTheDocument();
-    });
+    // The "Band Steering" label is a visual heading; the checkbox lives in the toggle group
+    expect(await screen.findByText('Band Steering')).toBeInTheDocument();
+    const group = document.querySelector('.band-steering-group');
+    const toggle = within(group).getByRole('checkbox');
+    expect(toggle).toBeChecked();
+    expect(within(group).getByText('Enabled')).toBeInTheDocument();
   });
 
   test('test_form_renders_submit_button', async () => {
@@ -194,8 +231,7 @@ describe('DecoWiFiConfigEditor Component', () => {
     });
   });
 
-  // stale, see #3
-  test.skip('test_password_confirm_mismatch_validation', async () => {
+  test('test_password_confirm_mismatch_validation', async () => {
     render(<DecoWiFiConfigEditor />);
 
     await waitFor(() => {
@@ -215,11 +251,16 @@ describe('DecoWiFiConfigEditor Component', () => {
     const confirmInput = screen.getByLabelText(/Confirm Password/i);
     fireEvent.change(confirmInput, { target: { value: 'DifferentPassword456' } });
 
+    // Inline field error shows as soon as the values differ
+    expect(document.querySelector('.field-error')).toHaveTextContent('Passwords do not match');
+
     fireEvent.click(submitButton);
 
+    // Submitting also surfaces the form-level validation error and no confirm dialog
     await waitFor(() => {
-      expect(screen.getByText(/Passwords do not match/i)).toBeInTheDocument();
+      expect(document.querySelector('.editor-error')).toHaveTextContent('Passwords do not match');
     });
+    expect(screen.queryByText(/Confirm WiFi Configuration Changes/i)).not.toBeInTheDocument();
   });
 
   // ==================== Confirmation Dialog ====================
@@ -329,62 +370,29 @@ describe('DecoWiFiConfigEditor Component', () => {
     });
   });
 
-  // stale, see #3
-  test.skip('test_success_message_displays_after_update', async () => {
+  test('test_success_message_displays_after_update', async () => {
+    mockWiFiApi();
     render(<DecoWiFiConfigEditor />);
 
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('TestNetwork')).toBeInTheDocument();
-    });
+    await submitSsidChange('NewNetwork');
 
-    const ssidInput = screen.getByLabelText(/Network Name/i);
-    const submitButton = screen.getByRole('button', { name: /Update Configuration/i });
-
-    fireEvent.change(ssidInput, { target: { value: 'NewNetwork' } });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Confirm WiFi Configuration Changes/i)).toBeInTheDocument();
-    });
-
-    const applyButton = within(document.querySelector('.dialog-container')).getByRole('button', {
-      name: /Apply Changes/i,
-    });
-    fireEvent.click(applyButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/WiFi configuration updated successfully/i)).toBeInTheDocument();
-    });
+    // Verification resolves ~1s after the first successful poll
+    expect(
+      await screen.findByText(/WiFi configuration updated successfully/i, {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue('NewNetwork')).toBeInTheDocument();
   });
 
-  // stale, see #3
-  test.skip('test_error_message_displays_on_api_failure', async () => {
-    fetch.mockRejectedValueOnce(new Error('API Error'));
-
+  test('test_error_message_displays_on_api_failure', async () => {
+    mockWiFiApi({ onPut: () => Promise.reject(new Error('API Error')) });
     render(<DecoWiFiConfigEditor />);
 
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('TestNetwork')).toBeInTheDocument();
-    });
+    await submitSsidChange('NewNetwork');
 
-    const ssidInput = screen.getByLabelText(/Network Name/i);
-    const submitButton = screen.getByRole('button', { name: /Update Configuration/i });
-
-    fireEvent.change(ssidInput, { target: { value: 'NewNetwork' } });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Confirm WiFi Configuration Changes/i)).toBeInTheDocument();
-    });
-
-    const applyButton = within(document.querySelector('.dialog-container')).getByRole('button', {
-      name: /Apply Changes/i,
-    });
-    fireEvent.click(applyButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Failed to update WiFi configuration/i)).toBeInTheDocument();
-    });
+    expect(
+      await screen.findByText(/Failed to update WiFi configuration: API Error/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/WiFi configuration updated successfully/i)).not.toBeInTheDocument();
   });
 
   // ==================== Verification Polling ====================
@@ -424,52 +432,28 @@ describe('DecoWiFiConfigEditor Component', () => {
   });
 
   // ==================== Loading & Disabled States ====================
-  // stale, see #3
-  test.skip('test_submit_button_disabled_during_submission', async () => {
-    fetch.mockImplementation(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                ok: true,
-                json: async () => mockWiFiConfig,
-              }),
-            500
-          )
-        )
-    );
-
+  test('test_submit_button_disabled_during_submission', async () => {
+    let resolvePut;
+    mockWiFiApi({
+      onPut: () =>
+        new Promise((resolve) => {
+          resolvePut = resolve;
+        }),
+    });
     render(<DecoWiFiConfigEditor />);
 
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('TestNetwork')).toBeInTheDocument();
-    });
+    await submitSsidChange('NewNetwork');
 
-    const ssidInput = screen.getByLabelText(/Network Name/i);
-    const submitButton = screen.getByRole('button', { name: /Update Configuration/i });
+    // Dialog closes on apply; the main submit button shows a disabled processing state
+    const processingButton = await screen.findByRole('button', { name: /Processing/i });
+    expect(processingButton).toBeDisabled();
+    expect(screen.getByLabelText(/Network Name/i)).toBeDisabled();
+    expect(screen.queryByText(/Confirm WiFi Configuration Changes/i)).not.toBeInTheDocument();
 
-    fireEvent.change(ssidInput, { target: { value: 'NewNetwork' } });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Confirm WiFi Configuration Changes/i)).toBeInTheDocument();
-    });
-
-    const applyButton = within(document.querySelector('.dialog-container')).getByRole('button', {
-      name: /Apply Changes/i,
-    });
-
-    fireEvent.click(applyButton);
-
-    // Submit button should show processing state
-    await waitFor(() => {
-      expect(
-        within(document.querySelector('.dialog-container')).getByRole('button', {
-          name: /Applying/i,
-        })
-      ).toBeInTheDocument();
-    });
+    // Finish the request so the component settles before teardown
+    resolvePut({ ok: false, statusText: 'Bad Request', json: async () => ({ detail: 'nope' }) });
+    expect(await screen.findByText(/Failed to update WiFi configuration: nope/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Update Configuration/i })).not.toBeDisabled();
   });
 
   // ==================== Cancel/Reset ====================
@@ -546,33 +530,21 @@ describe('DecoWiFiConfigEditor Component', () => {
   });
 
   // ==================== Callback ====================
-  // stale, see #3
-  test.skip('test_callback_called_on_successful_update', async () => {
+  test('test_callback_called_on_successful_update', async () => {
     const mockCallback = vi.fn();
+    mockWiFiApi();
 
     render(<DecoWiFiConfigEditor onConfigUpdated={mockCallback} />);
 
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('TestNetwork')).toBeInTheDocument();
-    });
+    await submitSsidChange('NewNetwork');
 
-    const ssidInput = screen.getByLabelText(/Network Name/i);
-    const submitButton = screen.getByRole('button', { name: /Update Configuration/i });
-
-    fireEvent.change(ssidInput, { target: { value: 'NewNetwork' } });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Confirm WiFi Configuration Changes/i)).toBeInTheDocument();
-    });
-
-    const applyButton = within(document.querySelector('.dialog-container')).getByRole('button', {
-      name: /Apply Changes/i,
-    });
-    fireEvent.click(applyButton);
-
-    await waitFor(() => {
-      expect(mockCallback).toHaveBeenCalled();
-    });
+    await waitFor(
+      () => {
+        expect(mockCallback).toHaveBeenCalledWith(
+          expect.objectContaining({ ssid: 'NewNetwork', band_steering_enabled: true })
+        );
+      },
+      { timeout: 4000 }
+    );
   });
 });

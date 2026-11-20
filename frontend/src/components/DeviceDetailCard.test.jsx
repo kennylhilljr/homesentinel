@@ -30,7 +30,7 @@ describe('DeviceDetailCard Component', () => {
   const mockOnUpdate = vi.fn();
 
   beforeEach(() => {
-    fetch.mockClear();
+    fetch.mockReset();
     mockOnClose.mockClear();
     mockOnUpdate.mockClear();
   });
@@ -314,11 +314,13 @@ describe('DeviceDetailCard Component', () => {
     expect(input).toBeInTheDocument();
   });
 
-  // stale, see #3
-  test.skip('test_edit_friendly_name_saves', async () => {
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ ...mockDevice, friendly_name: 'New Name' }),
+  test('test_edit_friendly_name_saves', async () => {
+    // Component also fetches presence history on mount, so route by URL/method
+    fetch.mockImplementation(async (url, opts) => {
+      if (opts && opts.method === 'PUT') {
+        return { ok: true, json: async () => ({ ...mockDevice, friendly_name: 'New Name' }) };
+      }
+      return { ok: true, json: async () => [] };
     });
 
     render(
@@ -341,8 +343,11 @@ describe('DeviceDetailCard Component', () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        `https://localhost:8443/api/devices/${mockDevice.device_id}`,
-        expect.any(Object)
+        `/api/devices/${mockDevice.device_id}`,
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ friendly_name: 'New Name' }),
+        })
       );
     });
   });
@@ -472,12 +477,13 @@ describe('DeviceDetailCard Component', () => {
     });
   });
 
-  // stale, see #3
-  test.skip('test_update_callback_called_after_save', async () => {
+  test('test_update_callback_called_after_save', async () => {
     const updatedDevice = { ...mockDevice, friendly_name: 'Updated Name' };
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => updatedDevice,
+    fetch.mockImplementation(async (url, opts) => {
+      if (opts && opts.method === 'PUT') {
+        return { ok: true, json: async () => updatedDevice };
+      }
+      return { ok: true, json: async () => [] };
     });
 
     render(
