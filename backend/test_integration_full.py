@@ -3,6 +3,8 @@
 
 import sys
 import os
+import shutil
+import tempfile
 from datetime import datetime
 from unittest.mock import Mock
 
@@ -17,7 +19,10 @@ def test_full_integration():
     """Test full correlation flow with real database"""
 
     # Create database and repository
-    db = Database()
+    # Use a throwaway migrated database, never the real homesentinel.db.
+    tmp_dir = tempfile.mkdtemp()
+    db = Database(db_path=os.path.join(tmp_dir, "test.db"))
+    db.run_migrations()
     device_repo = NetworkDeviceRepository(db)
 
     # Create test devices in database
@@ -174,6 +179,7 @@ def test_full_integration():
 
     # Cleanup
     db.close()
+    shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

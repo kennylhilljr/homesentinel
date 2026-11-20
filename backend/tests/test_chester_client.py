@@ -24,9 +24,7 @@ class TestChesterClient:
     def test_authenticate_success(self, mock_post):
         mock_resp = Mock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "result": [0, {"ubus_rpc_session": "abc123", "expires": 300}],
-        }
+        mock_resp.json.return_value = {"errcode": 0, "result": {"sid": "abc123"}}
         mock_post.return_value = mock_resp
 
         client = ChesterClient(password="secret")
@@ -43,38 +41,34 @@ class TestChesterClient:
     def test_ubus_call_success(self, mock_post):
         login_resp = Mock()
         login_resp.status_code = 200
-        login_resp.json.return_value = {
-            "result": [0, {"ubus_rpc_session": "abc123", "expires": 300}],
-        }
+        login_resp.json.return_value = {"errcode": 0, "result": {"sid": "abc123"}}
 
         call_resp = Mock()
         call_resp.status_code = 200
-        call_resp.json.return_value = {
-            "result": [0, {"hostname": "chester"}],
-        }
+        call_resp.json.return_value = {"errcode": 0, "result": {"hostname": "chester"}}
 
         mock_post.side_effect = [login_resp, call_resp]
 
         client = ChesterClient(password="secret")
-        result = client.ubus_call("system", "board")
+        result = client.api_call("system", "board")
         assert result["hostname"] == "chester"
+        call_payload = mock_post.call_args_list[1].kwargs["json"]
+        assert call_payload["module"] == "system"
+        assert call_payload["api"] == "board"
+        assert call_payload["sid"] == "abc123"
 
     @patch("services.chester_client.requests.Session.post")
     def test_ubus_call_error_code(self, mock_post):
         login_resp = Mock()
         login_resp.status_code = 200
-        login_resp.json.return_value = {
-            "result": [0, {"ubus_rpc_session": "abc123", "expires": 300}],
-        }
+        login_resp.json.return_value = {"errcode": 0, "result": {"sid": "abc123"}}
 
         call_resp = Mock()
         call_resp.status_code = 200
-        call_resp.json.return_value = {
-            "result": [1, {}],
-        }
+        call_resp.json.return_value = {"errcode": 1, "result": {}}
 
         mock_post.side_effect = [login_resp, call_resp]
 
         client = ChesterClient(password="secret")
         with pytest.raises(ChesterAPIError):
-            client.ubus_call("system", "board")
+            client.api_call("system", "board")

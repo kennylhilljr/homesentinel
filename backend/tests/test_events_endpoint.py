@@ -259,12 +259,20 @@ class TestEventValidation:
 
     def test_alert_alert_types(self, event_service):
         """Test different alert types"""
-        alert_types = ['new_device', 'device_reconnected', 'device_offline']
+        # Each alert type is raised by a (differently named) device event type;
+        # device_events.event_type and device_alerts.alert_type have separate CHECK sets.
+        event_for_alert = {
+            'new_device': 'new_device',
+            'device_reconnected': 'online',
+            'device_offline': 'offline',
+        }
 
-        for alert_type in alert_types:
-            event_id = event_service.record_event('device-1', alert_type)
+        for alert_type, event_type in event_for_alert.items():
+            event_id = event_service.record_event('device-1', event_type)
+            assert event_id is not None
             alert_id = event_service.create_alert('device-1', event_id, alert_type)
             assert alert_id is not None
 
         alerts = event_service.get_alerts(dismissed=False)
         assert len(alerts) == 3
+        assert {a['alert_type'] for a in alerts} == set(event_for_alert)

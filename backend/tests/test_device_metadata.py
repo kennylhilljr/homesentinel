@@ -112,14 +112,14 @@ class TestDeviceMetadata:
     def test_create_device_with_vendor(self, device_service):
         """Test creating device with OUI vendor lookup"""
         # Use Apple OUI prefix
-        device = device_service.create_device_with_vendor("001A2B:DD:EE:FF", "192.168.1.100")
+        device = device_service.create_device_with_vendor("001B63:DD:EE:FF", "192.168.1.100")
 
-        assert device['vendor_name'] == "Apple Inc."
+        assert device['vendor_name'] == "Apple, Inc."
 
     def test_lookup_vendor_by_mac(self, device_service):
         """Test vendor lookup by MAC"""
-        vendor = device_service.lookup_vendor_by_mac("001A2B:DD:EE:FF")
-        assert vendor == "Apple Inc."
+        vendor = device_service.lookup_vendor_by_mac("001B63:DD:EE:FF")
+        assert vendor == "Apple, Inc."
 
     def test_device_metadata_persistence(self, device_repo, sample_device):
         """Test that device metadata persists"""

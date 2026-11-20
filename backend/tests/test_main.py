@@ -7,24 +7,60 @@ import pytest
 from fastapi.testclient import TestClient
 import sys
 import os
+import tempfile
+from unittest.mock import MagicMock
 
 # Add parent directory to path to import main
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import main
 from main import app
+from db import Database
+from services.device_scanner import NetworkDeviceService
 
 
 @pytest.fixture
-def client():
-    """Create a test client for the FastAPI app"""
+def device_service():
+    """Real NetworkDeviceService on a temp DB with scanner/DHCP mocked (no LAN access)."""
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    db = Database(path)
+    db.run_migrations()
+    svc = NetworkDeviceService(db)
+    svc.arp_scanner = MagicMock()
+    svc.arp_scanner.scan_subnet.return_value = []
+    svc.dhcp_parser = MagicMock()
+    svc.dhcp_parser.parse_dhcp_leases.return_value = []
+    yield svc
+    db.close()
+    for suffix in ("", "-wal", "-shm"):
+        if os.path.exists(path + suffix):
+            os.unlink(path + suffix)
+
+
+@pytest.fixture
+def client(device_service, monkeypatch):
+    """Test client with services injected the way startup_event wires them.
+
+    The app is not entered as a context manager, so startup (real DB, LAN polling,
+    Deco/Chester clients) never runs. monkeypatch restores the module globals.
+    The API-key middleware is disabled so tests are independent of the host env.
+    """
+    monkeypatch.setattr("middleware.auth.HOMESENTINEL_API_KEY", "")
+    polling_manager = MagicMock()
+    polling_manager.get_status.return_value = {"running": False, "interval": 60}
+    monkeypatch.setattr(main, "device_service", device_service)
+    monkeypatch.setattr(main, "polling_manager", polling_manager)
     return TestClient(app)
 
 
 class TestHealthCheckEndpoints:
     """Test suite for health check endpoints"""
 
-    def test_root_health_check(self, client):
-        """Test root health check endpoint"""
+    def test_root_health_check(self, client, monkeypatch, tmp_path):
+        """Test root health check endpoint (no frontend build present)"""
+        import main
+        monkeypatch.setattr(main, "_FRONTEND_BUILD", tmp_path / "no-build")
         response = client.get("/")
         assert response.status_code == 200
         data = response.json()

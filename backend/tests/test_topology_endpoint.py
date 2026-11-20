@@ -1,12 +1,17 @@
 """
 Test suite for Deco topology endpoint
-Tests the /api/deco/topology endpoint functionality
+Tests the /api/deco/topology endpoint functionality.
+
+The endpoint builds nodes and client->node relationships from the Deco local API
+(deco_client.get_topology_local()), enriches nodes with cloud data matched on
+raw_data.deviceMac, and builds the device list from correlation_service merged devices.
 """
 
+import base64
 import pytest
-import json
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
+import routes.deco as deco_routes
 from routes.deco import router, set_deco_service, set_correlation_service
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
@@ -16,73 +21,65 @@ app = FastAPI()
 app.include_router(router)
 client = TestClient(app)
 
+NODE_1_MAC = "AA-BB-CC-DD-EE-01"
+NODE_2_MAC = "AA-BB-CC-DD-EE-02"
+NODE_3_MAC = "AA-BB-CC-DD-EE-03"
+
+
+def _b64(text):
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def _cloud_node(node_id, name, mac, status="online", signal=80, clients=0):
+    return {
+        "node_id": node_id,
+        "node_name": name,
+        "firmware_version": "1.5.0",
+        "status": status,
+        "signal_strength": signal,
+        "connected_clients": clients,
+        "uptime_seconds": 86400 if status == "online" else 0,
+        "model": "Deco M70",
+        "last_updated": datetime.now().isoformat(),
+        "raw_data": {"nodeID": node_id, "deviceMac": mac, "nodeName": name},
+    }
+
 
 class TestTopologyEndpoint:
     """Test cases for the topology endpoint"""
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        """Setup test fixtures"""
-        # Mock Deco service
+        """Inject mocked services; reset the route cache and restore globals afterwards."""
+        prev_deco = deco_routes.deco_service
+        prev_corr = deco_routes.correlation_service
+        prev_cache = (deco_routes._topology_json_cache, deco_routes._topology_json_cache_time)
+        deco_routes._topology_json_cache = None
+        deco_routes._topology_json_cache_time = 0
+
         self.mock_deco_service = Mock()
+        # No device repo -> node names come from the Deco nickname, no DB lookup.
+        self.mock_deco_service._device_repo = None
         self.mock_deco_service.get_nodes_with_details.return_value = [
-            {
-                "node_id": "node_1",
-                "node_name": "Main Node",
-                "firmware_version": "1.5.0",
-                "status": "online",
-                "signal_strength": 85,
-                "connected_clients": 3,
-                "uptime_seconds": 86400,
-                "model": "Deco M70",
-                "last_updated": datetime.now().isoformat(),
-                "raw_data": {
-                    "nodeID": "node_1",
-                    "macAddress": "AA:BB:CC:DD:EE:01",
-                    "nodeName": "Main Node",
-                },
-            },
-            {
-                "node_id": "node_2",
-                "node_name": "Bedroom Node",
-                "firmware_version": "1.5.0",
-                "status": "online",
-                "signal_strength": 72,
-                "connected_clients": 2,
-                "uptime_seconds": 43200,
-                "model": "Deco M70",
-                "last_updated": datetime.now().isoformat(),
-                "raw_data": {
-                    "nodeID": "node_2",
-                    "macAddress": "AA:BB:CC:DD:EE:02",
-                    "nodeName": "Bedroom Node",
-                },
-            },
+            _cloud_node("node_1", "Main Node", NODE_1_MAC, signal=85, clients=2),
+            _cloud_node("node_2", "Bedroom Node", NODE_2_MAC, signal=72, clients=1),
         ]
         self.mock_deco_service.deco_client = Mock()
-        self.mock_deco_service.deco_client.get_client_list.return_value = [
-            {
-                "macAddress": "11:22:33:44:55:66",
-                "nodeID": "node_1",
-                "clientName": "iPhone",
-                "name": "iPhone",
-                "ipAddress": "192.168.1.10",
+        self.mock_deco_service.deco_client.get_topology_local.return_value = {
+            "nodes": [
+                {"mac": NODE_1_MAC, "nickname": _b64("Main Node"), "role": "master"},
+                {"mac": NODE_2_MAC, "nickname": _b64("Bedroom Node"), "role": "slave"},
+            ],
+            "node_clients": {
+                NODE_1_MAC: [
+                    {"mac": "11-22-33-44-55-66", "name": _b64("iPhone"), "connection_type": "band5", "online": True},
+                    {"mac": "11-22-33-44-55-77", "name": _b64("Laptop"), "connection_type": "band5", "online": True},
+                ],
+                NODE_2_MAC: [
+                    {"mac": "11-22-33-44-55-88", "name": _b64("Smart TV"), "connection_type": "wired", "online": True},
+                ],
             },
-            {
-                "macAddress": "11:22:33:44:55:77",
-                "nodeID": "node_1",
-                "clientName": "Laptop",
-                "name": "Laptop",
-                "ipAddress": "192.168.1.11",
-            },
-            {
-                "macAddress": "11:22:33:44:55:88",
-                "nodeID": "node_2",
-                "clientName": "Smart TV",
-                "name": "Smart TV",
-                "ipAddress": "192.168.1.12",
-            },
-        ]
+        }
 
         # Mock correlation service
         self.mock_correlation_service = Mock()
@@ -135,9 +132,12 @@ class TestTopologyEndpoint:
             },
         }
 
-        # Set the mocked services
         set_deco_service(self.mock_deco_service)
         set_correlation_service(self.mock_correlation_service)
+        yield
+        deco_routes.deco_service = prev_deco
+        deco_routes.correlation_service = prev_corr
+        deco_routes._topology_json_cache, deco_routes._topology_json_cache_time = prev_cache
 
     def test_topology_endpoint_success(self):
         """Test successful topology endpoint response"""
@@ -162,9 +162,15 @@ class TestTopologyEndpoint:
         nodes = data["nodes"]
 
         assert len(nodes) == 2
-        assert nodes[0]["node_id"] == "node_1"
+        # Node ids are the Deco node MACs from the local API
+        assert nodes[0]["node_id"] == NODE_1_MAC
+        assert nodes[0]["mac_address"] == NODE_1_MAC
         assert nodes[0]["node_name"] == "Main Node"
         assert nodes[0]["status"] == "online"
+        assert nodes[0]["signal_strength"] == 85
+        assert nodes[0]["connected_clients"] == 2
+        assert nodes[0]["role"] == "primary"
+        assert nodes[1]["role"] == "secondary"
         assert "signal_strength" in nodes[0]
         assert "connected_clients" in nodes[0]
         assert "mac_address" in nodes[0]
@@ -214,11 +220,11 @@ class TestTopologyEndpoint:
         relationships = data["relationships"]
 
         # Find relationships for node_1
-        node_1_rels = [r for r in relationships if r["node_id"] == "node_1"]
+        node_1_rels = [r for r in relationships if r["node_id"] == NODE_1_MAC]
         assert len(node_1_rels) == 2
 
         # Find relationships for node_2
-        node_2_rels = [r for r in relationships if r["node_id"] == "node_2"]
+        node_2_rels = [r for r in relationships if r["node_id"] == NODE_2_MAC]
         assert len(node_2_rels) == 1
 
     def test_topology_services_not_initialized(self):
@@ -238,33 +244,18 @@ class TestTopologyEndpoint:
 
     def test_topology_with_offline_nodes(self):
         """Test topology with offline nodes"""
-        # Update mock to include offline node
+        # Cloud data marks node 3 offline; it is matched to the local node via deviceMac
         self.mock_deco_service.get_nodes_with_details.return_value = [
-            {
-                "node_id": "node_1",
-                "node_name": "Main Node",
-                "status": "online",
-                "signal_strength": 85,
-                "connected_clients": 2,
-                "firmware_version": "1.5.0",
-                "uptime_seconds": 86400,
-                "model": "Deco M70",
-                "last_updated": datetime.now().isoformat(),
-                "raw_data": {"macAddress": "AA:BB:CC:DD:EE:01"},
-            },
-            {
-                "node_id": "node_3",
-                "node_name": "Offline Node",
-                "status": "offline",
-                "signal_strength": 0,
-                "connected_clients": 0,
-                "firmware_version": "1.5.0",
-                "uptime_seconds": 0,
-                "model": "Deco M70",
-                "last_updated": datetime.now().isoformat(),
-                "raw_data": {"macAddress": "AA:BB:CC:DD:EE:03"},
-            },
+            _cloud_node("node_1", "Main Node", NODE_1_MAC, signal=85, clients=2),
+            _cloud_node("node_3", "Offline Node", NODE_3_MAC, status="offline", signal=0),
         ]
+        self.mock_deco_service.deco_client.get_topology_local.return_value = {
+            "nodes": [
+                {"mac": NODE_1_MAC, "nickname": _b64("Main Node"), "role": "master"},
+                {"mac": NODE_3_MAC, "nickname": _b64("Offline Node"), "role": "slave"},
+            ],
+            "node_clients": {NODE_1_MAC: []},
+        }
 
         response = client.get("/api/deco/topology")
         data = response.json()
@@ -340,7 +331,10 @@ class TestTopologyEndpoint:
     def test_topology_empty_nodes(self):
         """Test topology with no nodes"""
         self.mock_deco_service.get_nodes_with_details.return_value = []
-        self.mock_deco_service.deco_client.get_client_list.return_value = []
+        self.mock_deco_service.deco_client.get_topology_local.return_value = {
+            "nodes": [],
+            "node_clients": {},
+        }
         self.mock_correlation_service.get_merged_clients.return_value = {
             "merged_devices": [],
             "total_merged": 0,

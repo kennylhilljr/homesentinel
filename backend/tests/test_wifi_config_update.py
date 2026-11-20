@@ -121,7 +121,7 @@ class TestWiFiConfigUpdateService:
             service.update_wifi_config(password="short")
 
     def test_update_wifi_config_clears_cache(self):
-        """Test that cache is cleared after update"""
+        """Test that the stale cache is discarded and refreshed from the API after update"""
         mock_client = Mock()
         mock_client.update_wifi_settings.return_value = {"success": True}
         mock_client.get_wifi_settings.return_value = {
@@ -131,16 +131,19 @@ class TestWiFiConfigUpdateService:
 
         service = DecoService(deco_client=mock_client)
 
-        # Set cache
+        # Set a still-valid cache
+        old_timestamp = datetime.now()
         service._wifi_config_cache = {"ssid": "OldNetwork"}
-        service._wifi_config_timestamp = datetime.now()
+        service._wifi_config_timestamp = old_timestamp
 
         # Update
-        service.update_wifi_config(ssid="NewNetwork")
+        result = service.update_wifi_config(ssid="NewNetwork")
 
-        # Cache should be cleared
-        assert service._wifi_config_cache is None
-        assert service._wifi_config_timestamp is None
+        # Old cache was bypassed: fresh config fetched and re-cached
+        mock_client.get_wifi_settings.assert_called_once()
+        assert result["updated_config"]["ssid"] == "NewNetwork"
+        assert service._wifi_config_cache["ssid"] == "NewNetwork"
+        assert service._wifi_config_timestamp >= old_timestamp
 
     def test_update_wifi_config_returns_updated_config(self):
         """Test that method returns the updated config"""
@@ -501,8 +504,9 @@ class TestWiFiConfigUpdateIntegration:
         with pytest.raises(APIConnectionError):
             service.update_wifi_config(ssid="NewNetwork")
 
-    def test_exponential_backoff_retry_logic(self):
-        """Test that transient failures are retried with backoff"""
+    def test_transient_verification_failure_then_caller_retry_succeeds(self):
+        """The service does not retry internally: a transient failure while re-reading
+        the config surfaces as APIConnectionError, and a caller retry succeeds."""
         mock_client = Mock()
         mock_client.update_wifi_settings.return_value = {"success": True}
 
@@ -517,6 +521,14 @@ class TestWiFiConfigUpdateIntegration:
 
         service = DecoService(deco_client=mock_client)
 
-        # Should handle gracefully
+        with pytest.raises(APIConnectionError):
+            service.update_wifi_config(ssid="UpdatedNetwork")
+
+        # Failed attempt must not leave a cached config behind
+        assert service._wifi_config_cache is None
+
         result = service.update_wifi_config(ssid="UpdatedNetwork")
         assert result["success"] is True
+        assert result["updated_config"]["ssid"] == "UpdatedNetwork"
+        assert mock_client.update_wifi_settings.call_count == 2
+        assert mock_client.get_wifi_settings.call_count == 2

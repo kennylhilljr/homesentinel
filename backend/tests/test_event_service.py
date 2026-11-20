@@ -78,8 +78,12 @@ class TestEventRecording:
             metadata=metadata
         )
 
-        events = event_service.get_events(event_id=event_id)
-        assert len(events) > 0
+        # get_events has no event_id filter; fetch by device and locate the event
+        events = event_service.get_events(device_id='test-device-1')
+        matching = [e for e in events if e['event_id'] == event_id]
+        assert len(matching) == 1
+        assert matching[0]['metadata'] == metadata
+        assert matching[0]['event_type'] == 'connected'
 
 
 class TestEventRetrieval:
@@ -271,14 +275,22 @@ class TestEventFiltering:
 
     def test_filter_by_date_range(self, event_service, test_db):
         """Test filtering events by date range"""
-        now = datetime.utcnow()
-        start = (now - timedelta(hours=1)).isoformat()
-        end = now.isoformat()
-
+        # Timestamps are stored via SQLite CURRENT_TIMESTAMP (UTC,
+        # "YYYY-MM-DD HH:MM:SS") and compared as strings, so bounds must use
+        # the same format.
+        fmt = '%Y-%m-%d %H:%M:%S'
         event_service.record_event('test-device-1', 'online')
+
+        now = datetime.utcnow()
+        start = (now - timedelta(hours=1)).strftime(fmt)
+        end = (now + timedelta(minutes=1)).strftime(fmt)
 
         events = event_service.get_events(start_date=start, end_date=end)
         assert len(events) > 0
+
+        past_end = (now - timedelta(hours=1)).strftime(fmt)
+        past_start = (now - timedelta(hours=2)).strftime(fmt)
+        assert event_service.get_events(start_date=past_start, end_date=past_end) == []
 
     def test_filter_no_results(self, event_service):
         """Test filtering with no results"""
