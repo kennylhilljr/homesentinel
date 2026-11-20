@@ -1,6 +1,7 @@
 // 2026-03-12: Extracted from App.js — custom hook for all data fetching and polling logic
 import { useState, useEffect, useRef } from 'react';
 import { buildUrl } from '../utils/apiConfig';
+import { openEventStream } from '../utils/eventStream';
 
 export default function useDevicePolling() {
   const [apiStatus, setApiStatus] = useState('connecting...');
@@ -315,26 +316,20 @@ export default function useDevicePolling() {
 
     pollingCallbacksRef.current = { fastPoll, slowPoll, speedPoll };
 
-    // 2026-03-12: SSE — connect to /api/sse/events for push updates
-    let eventSource = null;
-    try {
-      eventSource = new EventSource('/api/sse/events');
-      eventSource.addEventListener('device_update', () => {
+    // 2026-03-12: SSE — connect to /api/sse/events for push updates.
+    // openEventStream authenticates with a one-time token when an API key is in use
+    // and reconnects on errors; fast polling covers any gap.
+    const closeEventStream = openEventStream({
+      device_update: () => {
         // Server pushed a device update — refresh immediately
         getDevices();
         getActiveAlerts();
         getHomeStatus();
-      });
-      eventSource.addEventListener('connected', () => {
+      },
+      connected: () => {
         console.log('SSE: connected to server');
-      });
-      eventSource.onerror = () => {
-        // SSE failed — fast polling will cover us as fallback
-        console.warn('SSE: connection lost, relying on polling fallback');
-      };
-    } catch (e) {
-      console.warn('SSE: not available, using polling only');
-    }
+      },
+    });
 
     // 2026-03-12: Slowed fast poll from 5s to 15s — SSE handles real-time push
     fastIntervalRef.current = setInterval(fastPoll, 15000);
@@ -347,7 +342,7 @@ export default function useDevicePolling() {
       clearInterval(speedIntervalRef.current);
       for (const { controller } of pollRequestsRef.current.values()) controller.abort();
       pollRequestsRef.current.clear();
-      if (eventSource) eventSource.close();
+      closeEventStream();
     };
   }, []);
 

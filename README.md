@@ -312,6 +312,8 @@ A direct run (`python backend/main.py`, `start-dev.sh`, the macOS launchd runtim
 
 To expose the backend beyond localhost (LAN, ZeroTier, Alexa Lambda reaching port 8443 directly), set `HOMESENTINEL_HOST` (for example `0.0.0.0`) together with `HOMESENTINEL_API_KEY`, and generate certificates with `scripts/gen-cert.sh`. On a non-loopback bind, the backend refuses to start without an API key and does not fall back to plaintext HTTP when certificates are missing. `HOMESENTINEL_ALLOW_INSECURE_BIND=1` overrides both checks; avoid it outside isolated test networks.
 
+With an API key set, the dashboard asks for the key the first time an `/api` request returns 401, and keeps it in that browser's `localStorage`. It then sends `X-API-Key` on every `/api` request. The live SSE stream (`EventSource` can't send headers) opens with a single-use token that expires after 60 seconds, issued by the key-protected `POST /api/sse/token`. The API key itself is never put in a URL. Without a key (the default loopback setup), nothing changes and no prompt appears.
+
 At startup the backend logs the effective modes, for example `HomeSentinel bind=127.0.0.1:8443 (loopback) tls=on auth=off insecure_override=no`. The API key is never logged.
 
 Note: the frontend dev server listens on `0.0.0.0:2026` and proxies `/api` to the backend, so set `HOMESENTINEL_API_KEY` if port 2026 is reachable from your LAN.

@@ -9,6 +9,8 @@ import time
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
+from middleware import auth as auth_middleware
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sse", tags=["SSE"])
@@ -56,7 +58,10 @@ async def _event_generator(queue: asyncio.Queue):
 
 @router.get("/events")
 async def sse_events():
-    """SSE stream of device status changes, scan results, alerts, etc."""
+    """SSE stream of device status changes, scan results, alerts, etc.
+
+    With an API key configured, connect with ?token=<token from POST /api/sse/token>.
+    """
     queue = asyncio.Queue(maxsize=100)
     _subscribers.append(queue)
     return StreamingResponse(
@@ -68,3 +73,14 @@ async def sse_events():
             "X-Accel-Buffering": "no",  # Disable nginx buffering
         },
     )
+
+
+@router.post("/token")
+async def sse_token():
+    """Issue a short-lived, single-use token for opening /api/sse/events.
+
+    The auth middleware requires X-API-Key here; the token is accepted nowhere else.
+    Returns token=None when auth is disabled, in which case connect without a token.
+    """
+    token = auth_middleware.issue_sse_token()
+    return {"token": token, "expires_in": auth_middleware.SSE_TOKEN_TTL_SECONDS if token else None}

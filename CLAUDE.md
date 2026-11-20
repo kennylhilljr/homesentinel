@@ -88,7 +88,8 @@ docker compose up -d               # Docker deployment
 | `backend/utils.py` | MAC normalization, Fernet credential encryption/decryption |
 | `backend/routes/` | 12 API route modules (deco, chester, alexa, hiboost, alarm_com, etc.) |
 | `backend/services/` | 23 service files (clients, scanners, schedulers) |
-| `backend/middleware/auth.py` | API key auth middleware (`X-API-Key` header) |
+| `backend/middleware/auth.py` | API key auth middleware (`X-API-Key` header; one-time SSE tokens from `POST /api/sse/token`) |
+| `frontend/src/utils/apiAuth.js`, `eventStream.js` | Dashboard sends the stored key as `X-API-Key`; SSE opens with a one-time token |
 | `backend/migrations/` | 16 sequential SQL migrations (001–016) |
 | `backend/tests/` | 20 pytest test files |
 | `frontend/src/App.jsx` | Main React app — theme, nav, lazy page mounting |
