@@ -41,7 +41,9 @@ class TestChesterService:
         assert status["wan"] == {"error": "Unable to query network.get_wan"}
         assert status["wireless"] == {"error": "Unable to query network.get_wireless"}
 
-    def test_get_cellular_status_detects_qmi(self):
+    def test_get_cellular_status_passes_through_board_info_and_wan(self):
+        # QMI/protocol detection was removed: the service always reports
+        # detected=True and passes board info and WAN data through.
         client = Mock()
         client.get_board_info.return_value = {"model": "Chester X1"}
         client.api_call.return_value = {"interface": "cell0", "proto": "qmi", "up": True}
