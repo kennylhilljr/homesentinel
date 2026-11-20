@@ -365,4 +365,24 @@ describe('DecoWiFiQoSView Component', () => {
     // Verify fetch was called twice (once for wifi-config, once for qos)
     expect(fetch).toHaveBeenCalledTimes(2);
   });
+
+  test('test_wifi_section_is_read_only_with_unsupported_message', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockWiFiConfig,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockQoSSettings,
+      });
+
+    render(<DecoWiFiQoSView />);
+
+    expect(
+      await screen.findByText("WiFi changes aren't supported yet; change them in the Deco app")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save|update|apply/i })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.every(([, opts]) => !opts || opts.method === 'GET')).toBe(true);
+  });
 });
