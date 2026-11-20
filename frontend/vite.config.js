@@ -25,7 +25,8 @@ export default defineConfig({
     host: resolveDevServerHost(process.env),
     proxy: {
       '/api': {
-        target: 'https://localhost:8443',
+        // Docker Compose sets https://backend:8443; a direct run uses localhost.
+        target: (process.env.HOMESENTINEL_PROXY_TARGET || '').trim() || 'https://localhost:8443',
         secure: false,
       },
     },
