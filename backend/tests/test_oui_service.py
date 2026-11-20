@@ -32,34 +32,34 @@ class TestOUIService:
 
     def test_oui_lookup_finds_apple(self, oui_service):
         """Test OUI lookup for Apple devices"""
-        vendor = oui_service.lookup_vendor("001A2B:DD:EE:FF")
-        assert vendor == "Apple Inc.", f"Expected 'Apple Inc.', got '{vendor}'"
+        vendor = oui_service.lookup_vendor("001B63:DD:EE:FF")
+        assert vendor == "Apple, Inc.", f"Expected 'Apple, Inc.', got '{vendor}'"
 
     def test_oui_lookup_finds_tp_link(self, oui_service):
         """Test OUI lookup for TP-Link devices"""
-        vendor = oui_service.lookup_vendor("0014BF:AA:BB:CC")
-        assert vendor == "TP-Link", f"Expected 'TP-Link', got '{vendor}'"
+        vendor = oui_service.lookup_vendor("14CC20:AA:BB:CC")
+        assert vendor == "TP-LINK TECHNOLOGIES CO.,LTD.", f"Expected 'TP-LINK TECHNOLOGIES CO.,LTD.', got '{vendor}'"
 
     def test_oui_lookup_finds_cisco(self, oui_service):
         """Test OUI lookup for Cisco devices"""
-        vendor = oui_service.lookup_vendor("001018:AA:BB:CC")
-        assert vendor == "Cisco Systems Inc.", f"Expected 'Cisco Systems Inc.', got '{vendor}'"
+        vendor = oui_service.lookup_vendor("00000C:AA:BB:CC")
+        assert vendor == "Cisco Systems, Inc", f"Expected 'Cisco Systems, Inc', got '{vendor}'"
 
     def test_oui_lookup_case_insensitive_uppercase(self, oui_service):
         """Test OUI lookup is case-insensitive with uppercase MAC"""
-        vendor1 = oui_service.lookup_vendor("001A2B:DD:EE:FF")
-        vendor2 = oui_service.lookup_vendor("001a2b:dd:ee:ff")
+        vendor1 = oui_service.lookup_vendor("001B63:DD:EE:FF")
+        vendor2 = oui_service.lookup_vendor("001b63:dd:ee:ff")
         assert vendor1 == vendor2, "Lookup should be case-insensitive"
 
     def test_oui_lookup_case_insensitive_lowercase(self, oui_service):
         """Test OUI lookup is case-insensitive with lowercase MAC"""
-        vendor = oui_service.lookup_vendor("001a2b:dd:ee:ff")
-        assert vendor == "Apple Inc."
+        vendor = oui_service.lookup_vendor("001b63:dd:ee:ff")
+        assert vendor == "Apple, Inc."
 
     def test_oui_lookup_case_insensitive_mixed(self, oui_service):
         """Test OUI lookup is case-insensitive with mixed case MAC"""
-        vendor = oui_service.lookup_vendor("001A2b:Dd:Ee:Ff")
-        assert vendor == "Apple Inc."
+        vendor = oui_service.lookup_vendor("001B63:Dd:Ee:Ff")
+        assert vendor == "Apple, Inc."
 
     def test_oui_lookup_unknown_vendor(self, oui_service):
         """Test OUI lookup returns Unknown Vendor for unknown OUI"""
@@ -68,13 +68,13 @@ class TestOUIService:
 
     def test_oui_lookup_with_hyphens(self, oui_service):
         """Test OUI lookup with hyphenated MAC address"""
-        vendor = oui_service.lookup_vendor("001A-2B-DD-EE-FF")
-        assert vendor == "Apple Inc."
+        vendor = oui_service.lookup_vendor("001B-63-DD-EE-FF")
+        assert vendor == "Apple, Inc."
 
     def test_oui_lookup_with_dots(self, oui_service):
         """Test OUI lookup with dotted MAC address"""
-        vendor = oui_service.lookup_vendor("001A.2B.DD.EE.FF")
-        assert vendor == "Apple Inc."
+        vendor = oui_service.lookup_vendor("001B.63.DD.EE.FF")
+        assert vendor == "Apple, Inc."
 
     def test_oui_lookup_caching(self, oui_service):
         """Test that OUI lookups are cached"""
@@ -149,9 +149,9 @@ class TestOUIService:
     def test_oui_multiple_vendors(self, oui_service):
         """Test lookups for multiple vendors"""
         test_cases = [
-            ("001A2B:DD:EE:FF", "Apple Inc."),
-            ("0014BF:AA:BB:CC", "TP-Link"),
-            ("001018:AA:BB:CC", "Cisco Systems Inc."),
+            ("001B63:DD:EE:FF", "Apple, Inc."),
+            ("14CC20:AA:BB:CC", "TP-LINK TECHNOLOGIES CO.,LTD."),
+            ("00000C:AA:BB:CC", "Cisco Systems, Inc"),
         ]
 
         for mac, expected_vendor in test_cases:

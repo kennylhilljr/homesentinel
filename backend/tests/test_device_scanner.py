@@ -45,14 +45,6 @@ class TestARPScanner:
         vendor = scanner._get_vendor("AA:BB:CC:00:00:01")
         assert vendor is None
 
-    def test_arp_scanner_generate_mac_from_ip(self):
-        """Test pseudo MAC generation from IP"""
-        scanner = ARPScanner()
-        mac = scanner._generate_mac_from_ip("192.168.1.100")
-        assert mac is not None
-        assert ':' in mac
-        assert len(mac.split(':')) == 6
-
     @patch('subprocess.run')
     def test_arp_scan_with_mock_output(self, mock_run):
         """Test ARP scan with mocked arp-scan output"""
@@ -87,10 +79,27 @@ Host: 192.168.1.1 (router.local)	Status: Up
 Host: 192.168.1.100 (raspberry.local)	Status: Up
 Host: 192.168.1.101 (vmhost)	Status: Up"""
 
-        mock_run.return_value = Mock(returncode=0, stdout=mock_output, stderr="")
+        # nmap only finds IPs; MACs are resolved from `arp -a`. Hosts with no
+        # ARP entry (192.168.1.101 here) are skipped rather than given fake MACs.
+        arp_output = """? (192.168.1.1) at 8:0:27:0:0:0 on en0 ifscope [ethernet]
+? (192.168.1.100) at dc:a6:32:00:00:01 on en0 ifscope [ethernet]"""
+
+        def fake_run(cmd, *args, **kwargs):
+            if cmd[0] == 'nmap':
+                return Mock(returncode=0, stdout=mock_output, stderr="")
+            if cmd[0] == 'arp':
+                return Mock(returncode=0, stdout=arp_output, stderr="")
+            raise AssertionError(f"unexpected command {cmd}")
+
+        mock_run.side_effect = fake_run
 
         devices = scanner.scan_subnet_with_nmap("192.168.1.0/24")
-        assert len(devices) >= 3
+        assert len(devices) == 2
+        by_ip = {d.ip_address: d for d in devices}
+        assert by_ip['192.168.1.1'].mac_address == '08:00:27:00:00:00'
+        assert by_ip['192.168.1.1'].hostname == 'router.local'
+        assert by_ip['192.168.1.100'].mac_address == 'dc:a6:32:00:00:01'
+        assert '192.168.1.101' not in by_ip
 
     def test_arp_scanner_invalid_subnet(self):
         """Test scanning with invalid subnet"""
@@ -611,23 +620,23 @@ class TestNetworkDeviceService:
         config = service.set_polling_interval(120)
         assert config['polling_interval_seconds'] == 120
 
-    @patch.object(NetworkDeviceService, 'arp_scanner')
-    def test_scan_and_update(self, mock_scanner, temp_db):
+    def test_scan_and_update(self, temp_db):
         """Test scan and update operation"""
         service = NetworkDeviceService(temp_db)
 
-        # Mock scanner results
+        # Mock scanner results (arp_scanner is an instance attribute)
         mock_device1 = DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100")
         mock_device2 = DeviceInfo("aa:bb:cc:dd:ee:02", "192.168.1.101")
-        mock_scanner.scan_subnet.return_value = [mock_device1, mock_device2]
 
-        result = service.scan_and_update("192.168.1.0/24")
+        with patch.object(service.arp_scanner, 'scan_subnet', return_value=[mock_device1, mock_device2]), \
+                patch.object(service.dhcp_parser, 'parse_dhcp_leases', return_value=[]):
+            result = service.scan_and_update("192.168.1.0/24")
 
+        assert 'error' not in result
         assert result['devices_found'] == 2
         assert result['devices_added'] == 2
 
-    @patch.object(NetworkDeviceService, 'arp_scanner')
-    def test_offline_detection(self, mock_scanner, temp_db):
+    def test_offline_detection(self, temp_db):
         """Test detecting devices going offline"""
         service = NetworkDeviceService(temp_db)
 
@@ -637,9 +646,9 @@ class TestNetworkDeviceService:
 
         # Scan with only one device
         mock_device = DeviceInfo("aa:bb:cc:dd:ee:01", "192.168.1.100")
-        mock_scanner.scan_subnet.return_value = [mock_device]
-
-        result = service.scan_and_update("192.168.1.0/24")
+        with patch.object(service.arp_scanner, 'scan_subnet', return_value=[mock_device]), \
+                patch.object(service.dhcp_parser, 'parse_dhcp_leases', return_value=[]):
+            result = service.scan_and_update("192.168.1.0/24")
 
         assert result['devices_offline'] == 1
 

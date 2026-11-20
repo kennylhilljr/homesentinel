@@ -6,6 +6,8 @@ Correlation Service and Merged Clients Endpoint
 
 import sys
 import os
+import shutil
+import tempfile
 from datetime import datetime
 from unittest.mock import Mock, patch
 import importlib.util
@@ -310,7 +312,10 @@ def test_full_integration():
     from db import Database, NetworkDeviceRepository
     from services.correlation_service import CorrelationService
 
-    db = Database()
+    # Use a throwaway migrated database, never the real homesentinel.db.
+    tmp_dir = tempfile.mkdtemp()
+    db = Database(db_path=os.path.join(tmp_dir, "test.db"))
+    db.run_migrations()
     device_repo = NetworkDeviceRepository(db)
 
     # Create test devices
@@ -342,6 +347,7 @@ def test_full_integration():
     assert result["total_merged"] == 5
     assert result["correlation_stats"]["correlation_percentage"] == 100.0
     db.close()
+    shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # API Tests

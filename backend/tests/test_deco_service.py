@@ -17,6 +17,11 @@ from services.deco_service import DecoService
 from services.deco_client import InvalidCredentialsError, APIConnectionError
 
 
+def topology(nodes, node_clients=None):
+    """Build a DecoClient.get_topology_local() payload (DecoService's only node source)."""
+    return {"nodes": nodes, "node_clients": node_clients or {}}
+
+
 class TestDecoServiceInitialization:
     """Tests for DecoService initialization"""
 
@@ -46,7 +51,7 @@ class TestGetNodesWithDetails:
     def test_returns_list_of_nodes(self):
         """Test returns list of enriched nodes"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -57,7 +62,7 @@ class TestGetNodesWithDetails:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         nodes = service.get_nodes_with_details()
@@ -69,7 +74,7 @@ class TestGetNodesWithDetails:
     def test_enriches_node_data(self):
         """Test node data is enriched with all required fields"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -80,7 +85,7 @@ class TestGetNodesWithDetails:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         nodes = service.get_nodes_with_details()
@@ -95,11 +100,12 @@ class TestGetNodesWithDetails:
         assert "model" in node
         assert "status" in node
         assert "last_updated" in node
+        assert "clients" in node
 
     def test_caches_results(self):
         """Test results are cached after first fetch"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -110,23 +116,23 @@ class TestGetNodesWithDetails:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
         # First call should fetch from API
         nodes1 = service.get_nodes_with_details()
-        assert mock_client.get_node_list.call_count == 1
+        assert mock_client.get_topology_local.call_count == 1
 
         # Second call should use cache
         nodes2 = service.get_nodes_with_details()
-        assert mock_client.get_node_list.call_count == 1  # Still 1
+        assert mock_client.get_topology_local.call_count == 1  # Still 1
         assert nodes1 == nodes2
 
     def test_returns_cached_result_within_ttl(self):
         """Test cached result is returned within TTL"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -137,7 +143,7 @@ class TestGetNodesWithDetails:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
@@ -147,7 +153,7 @@ class TestGetNodesWithDetails:
 
         # Second call immediately after
         nodes2 = service.get_nodes_with_details()
-        assert mock_client.get_node_list.call_count == 1
+        assert mock_client.get_topology_local.call_count == 1
         assert nodes1 == nodes2
 
     def test_refreshes_cache_after_ttl_expires(self):
@@ -155,9 +161,9 @@ class TestGetNodesWithDetails:
         mock_client = Mock()
         call_count = [0]
 
-        def get_node_list_side_effect():
+        def get_topology_local_side_effect():
             call_count[0] += 1
-            return [
+            return topology([
                 {
                     "nodeID": "node1",
                     "nodeName": "Main Router",
@@ -168,9 +174,9 @@ class TestGetNodesWithDetails:
                     "modelName": "Deco M32",
                     "status": "online",
                 }
-            ]
+            ])
 
-        mock_client.get_node_list.side_effect = get_node_list_side_effect
+        mock_client.get_topology_local.side_effect = get_topology_local_side_effect
 
         service = DecoService(deco_client=mock_client)
 
@@ -184,12 +190,12 @@ class TestGetNodesWithDetails:
         # Second call should fetch fresh data
         nodes2 = service.get_nodes_with_details()
         assert nodes2[0]["firmware_version"] == "1.5.2"
-        assert mock_client.get_node_list.call_count == 2
+        assert mock_client.get_topology_local.call_count == 2
 
     def test_handles_authentication_error(self):
         """Test handles InvalidCredentialsError from client"""
         mock_client = Mock()
-        mock_client.get_node_list.side_effect = InvalidCredentialsError("Invalid credentials")
+        mock_client.get_topology_local.side_effect = InvalidCredentialsError("Invalid credentials")
 
         service = DecoService(deco_client=mock_client)
 
@@ -199,7 +205,7 @@ class TestGetNodesWithDetails:
     def test_handles_api_connection_error(self):
         """Test handles APIConnectionError from client"""
         mock_client = Mock()
-        mock_client.get_node_list.side_effect = APIConnectionError("Connection failed")
+        mock_client.get_topology_local.side_effect = APIConnectionError("Connection failed")
 
         service = DecoService(deco_client=mock_client)
 
@@ -209,7 +215,7 @@ class TestGetNodesWithDetails:
     def test_handles_empty_node_list(self):
         """Test handles empty node list from API"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = []
+        mock_client.get_topology_local.return_value = topology([])
 
         service = DecoService(deco_client=mock_client)
         nodes = service.get_nodes_with_details()
@@ -220,7 +226,7 @@ class TestGetNodesWithDetails:
     def test_handles_multiple_nodes(self):
         """Test handles multiple nodes from API"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -241,7 +247,7 @@ class TestGetNodesWithDetails:
                 "modelName": "Deco M32",
                 "status": "online",
             },
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         nodes = service.get_nodes_with_details()
@@ -257,7 +263,7 @@ class TestGetNodeById:
     def test_returns_node_by_id(self):
         """Test returns specific node by ID"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -278,7 +284,7 @@ class TestGetNodeById:
                 "modelName": "Deco M32",
                 "status": "online",
             },
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         node = service.get_node_by_id("node2")
@@ -290,7 +296,7 @@ class TestGetNodeById:
     def test_returns_none_for_missing_node(self):
         """Test returns None for non-existent node ID"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -301,7 +307,7 @@ class TestGetNodeById:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         node = service.get_node_by_id("nonexistent")
@@ -379,23 +385,30 @@ class TestEnrichNodeData:
         assert enriched["uptime_seconds"] == 0
         assert enriched["connected_clients"] == 0
         assert enriched["model"] == "unknown"
-        assert enriched["status"] == "unknown"
+        # Unknown status defaults to online to avoid false offline alarms
+        assert enriched["status"] == "online"
+        assert enriched["clients"] == []
 
     def test_converts_milliseconds_uptime_to_seconds(self):
         """Test converts uptime from milliseconds to seconds"""
         mock_client = Mock()
         service = DecoService(deco_client=mock_client)
 
+        # Values above ~100 years in seconds (3153600000) are treated as milliseconds
         raw_node = {
             "nodeID": "node1",
             "nodeName": "Main Router",
-            "uptime": 432000000,  # 432000 seconds in milliseconds
+            "uptime": 4320000000,  # 4320000 seconds in milliseconds
             "fwVersion": "1.5.8",
         }
 
         enriched = service._enrich_node_data(raw_node)
 
-        assert enriched["uptime_seconds"] == 432000
+        assert enriched["uptime_seconds"] == 4320000
+
+        # Values below the threshold are already seconds and left unchanged
+        raw_node["uptime"] = 432000000
+        assert service._enrich_node_data(raw_node)["uptime_seconds"] == 432000000
 
     def test_calculates_signal_strength(self):
         """Test calculates signal strength from RSSI"""
@@ -443,8 +456,10 @@ class TestCalculateSignalStrength:
         mock_client = Mock()
         service = DecoService(deco_client=mock_client)
 
-        assert service._calculate_signal_strength(-150) == 0  # Below minimum
-        assert service._calculate_signal_strength(150) == 100  # Above maximum
+        assert service._calculate_signal_strength(-150) == 0  # Below minimum RSSI
+        # Values > 100 are treated as a 0-255 scale and clamped to 100
+        assert service._calculate_signal_strength(255) == 100
+        assert service._calculate_signal_strength(1000) == 100
 
     def test_handles_invalid_values(self):
         """Test handles invalid signal values gracefully"""
@@ -462,7 +477,7 @@ class TestCacheManagement:
     def test_clear_cache_resets_state(self):
         """Test clear_cache resets cache state"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -473,7 +488,7 @@ class TestCacheManagement:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
@@ -490,7 +505,7 @@ class TestCacheManagement:
     def test_clear_cache_forces_fresh_fetch_on_next_call(self):
         """Test clearing cache forces fresh fetch on next call"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -501,18 +516,18 @@ class TestCacheManagement:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
         # First call
         service.get_nodes_with_details()
-        assert mock_client.get_node_list.call_count == 1
+        assert mock_client.get_topology_local.call_count == 1
 
         # Clear and call again
         service.clear_cache()
         service.get_nodes_with_details()
-        assert mock_client.get_node_list.call_count == 2
+        assert mock_client.get_topology_local.call_count == 2
 
 
 class TestNodeDataStructure:
@@ -521,7 +536,7 @@ class TestNodeDataStructure:
     def test_node_fields_have_correct_types(self):
         """Test node fields have correct data types"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -532,7 +547,7 @@ class TestNodeDataStructure:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         nodes = service.get_nodes_with_details()
@@ -605,10 +620,11 @@ class TestSignalStrengthEdgeCases:
         assert 0 <= result <= 100
 
     def test_signal_strength_greater_than_hundred(self):
-        """Test signal strength greater than 100 is clamped"""
+        """Test signal strength greater than 100 is scaled from 0-255"""
         mock_client = Mock()
         service = DecoService(deco_client=mock_client)
-        assert service._calculate_signal_strength(150) == 100
+        assert service._calculate_signal_strength(150) == 58  # int(150 / 255 * 100)
+        assert service._calculate_signal_strength(255) == 100
 
 
 class TestCacheHitMissBehavior:
@@ -617,7 +633,7 @@ class TestCacheHitMissBehavior:
     def test_cache_hit_doesnt_call_api(self):
         """Test cache hit does not call API"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -628,7 +644,7 @@ class TestCacheHitMissBehavior:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
@@ -637,12 +653,12 @@ class TestCacheHitMissBehavior:
         service.get_nodes_with_details()
 
         # API should only be called once (cache hit on second call)
-        assert mock_client.get_node_list.call_count == 1
+        assert mock_client.get_topology_local.call_count == 1
 
     def test_cache_miss_calls_api(self):
         """Test cache miss calls API"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -653,25 +669,25 @@ class TestCacheHitMissBehavior:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
         # First call
         service.get_nodes_with_details()
-        assert mock_client.get_node_list.call_count == 1
+        assert mock_client.get_topology_local.call_count == 1
 
         # Expire cache
         service._cache_timestamp = datetime.now() - timedelta(seconds=61)
 
         # Second call should be a miss
         service.get_nodes_with_details()
-        assert mock_client.get_node_list.call_count == 2
+        assert mock_client.get_topology_local.call_count == 2
 
     def test_cache_timestamp_updated_on_fetch(self):
         """Test cache timestamp is updated on fetch"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -682,7 +698,7 @@ class TestCacheHitMissBehavior:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
@@ -690,8 +706,7 @@ class TestCacheHitMissBehavior:
         service.get_nodes_with_details()
         timestamp1 = service._cache_timestamp
 
-        # Wait a bit and fetch again (cache hit)
-        time.sleep(0.01)
+        # Fetch again (cache hit)
         service.get_nodes_with_details()
         timestamp2 = service._cache_timestamp
 
@@ -705,7 +720,7 @@ class TestConcurrentRequests:
     def test_multiple_concurrent_requests_use_same_cache(self):
         """Test multiple concurrent requests during cache refresh use cached data"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -716,7 +731,7 @@ class TestConcurrentRequests:
                 "modelName": "Deco M32",
                 "status": "online",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
@@ -730,7 +745,7 @@ class TestConcurrentRequests:
             assert result == results[0]
 
         # API called only once
-        assert mock_client.get_node_list.call_count == 1
+        assert mock_client.get_topology_local.call_count == 1
 
 
 class TestFieldEnrichment:
@@ -857,28 +872,30 @@ class TestErrorRecovery:
     def test_malformed_response_handling(self):
         """Test handling of malformed API responses"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": None,  # Invalid
                 "nodeName": "Router",
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
 
         # Should handle gracefully
         nodes = service.get_nodes_with_details()
         assert len(nodes) == 1
+        assert nodes[0]["node_id"] == "unknown"
+        assert nodes[0]["node_name"] == "Router"
 
     def test_partial_field_response(self):
         """Test handling of responses with only some fields"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 # Missing many fields
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         nodes = service.get_nodes_with_details()
@@ -901,7 +918,7 @@ class TestErrorRecovery:
     def test_offline_node_handling(self):
         """Test handling of offline nodes"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Router",
@@ -909,7 +926,7 @@ class TestErrorRecovery:
                 "signalRSSI": -100,  # Very weak signal
                 "connectedClients": 0,
             }
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         nodes = service.get_nodes_with_details()
@@ -927,9 +944,9 @@ class TestComprehensiveLiveScenarios:
         mock_client = Mock()
         call_count = [0]
 
-        def get_node_list():
+        def get_topology_local():
             call_count[0] += 1
-            return [
+            return topology([
                 {
                     "nodeID": f"node_{call_count[0]}",
                     "nodeName": "Main Router",
@@ -940,9 +957,9 @@ class TestComprehensiveLiveScenarios:
                     "modelName": "Deco M32",
                     "status": "online",
                 }
-            ]
+            ])
 
-        mock_client.get_node_list.side_effect = get_node_list
+        mock_client.get_topology_local.side_effect = get_topology_local
 
         service = DecoService(deco_client=mock_client)
 
@@ -953,7 +970,7 @@ class TestComprehensiveLiveScenarios:
         # Cache hit
         nodes2 = service.get_nodes_with_details()
         assert nodes2[0]["node_id"] == "node_1"  # Same cached data
-        assert mock_client.get_node_list.call_count == 1
+        assert mock_client.get_topology_local.call_count == 1
 
         # Expire cache
         service._cache_timestamp = datetime.now() - timedelta(seconds=61)
@@ -961,12 +978,12 @@ class TestComprehensiveLiveScenarios:
         # Cache miss - refresh
         nodes3 = service.get_nodes_with_details()
         assert nodes3[0]["node_id"] == "node_2"  # New data
-        assert mock_client.get_node_list.call_count == 2
+        assert mock_client.get_topology_local.call_count == 2
 
     def test_mixed_online_offline_nodes(self):
         """Test handling of mixed online/offline nodes in single response"""
         mock_client = Mock()
-        mock_client.get_node_list.return_value = [
+        mock_client.get_topology_local.return_value = topology([
             {
                 "nodeID": "node1",
                 "nodeName": "Main Router",
@@ -988,7 +1005,7 @@ class TestComprehensiveLiveScenarios:
                 "signalRSSI": -100,
                 "connectedClients": 0,
             },
-        ]
+        ])
 
         service = DecoService(deco_client=mock_client)
         nodes = service.get_nodes_with_details()
