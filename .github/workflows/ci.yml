@@ -92,10 +92,10 @@ jobs:
         run: |
           curl -fk https://localhost:8443/api/health
           curl -fk https://localhost:8443/ -o root.html
-          grep -q 'id="root"' root.html
+          grep -q '<div id="root">' root.html
           asset="$(grep -o '/assets/[^"]*\.js' root.html | head -n1)"
           test -n "$asset"
-          curl -fk -o /dev/null "https://localhost:8443$asset"
+          test "$(curl -sk -o /dev/null -w '%{http_code}' "https://localhost:8443$asset")" = 200
           test "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost:8443/api/devices)" = 401
           curl -fk -o /dev/null -H "X-API-Key: $HOMESENTINEL_API_KEY" https://localhost:8443/api/devices
           curl -f http://127.0.0.1:2026/api/health

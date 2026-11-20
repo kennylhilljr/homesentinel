@@ -8,9 +8,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.11-slim
-# curl: health check. arp-scan, nmap, net-tools (arp): device discovery scanners.
+# curl: health check. arp-scan, nmap, net-tools (arp): device discovery.
+# iputils-ping: home-network check that gates polling. lsof: local service monitor.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl arp-scan nmap net-tools \
+    && apt-get install -y --no-install-recommends curl arp-scan nmap net-tools iputils-ping lsof \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/backend
 COPY backend/requirements.txt ./
