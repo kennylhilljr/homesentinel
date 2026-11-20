@@ -11,6 +11,8 @@ import asyncio
 import logging
 import time
 
+from services.deco_service import WIFI_UPDATE_UNSUPPORTED_MESSAGE
+
 logger = logging.getLogger(__name__)
 
 # Create router for Deco endpoints
@@ -536,64 +538,12 @@ async def get_wifi_config() -> Dict[str, Any]:
 @router.put("/wifi-config")
 async def update_wifi_config(config_update: WiFiConfigUpdate) -> Dict[str, Any]:
     """
-    Update WiFi configuration including SSID, password, and band steering
+    WiFi configuration changes (SSID, password, band steering) are not supported yet.
 
-    Request body:
-        - ssid: New SSID (1-32 characters, optional)
-        - password: New password (8+ characters, optional)
-        - band_steering: Enable/disable band steering (optional)
-
-    Returns:
-        JSON response containing:
-        - success: Operation success status
-        - message: Operation message
-        - updated_config: Updated WiFi configuration
-        - verification_status: Status of configuration verification ("pending", "verified", "timeout", "error")
-        - timestamp: API response timestamp
-
-    Raises:
-        400: Invalid input parameters
-        401: Not authenticated with Deco API
-        429: Rate limit exceeded
-        500: API error or service not initialized
+    The router write payload is unconfirmed, so this endpoint never contacts the
+    router and always responds with 501 Not Implemented.
     """
-    if deco_service is None:
-        raise HTTPException(status_code=500, detail="Deco service not initialized")
-
-    # Validate input parameters
-    if config_update.ssid is None and config_update.password is None and config_update.band_steering is None:
-        raise HTTPException(
-            status_code=400,
-            detail="At least one parameter (ssid, password, or band_steering) must be provided"
-        )
-
-    try:
-        # Call service to update WiFi config
-        result = deco_service.update_wifi_config(
-            ssid=config_update.ssid,
-            password=config_update.password,
-            band_steering=config_update.band_steering
-        )
-
-        return {
-            "success": result.get("success", True),
-            "message": result.get("message", "WiFi configuration updated successfully"),
-            "updated_config": result.get("updated_config"),
-            "verification_status": result.get("verification_status", "pending"),
-            "timestamp": result.get("timestamp"),
-        }
-
-    except ValueError as e:
-        # Validation errors
-        logger.error(f"Validation error updating WiFi config: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to update WiFi config: {e}")
-        if "401" in str(e) or "Unauthorized" in str(e):
-            raise HTTPException(status_code=401, detail="Not authenticated with Deco API")
-        if "429" in str(e) or "rate limit" in str(e).lower():
-            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
-        raise HTTPException(status_code=500, detail=f"Failed to update WiFi config: {str(e)}")
+    raise HTTPException(status_code=501, detail=WIFI_UPDATE_UNSUPPORTED_MESSAGE)
 
 
 @router.get("/qos")

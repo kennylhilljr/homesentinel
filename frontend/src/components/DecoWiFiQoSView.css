@@ -138,6 +138,16 @@
 }
 
 /* WiFi Section */
+.wifi-readonly-notice {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background-color: #dbeafe;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  font-size: 14px;
+}
+
 .wifi-content {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { buildUrl } from '../utils/apiConfig';
+import { WIFI_CHANGES_UNSUPPORTED_MESSAGE } from './DecoWiFiConfigEditor';
 import './DecoWiFiQoSView.css';
 
 /**
@@ -120,6 +121,10 @@ function DecoWiFiQoSView({ refreshInterval = 10000 }) {
             </span>
           )}
         </div>
+
+        <p className="wifi-readonly-notice" role="status">
+          {WIFI_CHANGES_UNSUPPORTED_MESSAGE}
+        </p>
 
         {wifiConfig && (
           <div className="wifi-content">

@@ -13,6 +13,13 @@ from services.deco_client import DecoClient, InvalidCredentialsError, APIConnect
 logger = logging.getLogger(__name__)
 
 
+WIFI_UPDATE_UNSUPPORTED_MESSAGE = "WiFi changes aren't supported yet; change them in the Deco app"
+
+
+class WiFiUpdateNotSupportedError(NotImplementedError):
+    """Raised when a WiFi configuration change is requested; writes are not supported yet."""
+
+
 class DecoService:
     """
     Service for managing Deco node data with caching and enrichment
@@ -744,74 +751,15 @@ class DecoService:
         band_steering: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
-        Update WiFi configuration settings
+        WiFi configuration changes are not supported yet.
 
-        Args:
-            ssid: New SSID (1-32 characters)
-            password: New WiFi password (8+ characters)
-            band_steering: Enable/disable band steering
-
-        Returns:
-            Dictionary containing:
-            - success: Whether update was successful
-            - message: Status message
-            - updated_config: Updated WiFi configuration from API
-            - verification_status: Status of verification ("pending", "verified", "timeout", "error")
-            - timestamp: Timestamp of update
+        The Deco write payload for SSID, password and band steering on
+        admin/wireless?form=wlan is unconfirmed, and a wrong payload could
+        disconnect every device on the network. This method never calls the
+        router; it always raises WiFiUpdateNotSupportedError.
 
         Raises:
-            ValueError: If input validation fails
-            InvalidCredentialsError: If not authenticated with Deco API
-            APIConnectionError: If API request fails
+            WiFiUpdateNotSupportedError: Always.
         """
-        # Validate inputs
-        if ssid is not None:
-            ssid = str(ssid).strip()
-            if len(ssid) < 1 or len(ssid) > 32:
-                raise ValueError("SSID must be between 1 and 32 characters")
-
-        if password is not None:
-            password = str(password)
-            if len(password) < 8:
-                raise ValueError("Password must be at least 8 characters")
-
-        try:
-            logger.info(f"Updating WiFi config: SSID={ssid is not None}, Password={password is not None}, BandSteering={band_steering}")
-
-            # Call Deco API to update settings
-            api_response = self.deco_client.update_wifi_settings(
-                ssid=ssid,
-                password=password,
-                band_steering=band_steering,
-            )
-
-            logger.info(f"WiFi config update response: {api_response}")
-
-            # Clear WiFi config cache to force refresh on next read
-            self._wifi_config_cache = None
-            self._wifi_config_timestamp = None
-            logger.info("Cleared WiFi config cache after update")
-
-            # Fetch fresh config from API to verify changes
-            fresh_config = self.get_wifi_config()
-
-            return {
-                "success": True,
-                "message": "WiFi configuration updated successfully",
-                "updated_config": fresh_config,
-                "verification_status": "pending",  # Frontend handles verification polling
-                "timestamp": datetime.now().isoformat(),
-            }
-
-        except ValueError as e:
-            logger.error(f"Validation error: {e}")
-            raise
-        except InvalidCredentialsError as e:
-            logger.error(f"Authentication failed during WiFi config update: {e}")
-            raise
-        except APIConnectionError as e:
-            logger.error(f"API connection error during WiFi config update: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error updating WiFi config: {e}")
-            raise APIConnectionError(f"Failed to update WiFi configuration: {str(e)}")
+        logger.warning("Rejected WiFi config update: WiFi changes are not supported yet")
+        raise WiFiUpdateNotSupportedError(WIFI_UPDATE_UNSUPPORTED_MESSAGE)
