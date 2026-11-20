@@ -88,7 +88,8 @@ def test_backend_image_bundles_dashboard_where_main_serves_it():
     assert "COPY --from=frontend /src/frontend/build /app/frontend/build" in dockerfile
     assert "WORKDIR /app/backend" in dockerfile
     assert 'CMD ["python", "main.py"]' in dockerfile
-    assert "curl" in dockerfile
+    for tool in ("curl", "arp-scan", "nmap", "net-tools"):
+        assert tool in dockerfile, tool
     # main.py resolves the build dir relative to the backend dir.
     assert '_BACKEND_DIR.parent / "frontend" / "build"' in _read("backend/main.py")
 
