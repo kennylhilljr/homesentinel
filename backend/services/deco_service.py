@@ -249,6 +249,15 @@ class DecoService:
             return alias_text
         return alias_text
 
+    def _decode_nickname(self, nickname: Any) -> Any:
+        """Decode a base64 local-API nickname, keeping the original if it isn't valid base64/UTF-8."""
+        if not nickname:
+            return nickname
+        try:
+            return base64.b64decode(str(nickname), validate=True).decode("utf-8")
+        except Exception:
+            return nickname
+
     def _extract_client_details(self, raw_client: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize a raw Deco client object for UI consumption."""
         return {
@@ -350,9 +359,11 @@ class DecoService:
         Returns:
             Enriched node data dictionary
         """
-        # Extract base node information
+        # Extract base node information. Local LuCI device_list nodes carry both
+        # `mac` and `device_id`; node_clients is keyed by mac, so mac wins.
         node_id = (
-            raw_node.get("nodeID")
+            raw_node.get("mac")
+            or raw_node.get("nodeID")
             or raw_node.get("node_id")
             or raw_node.get("deviceId")
             or raw_node.get("device_id")
@@ -365,7 +376,7 @@ class DecoService:
             raw_node.get("nodeName")
             or raw_node.get("node_name")
             or raw_node.get("name")
-            or raw_node.get("nickname")
+            or self._decode_nickname(raw_node.get("nickname"))
             or self._decode_node_alias(raw_node.get("alias"))
             or f"Node {node_id}"
         )
@@ -378,6 +389,7 @@ class DecoService:
             or raw_node.get("firmwareVersion")
             or raw_node.get("swVersion")
             or raw_node.get("sw_version")
+            or raw_node.get("software_ver")
             or "unknown"
         )
 
@@ -435,6 +447,7 @@ class DecoService:
             or raw_node.get("model_name")
             or raw_node.get("model")
             or raw_node.get("deviceModel")
+            or raw_node.get("device_model")
             or raw_node.get("deviceName")
             or raw_node.get("productModel")
             or raw_node.get("product_model")
