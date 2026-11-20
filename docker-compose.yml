@@ -10,7 +10,9 @@ services:
       - "8443:8443"
     environment:
       - BACKEND_PORT=8443
-      - BACKEND_HOST=0.0.0.0
+      # Explicit LAN exposure: a non-loopback bind requires an API key and TLS certs in ./backend/certs
+      - HOMESENTINEL_HOST=0.0.0.0
+      - HOMESENTINEL_API_KEY=${HOMESENTINEL_API_KEY:?Set HOMESENTINEL_API_KEY to expose HomeSentinel beyond localhost}
       - LOG_LEVEL=INFO
     volumes:
       - ./backend:/app
@@ -30,10 +32,13 @@ services:
       dockerfile: Dockerfile
     container_name: homesentinel-frontend
     ports:
-      - "2026:2026"
+      - "127.0.0.1:2026:2026"
     environment:
       - REACT_APP_API_URL=https://backend:8443
       - REACT_APP_WS_URL=wss://backend:8443
+      # Container must listen on 0.0.0.0; the host publishes 2026 on loopback only.
+      - HOMESENTINEL_FRONTEND_HOST=0.0.0.0
+      - HOMESENTINEL_ALLOW_INSECURE_BIND=1
     volumes:
       - ./frontend:/app
       - /app/node_modules

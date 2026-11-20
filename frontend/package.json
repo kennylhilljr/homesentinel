@@ -25,6 +25,6 @@
     "start": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run && node --test tests/devServerHost.test.mjs"
   }
 }

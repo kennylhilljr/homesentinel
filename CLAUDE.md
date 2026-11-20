@@ -88,7 +88,8 @@ docker compose up -d               # Docker deployment
 | `backend/utils.py` | MAC normalization, Fernet credential encryption/decryption |
 | `backend/routes/` | 12 API route modules (deco, chester, alexa, hiboost, alarm_com, etc.) |
 | `backend/services/` | 23 service files (clients, scanners, schedulers) |
-| `backend/middleware/auth.py` | API key auth middleware (`X-API-Key` header) |
+| `backend/middleware/auth.py` | API key auth middleware (`X-API-Key` header; one-time SSE tokens from `POST /api/sse/token`) |
+| `frontend/src/utils/apiAuth.js`, `eventStream.js` | Dashboard sends the stored key as `X-API-Key`; SSE opens with a one-time token |
 | `backend/migrations/` | 16 sequential SQL migrations (001–016) |
 | `backend/tests/` | 20 pytest test files |
 | `frontend/src/App.jsx` | Main React app — theme, nav, lazy page mounting |
@@ -141,9 +142,12 @@ React Frontend (:2026)
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BACKEND_PORT` | `8443` | HTTPS port |
+| `HOMESENTINEL_HOST` | `127.0.0.1` | Bind address (non-loopback needs API key + TLS) |
 | `NETWORK_SUBNET` | `192.168.12.0/24` | ARP scan subnet |
 | `POLLING_INTERVAL_SECONDS` | `60` | Device scan interval |
 | `HOMESENTINEL_API_KEY` | _(empty)_ | API key (empty = auth disabled) |
+| `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | `1` = allow insecure non-loopback bind |
+| `HOMESENTINEL_FRONTEND_HOST` | `127.0.0.1` | Vite dev server bind (non-loopback needs override) |
 | `CREDENTIAL_KEY` | _(auto-gen)_ | Fernet encryption key |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa |
 | `SPEEDTEST_INTERVAL_SECONDS` | `1800` | Speed test interval |

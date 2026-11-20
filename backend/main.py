@@ -66,6 +66,7 @@ app = FastAPI(
 # Add this BEFORE CORSMiddleware so CORS ends up "last added" and runs first (correctly
 # handling OPTIONS preflight without auth blocking it).
 from middleware.auth import APIKeyAuthMiddleware
+from middleware import auth as auth_middleware_module
 app.add_middleware(APIKeyAuthMiddleware)
 
 # 2026-03-12: CORS — default to localhost only. Wildcard "*" is dangerous because it allows
@@ -78,6 +79,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets a cross-origin dashboard (CORS_ORIGINS + VITE_API_URL) tell auth 401s apart.
+    expose_headers=[auth_middleware_module.AUTH_REQUIRED_HEADER],
 )
 
 # 2026-03-11: Serve React production build from FastAPI
@@ -1028,29 +1031,40 @@ async def spa_catch_all(request: Request, path: str):
     raise HTTPException(status_code=404, detail="Not found")
 
 
-if __name__ == "__main__":
-    # SSL certificate setup
-    cert_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs")
-    cert_file = f"{cert_dir}/cert.pem"
-    key_file = f"{cert_dir}/key.pem"
+def run_server(cert_dir=None):
+    """Resolve bind/TLS/auth policy and start uvicorn, or exit if the policy refuses."""
+    from middleware import auth as auth_middleware
+    from startup_policy import StartupPolicyError, describe_startup_config, resolve_startup_config
 
-    # Use SSL if certificates exist
-    port = int(os.getenv("BACKEND_PORT", "8443"))
-    if os.path.exists(cert_file) and os.path.exists(key_file):
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=port,
-            ssl_certfile=cert_file,
-            ssl_keyfile=key_file,
-            log_level="info"
+    # Judge auth by the key the middleware actually enforces, not a fresh env read,
+    # so the policy can never report auth=on for an app that runs without it.
+    env = dict(os.environ)
+    env["HOMESENTINEL_API_KEY"] = auth_middleware.HOMESENTINEL_API_KEY
+    cert_dir = cert_dir or os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs")
+    try:
+        config = resolve_startup_config(
+            env, os.path.join(cert_dir, "cert.pem"), os.path.join(cert_dir, "key.pem")
         )
-    else:
-        # Fall back to HTTP if no certificates
-        print("Warning: SSL certificates not found, running on HTTP")
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=port,
-            log_level="info"
+    except StartupPolicyError as e:
+        logger.error("Refusing to start: %s", e)
+        raise SystemExit(1)
+
+    logger.info(describe_startup_config(config))
+    if not config.tls_enabled:
+        logger.warning("SSL certificates not found, serving plain HTTP on %s", config.host)
+    if config.insecure_override and not config.loopback:
+        logger.warning(
+            "HOMESENTINEL_ALLOW_INSECURE_BIND is set: non-loopback bind may lack API key auth or TLS"
         )
+    uvicorn.run(
+        app,
+        host=config.host,
+        port=config.port,
+        ssl_certfile=config.ssl_certfile,
+        ssl_keyfile=config.ssl_keyfile,
+        log_level="info",
+    )
+
+
+if __name__ == "__main__":
+    run_server()
