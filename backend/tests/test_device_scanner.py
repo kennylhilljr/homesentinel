@@ -43,6 +43,7 @@ class TestARPScanner:
         "192.168.1.0/33",
         "192.168.1.0/24 10.0.0.0/8",
         "",
+        "fe80::/64",
     ])
     def test_arp_scanner_rejects_non_network_subnet(self, subnet):
         """Option-like or malformed values never reach arp-scan/nmap"""
@@ -56,6 +57,15 @@ class TestARPScanner:
         with patch('subprocess.run') as mock_run:
             assert scanner.scan_subnet("--script=x/24") == []
         mock_run.assert_not_called()
+
+    def test_scan_subnet_passes_canonical_cidr(self):
+        scanner = ARPScanner()
+        scanner.has_arp_scan = False
+        scanner.has_nmap = True
+        with patch.object(scanner, 'scan_subnet_with_nmap', return_value=[]) as nmap, \
+                patch.object(scanner, 'scan_arp_table_only', return_value=[]):
+            scanner.scan_subnet("192.168.1.7/255.255.255.0")
+        nmap.assert_called_once_with("192.168.1.0/24")
 
     @patch('subprocess.run')
     def test_arp_scan_uses_configured_subnet(self, mock_run):

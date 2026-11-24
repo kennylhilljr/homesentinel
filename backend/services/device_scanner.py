@@ -257,10 +257,12 @@ class ARPScanner:
         """
         logger.info(f"Starting subnet scan: {subnet}")
 
-        # Validate subnet format
-        if not self._validate_subnet(subnet):
+        # Validate subnet format; scanners get the canonical CIDR form
+        normalized = self._normalize_subnet(subnet)
+        if normalized is None:
             logger.error(f"Invalid subnet format: {subnet}")
             return []
+        subnet = normalized
 
         devices = []
 
@@ -287,17 +289,23 @@ class ARPScanner:
         logger.info(f"Scan completed, found {len(devices)} devices")
         return devices
 
-    def _validate_subnet(self, subnet: str) -> bool:
-        """Validate that subnet is an IP network (e.g., 192.168.1.0/24) or a single IP.
+    def _normalize_subnet(self, subnet: str) -> Optional[str]:
+        """Return subnet as a canonical IPv4 CIDR string (e.g. 192.168.1.0/24), or None.
 
         The value is passed to arp-scan/nmap, so anything else (option-like
-        strings, interface names) is rejected.
+        strings, interface names, IPv6) is rejected.
         """
         try:
-            ipaddress.ip_network(subnet, strict=False)
-            return True
+            network = ipaddress.ip_network(subnet, strict=False)
         except (TypeError, ValueError):
-            return False
+            return None
+        if network.version != 4:
+            return None
+        return network.with_prefixlen
+
+    def _validate_subnet(self, subnet: str) -> bool:
+        """Validate subnet format (IPv4 CIDR or single IPv4 address)."""
+        return self._normalize_subnet(subnet) is not None
 
 
 class DHCPParser:
