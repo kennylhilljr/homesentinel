@@ -131,3 +131,12 @@ def test_expired_code_rejected(client):
     response = _exchange(client, code)
     assert response.status_code == 400
     assert response.json() == {"error": "invalid_grant"}
+
+
+def test_unencodable_secret_is_rejected_not_500(client):
+    response = client.post(
+        "/oauth/token",
+        content='{"grant_type": "authorization_code", "code": "x", "client_secret": "\\ud800"}',
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 401

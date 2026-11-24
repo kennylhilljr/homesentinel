@@ -568,7 +568,7 @@ The backend uses SQLite WAL mode with a Python threading lock for write serializ
 
 ### Alexa Skill not discovering devices
 
-1. Verify `OAUTH_CLIENT_SECRET` and `OAUTH_REDIRECT_URI_ALLOWLIST` are set in `.env` (account linking is disabled without both)
+1. Verify `OAUTH_CLIENT_SECRET` and `OAUTH_REDIRECT_URI_ALLOWLIST` are set in the backend process environment (account linking is disabled without both; nothing loads `.env` automatically)
 2. Confirm Lambda function URL matches Alexa Developer Console
 3. Check Lambda CloudWatch logs for errors
 4. Trigger "Discover Devices" from the Alexa app

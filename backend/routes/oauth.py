@@ -146,8 +146,8 @@ async def token(request: Request):
         not _oauth_enabled()
         or not isinstance(client_id, str)
         or not isinstance(client_secret, str)
-        or not hmac.compare_digest(client_id.encode(), CLIENT_ID.encode())
-        or not hmac.compare_digest(client_secret.encode(), CLIENT_SECRET.encode())
+        or not hmac.compare_digest(client_id.encode("utf-8", "surrogatepass"), CLIENT_ID.encode())
+        or not hmac.compare_digest(client_secret.encode("utf-8", "surrogatepass"), CLIENT_SECRET.encode())
     ):
         logger.warning("OAuth token: invalid credentials (client_id=%s)", client_id)
         return JSONResponse(status_code=401, content={"error": "invalid_client"})
