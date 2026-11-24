@@ -3,9 +3,8 @@ version: '3.8'
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: homesentinel-backend
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8443:8443"
     environment:
@@ -15,13 +14,15 @@ services:
       - HOMESENTINEL_API_KEY=${HOMESENTINEL_API_KEY:?Set HOMESENTINEL_API_KEY to expose HomeSentinel beyond localhost}
       - LOG_LEVEL=INFO
     volumes:
-      - ./backend:/app
-      - ./backend/certs:/app/certs
+      # Host source (and its SQLite DB / .credential_key) at /app/backend; the
+      # image's built dashboard at /app/frontend/build stays visible.
+      - ./backend:/app/backend
+      - ./backend/certs:/app/backend/certs:ro
     command: python main.py
     networks:
       - homesentinel-network
     healthcheck:
-      test: ["CMD", "curl", "-k", "https://localhost:8443/api/health"]
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,12 +31,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: homesentinel-frontend
     ports:
       - "127.0.0.1:2026:2026"
     environment:
-      - REACT_APP_API_URL=https://backend:8443
-      - REACT_APP_WS_URL=wss://backend:8443
+      # Vite proxies /api to the backend service (server-side only, not in the bundle).
+      - HOMESENTINEL_PROXY_TARGET=https://backend:8443
       # Container must listen on 0.0.0.0; the host publishes 2026 on loopback only.
       - HOMESENTINEL_FRONTEND_HOST=0.0.0.0
       - HOMESENTINEL_ALLOW_INSECURE_BIND=1

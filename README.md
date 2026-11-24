@@ -306,6 +306,16 @@ docker compose up -d
 
 Backend runs on port 8443, frontend on port 2026. The compose file sets `HOMESENTINEL_HOST=0.0.0.0` so the backend is reachable from outside its container, so it requires `HOMESENTINEL_API_KEY` and certificates in `backend/certs/`; without them, compose or the backend refuses to start.
 
+`docker compose build` builds two images. `backend/Dockerfile` (context: repo root) runs `npm run build` and copies the dashboard into the backend image at `/app/frontend/build`, so `https://<host>:8443/` serves the dashboard over HTTPS. Enter the API key when the dashboard asks for it. The host's `backend/` directory (SQLite database, `.credential_key`) is mounted at `/app/backend` and `backend/certs/` is mounted read-only. `frontend/Dockerfile` runs the Vite dev server, published on `127.0.0.1:2026` only; it proxies `/api` to `HOMESENTINEL_PROXY_TARGET` (`https://backend:8443` in compose). The backend image includes `arp-scan`, `nmap` and `arp`. On Docker's default bridge network they only see the container network, so for LAN device discovery configure the Deco or Chester integration or run the backend directly on the host. The Local Services monitor (`lsof`) only sees listeners inside the backend container, so it reports the separate frontend container as down.
+
+CI's `Docker` job builds both images, starts them, and checks `curl -fk https://localhost:8443/api/health` and the HTTPS root. To run the same smoke test locally:
+
+```bash
+docker compose build && docker compose up -d --wait
+curl -fk https://localhost:8443/api/health && curl -fk https://localhost:8443/ | grep 'id="root"'
+docker compose down
+```
+
 ### Bind address and exposure
 
 A direct run (`python backend/main.py`, `start-dev.sh`, the macOS launchd runtime) binds to `127.0.0.1` by default. The Vite frontend proxies `/api` to `https://localhost:8443`, so the dashboard keeps working.
@@ -450,6 +460,7 @@ homesentinel/
 | `HOMESENTINEL_API_KEY` | _(empty)_ | API key for `X-API-Key` auth (empty = auth disabled; required for non-loopback binds) |
 | `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | Set to `1` to allow a non-loopback backend or dev-server bind without the usual checks (not recommended) |
 | `HOMESENTINEL_FRONTEND_HOST` | `127.0.0.1` | Vite dev server bind address. Non-loopback values need `HOMESENTINEL_ALLOW_INSECURE_BIND=1` |
+| `HOMESENTINEL_PROXY_TARGET` | `https://localhost:8443` | Backend URL the Vite dev server proxies `/api` to (compose: `https://backend:8443`) |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa account linking |
 | `CREDENTIAL_KEY` | _(auto-generated)_ | Fernet key for credential encryption at rest |
 | `NETWORK_SUBNET` | `192.168.12.0/24` | Subnet for ARP scanning |

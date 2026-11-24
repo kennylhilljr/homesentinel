@@ -69,3 +69,42 @@ jobs:
           CI: "true"
       - name: Build
         run: npm run build
+
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generate TLS certificates and a throwaway API key
+        run: |
+          bash scripts/gen-cert.sh
+          key="$(openssl rand -hex 32)"
+          echo "::add-mask::$key"
+          echo "HOMESENTINEL_API_KEY=$key" >> "$GITHUB_ENV"
+      - name: Build
+        run: docker compose build
+      - name: Start
+        run: docker compose up -d --wait --wait-timeout 180
+      - name: Smoke test
+        run: |
+          curl -fk https://localhost:8443/api/health
+          curl -fk https://localhost:8443/ -o root.html
+          grep -q '<div id="root">' root.html
+          asset="$(grep -o '/assets/[^"]*\.js' root.html | head -n1)"
+          test -n "$asset"
+          test "$(curl -sk -o /dev/null -w '%{http_code}' "https://localhost:8443$asset")" = 200
+          test "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost:8443/api/devices)" = 401
+          curl -fk -o /dev/null -H "X-API-Key: $HOMESENTINEL_API_KEY" https://localhost:8443/api/devices
+          curl -f http://127.0.0.1:2026/api/health
+          test "$(docker compose port frontend 2026)" = "127.0.0.1:2026"
+      - name: Diagnostics
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color
+      - name: Stop
+        if: always()
+        run: docker compose down -v
