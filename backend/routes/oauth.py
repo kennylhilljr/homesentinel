@@ -55,8 +55,27 @@ def _redirect_uri_allowed(redirect_uri: str) -> bool:
 
 # In-memory stores (sufficient for personal dev skill)
 _auth_codes: dict[str, dict] = {}   # code -> {redirect_uri, expires, client_id}
-_access_tokens: dict[str, dict] = {}  # token -> {expires, client_id}
+_access_tokens: dict[str, dict] = {}  # token -> {expires, client_id}; checked by require_bearer_token
 _refresh_tokens: dict[str, dict] = {}  # token -> {expires, client_id}
+
+
+def require_bearer_token(request: Request) -> None:
+    """FastAPI dependency for the routes the Alexa Lambda calls with the linked account's token.
+
+    Accepts only an unexpired access token issued by /oauth/token. Fails closed when
+    account linking is not configured, since no valid token can exist then.
+    """
+    auth_header = request.headers.get("authorization", "")
+    scheme, _, token = auth_header.partition(" ")
+    token = token.strip()
+    stored = _access_tokens.get(token) if scheme.lower() == "bearer" and token else None
+    if not _oauth_enabled() or not stored or stored.get("expires", 0) < time.time():
+        logger.warning("Bearer token rejected for %s", request.url.path)
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def _expire_oauth_entries():

@@ -350,6 +350,8 @@ ALEXA_CLIENT_SECRET=amzn1.oa2-cs.v1.xxxxx
 
 Provides: device discovery and state reporting, voice-controlled network monitoring via Alexa. The AWS Lambda function in `lambda/` implements the Alexa Smart Home Skill v3 API.
 
+The backend endpoints the Lambda calls for discovery, state and commands (`/api/alexa/lambda/discover`, `/state/{id}`, `/command`) require `Authorization: Bearer <token>` with an unexpired access token issued by `/oauth/token`, in addition to `X-API-Key`. Issued tokens live in memory, so a backend restart means relinking the skill in the Alexa app.
+
 ### Chester 5G Router (OpenWrt/ImmortalWrt)
 
 ```env

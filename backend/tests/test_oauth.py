@@ -148,3 +148,72 @@ def test_malformed_json_body(client, monkeypatch, body):
     assert client.post("/oauth/token", content=body, headers=headers).status_code == 400
     monkeypatch.setattr(oauth, "CLIENT_SECRET", "")
     assert client.post("/oauth/token", content=body, headers=headers).status_code == 401
+
+
+# ─── Bearer validation on the routes the Alexa Lambda calls (#18) ─────────────
+
+LAMBDA_CALLS = [
+    ("get", "/api/alexa/lambda/discover", None),
+    ("get", "/api/alexa/lambda/state/deco-wifi", None),
+    ("post", "/api/alexa/lambda/command", {"endpoint_id": "deco-wifi", "command": "TurnOn", "value": "ON"}),
+]
+
+
+@pytest.fixture
+def lambda_client(client):
+    from routes import alexa
+
+    client.app.include_router(alexa.router)
+    return client
+
+
+def _call(client, method, path, body, headers=None):
+    kwargs = {"headers": headers or {}}
+    if body is not None:
+        kwargs["json"] = body
+    return getattr(client, method)(path, **kwargs)
+
+
+def _access_token(client):
+    return _exchange(client, _code(client)).json()["access_token"]
+
+
+@pytest.mark.parametrize("method,path,body", LAMBDA_CALLS)
+def test_lambda_routes_reject_missing_bearer(lambda_client, method, path, body):
+    response = _call(lambda_client, method, path, body)
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+@pytest.mark.parametrize("method,path,body", LAMBDA_CALLS)
+def test_lambda_routes_reject_unknown_bearer(lambda_client, method, path, body):
+    response = _call(lambda_client, method, path, body, {"Authorization": "Bearer not-issued"})
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("method,path,body", LAMBDA_CALLS)
+def test_lambda_routes_accept_issued_bearer(lambda_client, method, path, body):
+    token = _access_token(lambda_client)
+    response = _call(lambda_client, method, path, body, {"Authorization": f"Bearer {token}"})
+    # Past auth; the Lambda integration itself is still disabled.
+    assert response.status_code == 503
+
+
+def test_lambda_routes_reject_refresh_token_as_bearer(lambda_client):
+    refresh = _exchange(lambda_client, _code(lambda_client)).json()["refresh_token"]
+    response = lambda_client.get("/api/alexa/lambda/discover", headers={"Authorization": f"Bearer {refresh}"})
+    assert response.status_code == 401
+
+
+def test_lambda_routes_reject_expired_bearer(lambda_client):
+    token = _access_token(lambda_client)
+    oauth._access_tokens[token]["expires"] = 0
+    response = lambda_client.get("/api/alexa/lambda/discover", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 401
+
+
+def test_lambda_routes_reject_bearer_when_oauth_disabled(lambda_client, monkeypatch):
+    token = _access_token(lambda_client)
+    monkeypatch.setattr(oauth, "CLIENT_SECRET", "")
+    response = lambda_client.get("/api/alexa/lambda/discover", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 401

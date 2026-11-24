@@ -3,7 +3,7 @@ Alexa Smart Home API Routes
 Endpoints for Alexa device management, control, and OAuth
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -14,6 +14,8 @@ import os
 
 import time
 import asyncio
+
+from routes.oauth import require_bearer_token
 
 logger = logging.getLogger(__name__)
 
@@ -1232,6 +1234,9 @@ async def get_smart_home_mac_candidates() -> Dict[str, Any]:
 # (WiFi toggle, reboot, etc.) to anyone who could reach the backend URL.
 # The Lambda function in lambda/lambda_function.py calls these endpoints —
 # until proper API key auth is added, they stay disabled.
+# discover, state and command also require an access token issued by /oauth/token
+# (the Lambda forwards the linked account's bearer token), so re-enabling them
+# cannot expose them to callers that only hold the API key.
 # Original implementations are preserved below each stub for re-enablement.
 
 class LambdaTokenRequest(BaseModel):
@@ -1537,7 +1542,7 @@ def _build_chester_endpoints() -> List[Dict[str, Any]]:
     return endpoints
 
 
-@router.get("/lambda/discover")
+@router.get("/lambda/discover", dependencies=[Depends(require_bearer_token)])
 async def lambda_discover() -> Dict[str, Any]:
     """Return cached Alexa endpoints. Alexa enforces 8s timeout so we must respond fast."""
     raise HTTPException(status_code=503, detail="Lambda integration is disabled")
@@ -1673,7 +1678,7 @@ async def _build_all_endpoints() -> Dict[str, Any]:
 
 # ─── State Reporting ──────────────────────────────────────────────────────────
 
-@router.get("/lambda/state/{endpoint_id}")
+@router.get("/lambda/state/{endpoint_id}", dependencies=[Depends(require_bearer_token)])
 async def lambda_get_state(endpoint_id: str) -> Dict[str, Any]:
     """Return cached device state for Alexa ReportState."""
     raise HTTPException(status_code=503, detail="Lambda integration is disabled")
@@ -1881,7 +1886,7 @@ async def _get_chester_state(ts: str) -> Dict[str, Any]:
 
 # ─── Command Handling ─────────────────────────────────────────────────────────
 
-@router.post("/lambda/command")
+@router.post("/lambda/command", dependencies=[Depends(require_bearer_token)])
 async def lambda_command(req: LambdaCommandRequest) -> Dict[str, Any]:
     """Handle commands forwarded from the Lambda.
 
