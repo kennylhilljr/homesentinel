@@ -140,3 +140,11 @@ def test_unencodable_secret_is_rejected_not_500(client):
         headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize("body", ["not json", "[1, 2]"])
+def test_malformed_json_body(client, monkeypatch, body):
+    headers = {"Content-Type": "application/json"}
+    assert client.post("/oauth/token", content=body, headers=headers).status_code == 400
+    monkeypatch.setattr(oauth, "CLIENT_SECRET", "")
+    assert client.post("/oauth/token", content=body, headers=headers).status_code == 401

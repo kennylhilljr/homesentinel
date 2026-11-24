@@ -119,13 +119,21 @@ async def authorize(
 @router.post("/token")
 async def token(request: Request):
     """OAuth token endpoint — exchanges auth code for access + refresh tokens."""
+    if not _oauth_enabled():
+        return JSONResponse(status_code=401, content={"error": "invalid_client"})
+
     # Support both form-encoded and JSON
     content_type = request.headers.get("content-type", "")
     if "application/x-www-form-urlencoded" in content_type:
         form = await request.form()
         data = dict(form)
     else:
-        data = await request.json()
+        try:
+            data = await request.json()
+        except ValueError:
+            data = None
+        if not isinstance(data, dict):
+            return JSONResponse(status_code=400, content={"error": "invalid_request"})
 
     grant_type = data.get("grant_type", "")
     client_id = data.get("client_id", CLIENT_ID)
@@ -143,11 +151,10 @@ async def token(request: Request):
             client_id, client_secret = decoded.split(":", 1)
 
     if (
-        not _oauth_enabled()
-        or not isinstance(client_id, str)
+        not isinstance(client_id, str)
         or not isinstance(client_secret, str)
-        or not hmac.compare_digest(client_id.encode("utf-8", "surrogatepass"), CLIENT_ID.encode())
-        or not hmac.compare_digest(client_secret.encode("utf-8", "surrogatepass"), CLIENT_SECRET.encode())
+        or not hmac.compare_digest(client_id.encode("utf-8", "surrogatepass"), CLIENT_ID.encode("utf-8", "surrogatepass"))
+        or not hmac.compare_digest(client_secret.encode("utf-8", "surrogatepass"), CLIENT_SECRET.encode("utf-8", "surrogatepass"))
     ):
         logger.warning("OAuth token: invalid credentials (client_id=%s)", client_id)
         return JSONResponse(status_code=401, content={"error": "invalid_client"})
