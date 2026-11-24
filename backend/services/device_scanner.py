@@ -4,6 +4,7 @@ Implements ARP scanning, DHCP parsing, and device management
 """
 
 import base64
+import ipaddress
 import subprocess
 import re
 import logging
@@ -104,11 +105,11 @@ class ARPScanner:
         try:
             # Try without sudo first (works if BPF permissions are set),
             # fall back to sudo (works if NOPASSWD sudo is configured).
-            # -l = scan local network, --interface selects the right adapter.
-            cmd = ['arp-scan', '-l']
+            # Scan the configured subnet; `--` keeps it from being read as an option.
+            cmd = ['arp-scan', '--', subnet]
             result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
             if result.returncode != 0 and 'Permission denied' in (result.stderr or ''):
-                cmd = ['sudo', '-n', 'arp-scan', '-l']
+                cmd = ['sudo', '-n', 'arp-scan', '--', subnet]
                 result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
 
             if result.returncode != 0:
@@ -186,7 +187,7 @@ class ARPScanner:
         devices = []
         try:
             # Use nmap -sn for ping scan (triggers ARP resolution)
-            cmd = ['nmap', '-sn', subnet, '-oG', '-']
+            cmd = ['nmap', '-sn', '-oG', '-', '--', subnet]
             result = subprocess.run(cmd, capture_output=True, timeout=120, text=True)
 
             if result.returncode != 0 and result.returncode != 1:
@@ -287,21 +288,16 @@ class ARPScanner:
         return devices
 
     def _validate_subnet(self, subnet: str) -> bool:
-        """Validate subnet format (e.g., 192.168.1.0/24)"""
-        # For simplicity, accept CIDR or interface name
-        if '/' in subnet:
-            # CIDR notation
-            parts = subnet.split('/')
-            if len(parts) != 2:
-                return False
-            try:
-                int(parts[1])
-                return True
-            except ValueError:
-                return False
-        else:
-            # Assume it's an interface or direct IP
+        """Validate that subnet is an IP network (e.g., 192.168.1.0/24) or a single IP.
+
+        The value is passed to arp-scan/nmap, so anything else (option-like
+        strings, interface names) is rejected.
+        """
+        try:
+            ipaddress.ip_network(subnet, strict=False)
             return True
+        except (TypeError, ValueError):
+            return False
 
 
 class DHCPParser:
