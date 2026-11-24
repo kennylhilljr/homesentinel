@@ -151,6 +151,7 @@ React Frontend (:2026)
 | `HOMESENTINEL_PROXY_TARGET` | `https://localhost:8443` | Vite `/api` proxy target (compose: `https://backend:8443`) |
 | `CREDENTIAL_KEY` | _(auto-gen)_ | Fernet encryption key |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa |
+| `OAUTH_REDIRECT_URI_ALLOWLIST` | _(required)_ | Allowed Alexa `redirect_uri` prefixes (OAuth off if unset) |
 | `SPEEDTEST_INTERVAL_SECONDS` | `1800` | Speed test interval |
 | `HIBOOST_POLL_INTERVAL` | `300` | HiBoost RF poll interval |
 | `RETENTION_DAYS` | `90` | Event data retention |
