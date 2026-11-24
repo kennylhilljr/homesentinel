@@ -148,6 +148,7 @@ React Frontend (:2026)
 | `HOMESENTINEL_API_KEY` | _(empty)_ | API key (empty = auth disabled) |
 | `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | `1` = allow insecure non-loopback bind |
 | `HOMESENTINEL_FRONTEND_HOST` | `127.0.0.1` | Vite dev server bind (non-loopback needs override) |
+| `HOMESENTINEL_PROXY_TARGET` | `https://localhost:8443` | Vite `/api` proxy target (compose: `https://backend:8443`) |
 | `CREDENTIAL_KEY` | _(auto-gen)_ | Fernet encryption key |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa |
 | `OAUTH_REDIRECT_URI_ALLOWLIST` | _(required)_ | Allowed Alexa `redirect_uri` prefixes (OAuth off if unset) |

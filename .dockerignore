@@ -1,0 +1,30 @@
+# Build context for backend/Dockerfile is the repo root: keep secrets, data and
+# local dependencies out of it.
+.git
+**/.env
+**/.env.*
+!.env.example
+**/.credential_key
+**/certs
+**/*.pem
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.db.*
+backend/db-backups
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/venv
+**/.venv
+**/.venv.*
+**/env
+frontend/build
+**/dist
+**/coverage
+.coverage
+**/.pytest_cache
+**/logs
+**/*.log
+.code-review-graph
+graphify-out
