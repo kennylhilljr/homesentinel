@@ -2,7 +2,7 @@
 
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![React 18](https://img.shields.io/badge/React-18.2-61DAFB?logo=react&logoColor=black)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?logo=fastapi&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.162-009688?logo=fastapi&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?logo=sqlite&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-Proprietary-red)
@@ -202,7 +202,7 @@ erDiagram
 
 ### Backend
 - **Runtime**: Python 3.10+
-- **Framework**: FastAPI 0.104 with HTTPS (self-signed certs)
+- **Framework**: FastAPI 0.162 with HTTPS (self-signed certs)
 - **Database**: SQLite with WAL journal mode + write locking
 - **Auth**: API key middleware (`X-API-Key`), OAuth 2.0 (Alexa account linking)
 - **Encryption**: Fernet symmetric encryption for credentials at rest
