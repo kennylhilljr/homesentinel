@@ -4,6 +4,7 @@ Implements ARP scanning, DHCP parsing, and device management
 """
 
 import base64
+import ipaddress
 import subprocess
 import re
 import logging
@@ -104,11 +105,11 @@ class ARPScanner:
         try:
             # Try without sudo first (works if BPF permissions are set),
             # fall back to sudo (works if NOPASSWD sudo is configured).
-            # -l = scan local network, --interface selects the right adapter.
-            cmd = ['arp-scan', '-l']
+            # Scan the configured subnet; `--` keeps it from being read as an option.
+            cmd = ['arp-scan', '--', subnet]
             result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
             if result.returncode != 0 and 'Permission denied' in (result.stderr or ''):
-                cmd = ['sudo', '-n', 'arp-scan', '-l']
+                cmd = ['sudo', '-n', 'arp-scan', '--', subnet]
                 result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
 
             if result.returncode != 0:
@@ -186,7 +187,7 @@ class ARPScanner:
         devices = []
         try:
             # Use nmap -sn for ping scan (triggers ARP resolution)
-            cmd = ['nmap', '-sn', subnet, '-oG', '-']
+            cmd = ['nmap', '-sn', '-oG', '-', '--', subnet]
             result = subprocess.run(cmd, capture_output=True, timeout=120, text=True)
 
             if result.returncode != 0 and result.returncode != 1:
@@ -256,10 +257,12 @@ class ARPScanner:
         """
         logger.info(f"Starting subnet scan: {subnet}")
 
-        # Validate subnet format
-        if not self._validate_subnet(subnet):
+        # Validate subnet format; scanners get the canonical CIDR form
+        normalized = self._normalize_subnet(subnet)
+        if normalized is None:
             logger.error(f"Invalid subnet format: {subnet}")
             return []
+        subnet = normalized
 
         devices = []
 
@@ -286,22 +289,23 @@ class ARPScanner:
         logger.info(f"Scan completed, found {len(devices)} devices")
         return devices
 
+    def _normalize_subnet(self, subnet: str) -> Optional[str]:
+        """Return subnet as a canonical IPv4 CIDR string (e.g. 192.168.1.0/24), or None.
+
+        The value is passed to arp-scan/nmap, so anything else (option-like
+        strings, interface names, IPv6) is rejected.
+        """
+        try:
+            network = ipaddress.ip_network(subnet, strict=False)
+        except (TypeError, ValueError):
+            return None
+        if network.version != 4:
+            return None
+        return network.with_prefixlen
+
     def _validate_subnet(self, subnet: str) -> bool:
-        """Validate subnet format (e.g., 192.168.1.0/24)"""
-        # For simplicity, accept CIDR or interface name
-        if '/' in subnet:
-            # CIDR notation
-            parts = subnet.split('/')
-            if len(parts) != 2:
-                return False
-            try:
-                int(parts[1])
-                return True
-            except ValueError:
-                return False
-        else:
-            # Assume it's an interface or direct IP
-            return True
+        """Validate subnet format (IPv4 CIDR or single IPv4 address)."""
+        return self._normalize_subnet(subnet) is not None
 
 
 class DHCPParser:

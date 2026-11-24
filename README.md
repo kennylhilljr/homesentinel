@@ -412,7 +412,7 @@ homesentinel/
 │   ├── middleware/
 │   │   └── auth.py                # API key authentication middleware
 │   ├── migrations/                # 16 sequential SQL migration files
-│   ├── tests/                     # 20 pytest test files
+│   ├── tests/                     # pytest suite (backend/pytest.ini sets testpaths)
 │   └── certs/                     # Auto-generated SSL certificates
 ├── frontend/
 │   ├── src/
