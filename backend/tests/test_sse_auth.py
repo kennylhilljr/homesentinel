@@ -117,9 +117,10 @@ def test_auth_disabled_needs_no_token(monkeypatch):
 def test_real_app_registers_token_route():
     import main
 
-    routes = {(route.path, method) for route in main.app.routes for method in getattr(route, "methods", ())}
-    assert ("/api/sse/token", "POST") in routes
-    assert ("/api/sse/events", "GET") in routes
+    # FastAPI >= 0.16x keeps included routers nested in app.routes, so check the OpenAPI paths.
+    paths = main.app.openapi()["paths"]
+    assert "post" in paths["/api/sse/token"]
+    assert "get" in paths["/api/sse/events"]
 
 
 def test_real_app_exposes_auth_marker_to_cross_origin_dashboard(monkeypatch):
