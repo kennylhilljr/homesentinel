@@ -28,7 +28,7 @@ CLIENT_ID = "homesentinel"
 # OAUTH_CLIENT_SECRET must be set in the environment — no hardcoded default.
 CLIENT_SECRET = os.getenv("OAUTH_CLIENT_SECRET", "")
 if not CLIENT_SECRET:
-    logger.warning("OAUTH_CLIENT_SECRET not set — OAuth account linking is disabled")
+    logger.warning("OAUTH_CLIENT_SECRET not set, so OAuth account linking is disabled")
 
 # Comma-separated list of allowed redirect_uri prefixes. Required: if unset, OAuth
 # account linking is disabled.
@@ -40,7 +40,7 @@ REDIRECT_URI_ALLOWLIST: list[str] = (
 )
 if not REDIRECT_URI_ALLOWLIST:
     logger.warning(
-        "OAUTH_REDIRECT_URI_ALLOWLIST not set — OAuth account linking is disabled. "
+        "OAUTH_REDIRECT_URI_ALLOWLIST not set, so OAuth account linking is disabled. "
         "Set it to a comma-separated list of allowed redirect_uri prefixes."
     )
 
