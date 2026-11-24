@@ -450,7 +450,8 @@ homesentinel/
 | `HOMESENTINEL_API_KEY` | _(empty)_ | API key for `X-API-Key` auth (empty = auth disabled; required for non-loopback binds) |
 | `HOMESENTINEL_ALLOW_INSECURE_BIND` | _(empty)_ | Set to `1` to allow a non-loopback backend or dev-server bind without the usual checks (not recommended) |
 | `HOMESENTINEL_FRONTEND_HOST` | `127.0.0.1` | Vite dev server bind address. Non-loopback values need `HOMESENTINEL_ALLOW_INSECURE_BIND=1` |
-| `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa account linking |
+| `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa account linking. If unset, `/oauth/authorize` and `/oauth/token` refuse every request |
+| `OAUTH_REDIRECT_URI_ALLOWLIST` | _(required)_ | Comma-separated `redirect_uri` prefixes allowed for Alexa account linking. If unset, account linking is disabled |
 | `CREDENTIAL_KEY` | _(auto-generated)_ | Fernet key for credential encryption at rest |
 | `NETWORK_SUBNET` | `192.168.12.0/24` | Subnet for ARP scanning |
 | `POLLING_INTERVAL_SECONDS` | `60` | Device scan interval |
@@ -567,7 +568,7 @@ The backend uses SQLite WAL mode with a Python threading lock for write serializ
 
 ### Alexa Skill not discovering devices
 
-1. Verify `OAUTH_CLIENT_SECRET` is set in `.env`
+1. Verify `OAUTH_CLIENT_SECRET` and `OAUTH_REDIRECT_URI_ALLOWLIST` are set in `.env` (account linking is disabled without both)
 2. Confirm Lambda function URL matches Alexa Developer Console
 3. Check Lambda CloudWatch logs for errors
 4. Trigger "Discover Devices" from the Alexa app

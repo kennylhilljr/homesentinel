@@ -150,6 +150,7 @@ React Frontend (:2026)
 | `HOMESENTINEL_FRONTEND_HOST` | `127.0.0.1` | Vite dev server bind (non-loopback needs override) |
 | `CREDENTIAL_KEY` | _(auto-gen)_ | Fernet encryption key |
 | `OAUTH_CLIENT_SECRET` | _(required)_ | OAuth secret for Alexa |
+| `OAUTH_REDIRECT_URI_ALLOWLIST` | _(required)_ | Allowed Alexa `redirect_uri` prefixes (OAuth off if unset) |
 | `SPEEDTEST_INTERVAL_SECONDS` | `1800` | Speed test interval |
 | `HIBOOST_POLL_INTERVAL` | `300` | HiBoost RF poll interval |
 | `RETENTION_DAYS` | `90` | Event data retention |

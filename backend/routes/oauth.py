@@ -6,6 +6,9 @@ This is a personal/dev skill — no real user auth needed.
 """
 
 import asyncio
+import base64
+import binascii
+import hmac
 import os
 import secrets
 import time
@@ -25,10 +28,10 @@ CLIENT_ID = "homesentinel"
 # OAUTH_CLIENT_SECRET must be set in the environment — no hardcoded default.
 CLIENT_SECRET = os.getenv("OAUTH_CLIENT_SECRET", "")
 if not CLIENT_SECRET:
-    logger.warning("OAUTH_CLIENT_SECRET not set — OAuth token endpoint will reject all requests")
+    logger.warning("OAUTH_CLIENT_SECRET not set — OAuth account linking is disabled")
 
-# Comma-separated list of allowed redirect_uri prefixes. If unset, all are allowed
-# with a warning (preserves backwards-compat for personal-skill default).
+# Comma-separated list of allowed redirect_uri prefixes. Required: if unset, OAuth
+# account linking is disabled.
 _redirect_allowlist_raw = os.getenv("OAUTH_REDIRECT_URI_ALLOWLIST", "").strip()
 REDIRECT_URI_ALLOWLIST: list[str] = (
     [s.strip() for s in _redirect_allowlist_raw.split(",") if s.strip()]
@@ -37,14 +40,17 @@ REDIRECT_URI_ALLOWLIST: list[str] = (
 )
 if not REDIRECT_URI_ALLOWLIST:
     logger.warning(
-        "OAUTH_REDIRECT_URI_ALLOWLIST not set — any redirect_uri is accepted. "
-        "Set this env var to a comma-separated list of allowed prefixes to prevent code-theft."
+        "OAUTH_REDIRECT_URI_ALLOWLIST not set — OAuth account linking is disabled. "
+        "Set it to a comma-separated list of allowed redirect_uri prefixes."
     )
 
 
+def _oauth_enabled() -> bool:
+    """Account linking needs both a client secret and a redirect allowlist; fail closed otherwise."""
+    return bool(CLIENT_SECRET) and bool(REDIRECT_URI_ALLOWLIST)
+
+
 def _redirect_uri_allowed(redirect_uri: str) -> bool:
-    if not REDIRECT_URI_ALLOWLIST:
-        return True
     return any(redirect_uri.startswith(prefix) for prefix in REDIRECT_URI_ALLOWLIST)
 
 # In-memory stores (sufficient for personal dev skill)
@@ -82,6 +88,8 @@ async def authorize(
     scope: str = "",
 ):
     """OAuth authorization endpoint — shows consent page and redirects with auth code."""
+    if not _oauth_enabled():
+        raise HTTPException(status_code=503, detail="OAuth account linking is not configured")
     if client_id != CLIENT_ID:
         raise HTTPException(status_code=400, detail="Invalid client_id")
     if response_type != "code":
@@ -126,12 +134,21 @@ async def token(request: Request):
     # Also check Authorization header (HTTP Basic)
     auth_header = request.headers.get("authorization", "")
     if auth_header.startswith("Basic "):
-        import base64
-        decoded = base64.b64decode(auth_header[6:]).decode()
+        try:
+            decoded = base64.b64decode(auth_header[6:], validate=True).decode()
+        except (binascii.Error, UnicodeDecodeError):
+            decoded = ""
+            client_secret = ""
         if ":" in decoded:
             client_id, client_secret = decoded.split(":", 1)
 
-    if client_id != CLIENT_ID or client_secret != CLIENT_SECRET:
+    if (
+        not _oauth_enabled()
+        or not isinstance(client_id, str)
+        or not isinstance(client_secret, str)
+        or not hmac.compare_digest(client_id.encode(), CLIENT_ID.encode())
+        or not hmac.compare_digest(client_secret.encode(), CLIENT_SECRET.encode())
+    ):
         logger.warning("OAuth token: invalid credentials (client_id=%s)", client_id)
         return JSONResponse(status_code=401, content={"error": "invalid_client"})
 
