@@ -6,8 +6,7 @@ Tests the GET /api/deco/clients-merged endpoint
 import pytest
 import os
 import sys
-import json
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime
 
 # Add parent directory to path
@@ -158,7 +157,6 @@ class TestMergedClientsEndpoint:
         # Verify online devices come first
         merged = result["merged_devices"]
         if len(merged) > 1:
-            online_count = sum(1 for d in merged if d["status"] == "online")
             first_offline_idx = next(
                 (i for i, d in enumerate(merged) if d["status"] == "offline"), len(merged)
             )

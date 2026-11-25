@@ -17,7 +17,6 @@ Encryption: AES-128-CCM for post-auth business data
 """
 
 import os
-import sys
 import ssl
 import json
 import struct
@@ -28,7 +27,7 @@ import hmac
 import logging
 import secrets
 from binascii import hexlify, unhexlify
-from typing import Optional, Dict, Any, Tuple
+from typing import Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -206,16 +205,8 @@ class BusinessPacket:
 # ---------------------------------------------------------------------------
 
 try:
-    from cryptography.hazmat.primitives.asymmetric.ec import (
-        SECP256R1, generate_private_key, EllipticCurvePublicKey,
-        EllipticCurvePrivateKey, ECDH
-    )
-    from cryptography.hazmat.primitives.asymmetric.utils import (
-        decode_dss_signature, encode_dss_signature
-    )
     from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.ciphers.aead import AESCCM
     from cryptography.hazmat.backends import default_backend
     HAS_CRYPTO = True

@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import database and services
-from db import Database, NetworkDeviceRepository, PollingConfigRepository, DeviceGroupRepository, DeviceGroupMemberRepository, DeviceEventRepository, DeviceAlertRepository
+from db import Database, NetworkDeviceRepository, DeviceGroupRepository, DeviceGroupMemberRepository, DeviceEventRepository, DeviceAlertRepository
 from services import NetworkDeviceService, DeviceSearchService, EventService
 from services.polling_service import PollingServiceManager
 from services.oui_service import OUIService
@@ -430,7 +430,6 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global db, polling_manager, deco_client, chester_client, alarm_com_client_instance, hiboost_client_instance, hiboost_scheduler, speedtest_scheduler, retention_scheduler, local_service_monitor_task
 
     logger.info("Shutting down HomeSentinel Backend...")
 
@@ -515,7 +514,6 @@ async def root():
 @app.get("/api/health")
 async def health():
     """Health check endpoint"""
-    global db
     db_status = "connected" if db else "disconnected"
     return {
         "status": "healthy",
@@ -527,7 +525,6 @@ async def health():
 @app.get("/api/devices")
 async def get_devices():
     """Get list of discovered devices"""
-    global device_service
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -542,7 +539,6 @@ async def get_devices():
 @app.get("/api/devices/online")
 async def get_online_devices():
     """Get list of online devices"""
-    global device_service
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -557,7 +553,6 @@ async def get_online_devices():
 @app.get("/api/devices/offline")
 async def get_offline_devices():
     """Get list of offline devices"""
-    global device_service
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -585,7 +580,6 @@ async def search_devices(q: str = "", status: Optional[str] = None):
 
     Returns devices matching the query, sorted by last_seen.
     """
-    global search_service
     if search_service is None:
         raise HTTPException(status_code=500, detail="Search service not initialized")
 
@@ -633,7 +627,6 @@ async def toggle_auto_scan(enabled: bool):
 @app.get("/api/config/polling")
 async def get_polling_config():
     """Get polling configuration"""
-    global device_service
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -650,7 +643,6 @@ async def get_polling_config():
 @app.post("/api/config/polling")
 async def update_polling_config(interval: int):
     """Update polling interval"""
-    global device_service, polling_manager
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -671,7 +663,6 @@ async def update_polling_config(interval: int):
 @app.post("/api/devices/scan-now")
 async def trigger_manual_scan():
     """Manually trigger a network scan"""
-    global device_service
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -696,7 +687,6 @@ async def trigger_manual_scan():
 @app.get("/api/devices/{device_id}")
 async def get_device_details(device_id: str):
     """Get full device details including vendor information"""
-    global device_service
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -711,7 +701,6 @@ async def get_device_details(device_id: str):
 @app.get("/api/devices/{device_id}/presence-history")
 async def get_device_presence_history(device_id: str, days: int = 7):
     """Get per-day presence history for a device (hourly online/offline)."""
-    global event_service
     if event_service is None:
         raise HTTPException(status_code=500, detail="Event service not initialized")
 
@@ -724,7 +713,6 @@ async def get_device_presence_history(device_id: str, days: int = 7):
 @app.put("/api/devices/{device_id}")
 async def update_device(device_id: str, updates: DeviceUpdate):
     """Update device metadata"""
-    global device_service
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -757,7 +745,6 @@ async def update_device(device_id: str, updates: DeviceUpdate):
 @app.delete("/api/devices/{device_id}")
 async def delete_device(device_id: str):
     """Permanently delete a device from the database"""
-    global device_service
     if device_service is None:
         raise HTTPException(status_code=500, detail="Device service not initialized")
 
@@ -777,7 +764,6 @@ async def delete_device(device_id: str):
 @app.post("/api/device-groups")
 async def create_device_group(group_data: DeviceGroupCreate):
     """Create a new device group"""
-    global group_repo
     if group_repo is None:
         raise HTTPException(status_code=500, detail="Group service not initialized")
 
@@ -793,7 +779,6 @@ async def create_device_group(group_data: DeviceGroupCreate):
 @app.get("/api/device-groups")
 async def list_device_groups():
     """List all device groups"""
-    global group_repo
     if group_repo is None:
         raise HTTPException(status_code=500, detail="Group service not initialized")
 
@@ -811,7 +796,6 @@ async def list_device_groups():
 @app.get("/api/device-groups/{group_id}")
 async def get_device_group(group_id: str):
     """Get group details with members"""
-    global group_repo, member_repo
     if group_repo is None or member_repo is None:
         raise HTTPException(status_code=500, detail="Group service not initialized")
 
@@ -834,7 +818,6 @@ async def get_device_group(group_id: str):
 @app.put("/api/device-groups/{group_id}")
 async def update_device_group(group_id: str, updates: DeviceGroupUpdate):
     """Update group metadata"""
-    global group_repo
     if group_repo is None:
         raise HTTPException(status_code=500, detail="Group service not initialized")
 
@@ -853,7 +836,6 @@ async def update_device_group(group_id: str, updates: DeviceGroupUpdate):
 @app.delete("/api/device-groups/{group_id}")
 async def delete_device_group(group_id: str):
     """Delete a device group"""
-    global group_repo
     if group_repo is None:
         raise HTTPException(status_code=500, detail="Group service not initialized")
 
@@ -871,7 +853,6 @@ async def delete_device_group(group_id: str):
 @app.post("/api/device-groups/{group_id}/members")
 async def add_device_to_group(group_id: str, member_data: DeviceGroupMemberAdd):
     """Add device to group"""
-    global group_repo, member_repo, device_service
     if group_repo is None or member_repo is None:
         raise HTTPException(status_code=500, detail="Group service not initialized")
 
@@ -894,7 +875,6 @@ async def add_device_to_group(group_id: str, member_data: DeviceGroupMemberAdd):
 @app.delete("/api/device-groups/{group_id}/members/{device_id}")
 async def remove_device_from_group(group_id: str, device_id: str):
     """Remove device from group"""
-    global group_repo, member_repo
     if group_repo is None or member_repo is None:
         raise HTTPException(status_code=500, detail="Group service not initialized")
 
@@ -921,7 +901,6 @@ async def get_events(
     offset: int = Query(default=0, ge=0),
 ):
     """Get events with optional filtering"""
-    global event_service
     if event_service is None:
         raise HTTPException(status_code=500, detail="Event service not initialized")
 
@@ -959,7 +938,6 @@ async def get_alerts(
     offset: int = Query(default=0, ge=0),
 ):
     """Get recent active (not dismissed) alerts"""
-    global event_service
     if event_service is None:
         raise HTTPException(status_code=500, detail="Event service not initialized")
 
@@ -978,7 +956,6 @@ async def get_alerts(
 @app.post("/api/events/alerts/{alert_id}/dismiss")
 async def dismiss_alert(alert_id: str, body: AlertDismiss = None):
     """Dismiss an alert"""
-    global event_service
     if event_service is None:
         raise HTTPException(status_code=500, detail="Event service not initialized")
 
@@ -998,7 +975,6 @@ async def dismiss_alert(alert_id: str, body: AlertDismiss = None):
 @app.get("/api/events/stats")
 async def get_event_stats():
     """Get event statistics"""
-    global event_service
     if event_service is None:
         raise HTTPException(status_code=500, detail="Event service not initialized")
 

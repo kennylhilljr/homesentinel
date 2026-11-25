@@ -5,7 +5,7 @@ Implements device search across multiple fields with MAC/IP correlation
 
 import logging
 import json
-from typing import List, Optional, Dict
+from typing import List, Optional
 from datetime import datetime
 from db import Database
 

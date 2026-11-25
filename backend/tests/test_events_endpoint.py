@@ -3,12 +3,8 @@ Integration tests for event and alert API endpoints
 """
 
 import pytest
-import uuid
 import tempfile
 import os
-import json
-from datetime import datetime
-from fastapi.testclient import TestClient
 import sys
 
 # Setup path for imports

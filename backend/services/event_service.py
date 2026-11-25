@@ -362,12 +362,6 @@ class EventService:
             cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
             with self.db.get_connection() as conn:
-                # Get device current status for initial state assumption
-                dev_row = conn.execute(
-                    "SELECT status, last_seen FROM network_devices WHERE device_id = ?",
-                    (device_id,)
-                ).fetchone()
-
                 cursor = conn.execute(
                     """SELECT event_type, timestamp FROM device_events
                        WHERE device_id = ? AND timestamp >= ?

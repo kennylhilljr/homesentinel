@@ -3,14 +3,12 @@
 
 import sys
 import os
-from unittest.mock import Mock, patch
-from datetime import datetime
+from unittest.mock import Mock
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from services.correlation_service import CorrelationService
-from services.deco_service import DecoService
 
 def test_mac_normalization():
     """Test MAC address normalization"""

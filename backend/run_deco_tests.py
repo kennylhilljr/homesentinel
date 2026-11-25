@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services.deco_client import (
     DecoClient,
     InvalidCredentialsError,
-    SessionExpiredError,
     APIConnectionError,
 )
 

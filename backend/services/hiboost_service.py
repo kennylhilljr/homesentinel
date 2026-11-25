@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional
 from services.hiboost_client import (
     BANDS,
     HiBoostAPIError,
-    HiBoostAuthError,
     HiBoostClient,
     OID_GAIN_DL,
     OID_GAIN_UL,

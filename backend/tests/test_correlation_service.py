@@ -6,7 +6,7 @@ Tests Deco client correlation with LAN devices by MAC address
 import pytest
 import os
 import sys
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 from datetime import datetime
 
 # Add parent directory to path

@@ -6,7 +6,6 @@ import pytest
 import os
 import sys
 import tempfile
-import json
 from fastapi.testclient import TestClient
 
 # Add parent directory to path

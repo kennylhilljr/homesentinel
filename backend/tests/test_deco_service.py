@@ -6,9 +6,8 @@ Tests node data retrieval, enrichment, caching, and error handling
 import pytest
 import os
 import sys
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
-import time
 import base64
 
 # Add parent directory to path

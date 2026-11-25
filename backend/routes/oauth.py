@@ -14,10 +14,8 @@ import secrets
 import time
 import logging
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from pydantic import BaseModel
-from typing import Optional
-from urllib.parse import urlencode, urlparse, parse_qs
+from fastapi.responses import RedirectResponse, JSONResponse
+from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 

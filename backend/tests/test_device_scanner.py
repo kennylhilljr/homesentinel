@@ -9,8 +9,7 @@ import sys
 import tempfile
 import sqlite3
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
-import subprocess
+from unittest.mock import Mock, patch
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -707,7 +706,7 @@ class TestNetworkDeviceService:
 
     def test_scan_and_update_with_dhcp_merge(self, temp_db):
         """Test scan_and_update with DHCP merge (AI-292)"""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
         service = NetworkDeviceService(temp_db)
 
         # Mock ARP results

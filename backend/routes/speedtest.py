@@ -5,7 +5,7 @@ Speed Test API routes for HomeSentinel.
 viewing results/history, and accessing AI-driven insights.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 

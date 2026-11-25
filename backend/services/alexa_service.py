@@ -6,7 +6,7 @@ Business logic layer for Alexa Smart Home device management
 import logging
 import json
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

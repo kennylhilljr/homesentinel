@@ -3,16 +3,13 @@ Tests for WiFi Config and QoS API Endpoints
 Integration tests for /api/deco/wifi-config and /api/deco/qos
 """
 
-import pytest
 import os
 import sys
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
+from unittest.mock import Mock
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from routes.deco import router, deco_service
 from services.deco_service import DecoService
 
 

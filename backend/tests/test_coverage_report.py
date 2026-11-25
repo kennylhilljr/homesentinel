@@ -9,8 +9,7 @@ import os
 import shutil
 import tempfile
 from datetime import datetime
-from unittest.mock import Mock, patch
-import importlib.util
+from unittest.mock import Mock
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
