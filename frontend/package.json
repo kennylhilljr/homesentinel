@@ -4,7 +4,7 @@
   "description": "HomeSentinel - Home Network Monitor & Device Management Platform",
   "private": true,
   "dependencies": {
-    "@material-symbols/svg-400": "^0.44.6",
+    "@material-symbols/svg-400": "^0.49.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-force-graph-2d": "^1.29.2",
