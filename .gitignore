@@ -66,3 +66,13 @@ Thumbs.db
 .code-review-graph/
 .claude/worktrees/
 backend/backend/Archon/
+
+# Local tool state and build output: never track
+.coverage
+.pytest_cache/
+frontend/coverage/
+.harnesskit/
+*.bak
+.mcp.json
+.linear_project.json
+.claude_settings.json

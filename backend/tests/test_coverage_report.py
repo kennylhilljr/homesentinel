@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 import importlib.util
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Track all tests
 test_results = {

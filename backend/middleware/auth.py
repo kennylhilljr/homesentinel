@@ -110,7 +110,8 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
         if not provided_key or not hmac.compare_digest(provided_key, HOMESENTINEL_API_KEY):
-            logger.warning("API key auth failed for %s from %s", path, request.client.host)
+            client_host = request.client.host if request.client else "unknown"
+            logger.warning("API key auth failed for %s from %s", path, client_host)
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid or missing API key. Set X-API-Key header."},

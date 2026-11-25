@@ -9,7 +9,7 @@ from datetime import datetime
 from unittest.mock import Mock
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db import Database, NetworkDeviceRepository
 from services.deco_service import DecoService
