@@ -5,8 +5,6 @@ Implements Login with Amazon OAuth and Alexa Smart Home Skill API v3
 
 import os
 import logging
-import time
-import json
 import requests
 import uuid
 from typing import Optional, Dict, Any, List
@@ -17,12 +15,10 @@ logger = logging.getLogger(__name__)
 
 class AlexaAuthError(Exception):
     """Raised when authentication fails"""
-    pass
 
 
 class AlexaAPIError(Exception):
     """Raised when an Alexa API call fails"""
-    pass
 
 
 class AlexaClient:

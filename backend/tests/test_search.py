@@ -6,9 +6,6 @@ import pytest
 import os
 import sys
 import tempfile
-import uuid
-import json
-from datetime import datetime
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -293,7 +290,7 @@ class TestDeviceSearchService:
 
     def test_search_returns_sorted_results(self, device_repo, search_service):
         """Test that search results are sorted by last_seen"""
-        devices = self.setup_test_devices(device_repo)
+        self.setup_test_devices(device_repo)
 
         # Search and check sorting
         results = search_service.search("192.168")

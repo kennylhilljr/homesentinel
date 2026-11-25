@@ -6,7 +6,7 @@ Tests authentication, session management, and API requests with mocking
 import pytest
 import os
 import sys
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
 import json
 import base64
@@ -20,7 +20,6 @@ import services.deco_client as deco_client_module
 from services.deco_client import (
     DecoClient,
     InvalidCredentialsError,
-    SessionExpiredError,
     APIConnectionError,
 )
 

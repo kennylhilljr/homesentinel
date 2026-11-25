@@ -4,10 +4,10 @@ Correlates Deco mesh network clients with locally-discovered devices by MAC addr
 """
 
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Tuple
 from datetime import datetime
 from services.deco_service import DecoService
-from db import Database, NetworkDeviceRepository
+from db import NetworkDeviceRepository
 
 logger = logging.getLogger(__name__)
 

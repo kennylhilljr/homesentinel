@@ -6,22 +6,11 @@ Runs all unit tests and generates coverage report
 
 import sys
 import os
-import subprocess
 
 def run_tests():
     """Run all tests"""
     # Change to backend directory
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-    # Import test modules
-    import unittest
-
-    # Create test loader
-    loader = unittest.TestLoader()
-    suite = unittest.TestSuite()
-
-    # Run unit tests directly
-    test_results = []
 
     # Test database operations
     print("\n" + "="*60)
@@ -29,8 +18,6 @@ def run_tests():
     print("="*60 + "\n")
 
     import tempfile
-    from db import Database, NetworkDeviceRepository, PollingConfigRepository
-    from services import NetworkDeviceService, ARPScanner, DHCPParser
 
     passed = 0
     failed = 0
@@ -79,7 +66,6 @@ def run_tests():
     print("TESTING API ENDPOINTS")
     print("="*60 + "\n")
 
-    import tempfile
     import asyncio
 
     os.environ['DB_PATH'] = tempfile.gettempdir() + '/test_homesentinel.db'

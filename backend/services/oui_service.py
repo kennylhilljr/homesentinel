@@ -7,7 +7,6 @@ import csv
 import os
 import logging
 from typing import Optional, Dict
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

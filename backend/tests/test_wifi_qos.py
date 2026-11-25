@@ -6,8 +6,8 @@ Tests for /api/deco/wifi-config and /api/deco/qos endpoints
 import pytest
 import os
 import sys
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timedelta
+from unittest.mock import Mock
+from datetime import datetime
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -120,14 +120,14 @@ class TestWiFiConfigService:
         service.CACHE_TTL = 1  # Set TTL to 1 second for testing
 
         # First call
-        config1 = service.get_wifi_config()
+        service.get_wifi_config()
 
         # Simulate cache expiry
         import time
         time.sleep(1.1)
 
         # Second call should fetch fresh data
-        config2 = service.get_wifi_config()
+        service.get_wifi_config()
 
         # Verify API was called twice
         assert mock_client.get_wifi_settings.call_count == 2

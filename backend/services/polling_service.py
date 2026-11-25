@@ -7,7 +7,6 @@ import asyncio
 import logging
 import re
 import subprocess
-import socket
 from datetime import datetime
 from typing import Optional
 import os

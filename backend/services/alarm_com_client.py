@@ -4,7 +4,6 @@ Alarm.com API client for HomeSentinel.
 # Handles login, 2FA cookie persistence, device state, and partition commands.
 """
 
-import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional

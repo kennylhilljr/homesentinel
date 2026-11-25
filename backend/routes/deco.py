@@ -6,7 +6,7 @@ Endpoints for Deco node management and monitoring
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 import asyncio
 import logging
 import time
@@ -1073,7 +1073,6 @@ async def get_topology_graph() -> Response:
 
     import io
     import base64
-    import json as _json
 
     try:
         import networkx as nx

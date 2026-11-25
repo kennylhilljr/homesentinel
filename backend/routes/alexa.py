@@ -3,7 +3,7 @@ Alexa Smart Home API Routes
 Endpoints for Alexa device management, control, and OAuth
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List

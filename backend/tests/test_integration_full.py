@@ -5,14 +5,12 @@ import sys
 import os
 import shutil
 import tempfile
-from datetime import datetime
 from unittest.mock import Mock
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db import Database, NetworkDeviceRepository
-from services.deco_service import DecoService
 from services.correlation_service import CorrelationService
 
 def test_full_integration():
@@ -117,7 +115,7 @@ def test_full_integration():
     result = correlation_service.get_merged_clients()
 
     # Display results
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Total Deco clients: {result['correlation_stats']['total_deco_clients']}")
     print(f"  Total LAN devices: {result['correlation_stats']['total_lan_devices']}")
     print(f"  Successfully merged: {result['total_merged']}")

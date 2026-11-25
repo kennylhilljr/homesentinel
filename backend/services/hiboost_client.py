@@ -257,7 +257,7 @@ class HiBoostClient:
 
     def test_connection(self) -> Dict[str, Any]:
         """Test credentials by logging in and fetching dashboard."""
-        token = self.authenticate()
+        self.authenticate()
         dashboard = self.get_dashboard()
         return {
             "success": True,
